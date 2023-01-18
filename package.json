@@ -31,7 +31,8 @@
     "prepublish": "npm run build",
     "prepare": "husky install",
     "lint": "eslint . --ext .ts",
-    "start": "ts-node demo/emulator-run.ts",
+    "start:demo": "ts-node demo/emulator-run.ts",
+    "start": "ts-node demo/ntc-run.ts",
     "start:micropython": "ts-node demo/micropython-run.ts",
     "start:gdbdiff": "ts-node debug/gdbdiff.ts",
     "test": "jest"

@@ -1136,7 +1136,7 @@ export class CortexM0Core {
     }
     // SEV
     else if (opcode === 0b1011111101000000) {
-      this.logger.info(LOG_NAME, 'SEV');
+      //this.logger.info(LOG_NAME, 'SEV');
     }
     // STMIA
     else if (opcode >> 11 === 0b11000) {
