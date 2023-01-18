@@ -349,9 +349,12 @@ export class RP2040 {
   }
 
   step() {
+    let coreStartCycles = this.core.cycles;
     this.core.executeInstruction();
-    this.pio[0].step();
-    this.pio[1].step();
+    for(let cycle = coreStartCycles; cycle < this.core.cycles; cycle++) {
+      this.pio[0].step();
+      this.pio[1].step();
+    }
   }
 
   execute() {
@@ -359,9 +362,12 @@ export class RP2040 {
     this.executeTimer = null;
     this.stopped = false;
     for (let i = 0; i < 100000 && !this.stopped && !this.core.waiting; i++) {
+      let coreStartCycles = this.core.cycles;
       this.core.executeInstruction();
-      this.pio[0].step();
-      this.pio[1].step();
+      for(let cycle = coreStartCycles; cycle < this.core.cycles; cycle++) {
+        this.pio[0].step();
+        this.pio[1].step();
+      }
     }
     if (!this.stopped) {
       this.executeTimer = setTimeout(() => this.execute(), 0);
