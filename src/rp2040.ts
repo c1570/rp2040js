@@ -350,6 +350,8 @@ export class RP2040 {
 
   step() {
     this.core.executeInstruction();
+    this.pio[0].step();
+    this.pio[1].step();
   }
 
   execute() {

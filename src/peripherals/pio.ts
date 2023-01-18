@@ -138,6 +138,8 @@ export class StateMachine {
 
   clockDivInt: number = 1;
   clockDivFrac: number = 0;
+  curClockInt: number = 0;
+  curClockFrac: number = 0;
   execCtrl = 0x1f << 12;
   shiftCtrl = 0b11 << 18;
   pinCtrl = 0x5 << 26;
@@ -683,11 +685,26 @@ export class StateMachine {
   }
 
   step() {
+    if (!this.enabled) {
+      return;
+    }
     if (this.waiting) {
       this.checkWait();
       if (this.waiting) {
         return;
       }
+    }
+
+    this.curClockFrac += this.clockDivFrac;
+    if(this.curClockFrac > 255) {
+      this.curClockInt++;
+      this.curClockFrac -= 255;
+    }
+    this.curClockInt++;
+    if(this.curClockInt < this.clockDivInt) {
+      return;
+    } else {
+      this.curClockInt -= this.clockDivInt;
     }
 
     this.updatePC = true;
@@ -833,6 +850,8 @@ export class StateMachine {
 
   restart() {
     this.cycles = 0;
+    this.curClockInt = 0;
+    this.curClockFrac = 0;
     this.inputShiftCount = 0;
     this.outputShiftCount = 32;
     this.inputShiftReg = 0;
@@ -1077,14 +1096,6 @@ export class RPPIO extends BasePeripheral implements Peripheral {
             this.machines[index].clkDivRestart();
           }
         }
-        const shouldRun = value & 0xf;
-        if (this.stopped && shouldRun) {
-          this.stopped = false;
-          this.run();
-        }
-        if (!shouldRun) {
-          this.stopped = true;
-        }
         break;
       }
       case FDEBUG:
@@ -1183,15 +1194,6 @@ export class RPPIO extends BasePeripheral implements Peripheral {
       machine.step();
     }
     this.checkChangedPins();
-  }
-
-  run() {
-    for (let i = 0; i < 1000 && !this.stopped; i++) {
-      this.step();
-    }
-    if (!this.stopped) {
-      this.runTimer = setTimeout(() => this.run(), 0);
-    }
   }
 
   stop() {
