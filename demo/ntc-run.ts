@@ -38,7 +38,6 @@ export enum GPIOPinState {
 }
 */
 
-let cycle: number = 0;
 let pin_state: GPIOPinState[] = [0,0,0,0,0,0,0,0,0];
 let pin_name: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"];
 let pin_id: string[] = ["!", "§", "$", "%", "&", "/", "(", ")", "="];
@@ -46,8 +45,9 @@ let pin_id: string[] = ["!", "§", "$", "%", "&", "/", "(", ")", "="];
 function pinListener(pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
     let v: number = (state===GPIOPinState.Low)?0:1;
-    console.log("#"+cycle+` ${v}`+pin_id[pin]);
+    console.log("#"+mcu1.core.cycles+` ${v}`+pin_id[pin]);
     pin_state[pin] = state;
+    mcu1.gpio[pin+2].setInputValue((v==1)?true:false);
   };
 }
 
@@ -74,8 +74,7 @@ console.log("$enddefinitions $end");
 
 function run_mcus() {
   for (let i = 0; i < 100000; i++) {
-      cycle++;
-      //if((cycle%(1<<20))===0) console.log(cycle);
+      //if((mcu1.core.cycles%(1<<20))===0) console.log(mcu1.core.cycles);
       mcu1.step();
       mcu2.step();
   }
