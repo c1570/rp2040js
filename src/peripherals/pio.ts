@@ -1106,6 +1106,13 @@ export class RPPIO extends BasePeripheral implements Peripheral {
             this.machines[index].clkDivRestart();
           }
         }
+        const shouldRun = value & 0xf;
+        if (this.stopped && shouldRun) {
+          this.stopped = false;
+        }
+        if (!shouldRun) {
+          this.stopped = true;
+        }
         break;
       }
       case FDEBUG:
@@ -1200,6 +1207,9 @@ export class RPPIO extends BasePeripheral implements Peripheral {
   }
 
   step() {
+    if (this.stopped) {
+      return;
+    }
     for (const machine of this.machines) {
       machine.step();
     }
