@@ -140,6 +140,7 @@ export class StateMachine {
   clockDivFrac: number = 0;
   curClockInt: number = 0;
   curClockFrac: number = 0;
+  remainingDelay: number = 0;
   execCtrl = 0x1f << 12;
   shiftCtrl = 0b11 << 18;
   pinCtrl = 0x5 << 26;
@@ -438,7 +439,7 @@ export class StateMachine {
     }
   }
 
-  executeInstruction(opcode: number) {
+  executeInstruction(opcode: number): number {
     const arg = opcode & 0xff;
     switch (opcode >>> 13) {
       /* JMP */
@@ -656,14 +657,16 @@ export class StateMachine {
 
     if (this.execValid) {
       this.execValid = false;
-      this.executeInstruction(this.execOpcode);
+      return this.executeInstruction(this.execOpcode);
     } else if (this.waiting) {
       if (this.waitDelay < 0) {
         this.waitDelay = delay;
       }
       this.checkWait();
+      return delay;
     } else {
       this.cycles += delay;
+      return delay;
     }
   }
 
@@ -688,6 +691,24 @@ export class StateMachine {
     if (!this.enabled) {
       return;
     }
+
+    this.curClockFrac += this.clockDivFrac;
+    if (this.curClockFrac > 255) {
+      this.curClockInt++;
+      this.curClockFrac -= 255;
+    }
+    this.curClockInt++;
+    if (this.curClockInt < this.clockDivInt) {
+      return;
+    } else {
+      this.curClockInt -= this.clockDivInt;
+    }
+
+    if (this.remainingDelay > 0) {
+      this.remainingDelay--;
+      return;
+    }
+
     if (this.waiting) {
       this.checkWait();
       if (this.waiting) {
@@ -695,20 +716,8 @@ export class StateMachine {
       }
     }
 
-    this.curClockFrac += this.clockDivFrac;
-    if(this.curClockFrac > 255) {
-      this.curClockInt++;
-      this.curClockFrac -= 255;
-    }
-    this.curClockInt++;
-    if(this.curClockInt < this.clockDivInt) {
-      return;
-    } else {
-      this.curClockInt -= this.clockDivInt;
-    }
-
     this.updatePC = true;
-    this.executeInstruction(this.pio.instructions[this.pc]);
+    this.remainingDelay += this.executeInstruction(this.pio.instructions[this.pc]);
     if (this.updatePC) {
       this.nextPC();
     }
@@ -852,6 +861,7 @@ export class StateMachine {
     this.cycles = 0;
     this.curClockInt = 0;
     this.curClockFrac = 0;
+    this.remainingDelay = 0;
     this.inputShiftCount = 0;
     this.outputShiftCount = 32;
     this.inputShiftReg = 0;
