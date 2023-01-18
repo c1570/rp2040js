@@ -360,6 +360,8 @@ export class RP2040 {
     this.stopped = false;
     for (let i = 0; i < 100000 && !this.stopped && !this.core.waiting; i++) {
       this.core.executeInstruction();
+      this.pio[0].step();
+      this.pio[1].step();
     }
     if (!this.stopped) {
       this.executeTimer = setTimeout(() => this.execute(), 0);
