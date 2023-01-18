@@ -38,14 +38,15 @@ export enum GPIOPinState {
 }
 */
 
-let pin_state: GPIOPinState[] = [0,0,0,0,0,0,0,0,0];
-let pin_name: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"];
-let pin_id: string[] = ["!", "§", "$", "%", "&", "/", "(", ")", "="];
+let pin_state: GPIOPinState[] = [0,0,0,0,0,0,0,0,0,0];
+let pin_name: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "vic_ack"];
+let pin_id: string[] = ["!", "§", "$", "%", "&", "/", "(", ")", "=", "*"];
+let vcd_file = fs.createWriteStream('/tmp/ntc64rp2040.vcd', {});
 
 function pinListener(pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
     let v: number = (state===GPIOPinState.Low)?0:1;
-    console.log("#"+mcu1.core.cycles+` ${v}`+pin_id[pin]);
+    vcd_file.write(`#${mcu1.core.cycles} ${v}${pin_id[pin]}\n`);
     pin_state[pin] = state;
     mcu1.gpio[pin+2].setInputValue((v==1)?true:false);
   };
@@ -60,21 +61,22 @@ mcu1.gpio[7].addListener(pinListener(5));
 mcu1.gpio[8].addListener(pinListener(6));
 mcu1.gpio[9].addListener(pinListener(7));
 mcu1.gpio[10].addListener(pinListener(8));
+mcu1.gpio[11].addListener(pinListener(9));
 
 mcu1.core.PC = 0x10000000;
 mcu2.core.PC = 0x10000000;
 
-console.log("$timescale 1ns $end");
-console.log("$scope module logic $end");
-for(let i = 0; i < 9; i++) {
-  console.log(`$var wire 1 ${pin_id[i]} ${pin_name[i]} $end`);
+vcd_file.write("$timescale 1ns $end\n");
+vcd_file.write("$scope module logic $end\n");
+for(let i = 0; i < pin_name.length; i++) {
+  vcd_file.write(`$var wire 1 ${pin_id[i]} ${pin_name[i]} $end\n`);
 }
-console.log("$upscope $end");
-console.log("$enddefinitions $end");
+vcd_file.write("$upscope $end\n");
+vcd_file.write("$enddefinitions $end");
 
 function run_mcus() {
   for (let i = 0; i < 100000; i++) {
-      //if((mcu1.core.cycles%(1<<20))===0) console.log(mcu1.core.cycles);
+      if((mcu1.core.cycles%(1<<21))===0) console.log(`wall clock: ${mcu1.core.cycles/300000000} secs`);
       mcu1.step();
       mcu2.step();
   }
