@@ -39,44 +39,43 @@ export enum GPIOPinState {
 */
 
 let cycle: number = 0;
-let pins: GPIOPinState[] = [0,0,0,0,0,0,0,0];
-
-function pinClkListener(state: GPIOPinState, oldState: GPIOPinState) {
-  if(state===1) {
-    console.log("Clock high at cycle " + cycle);
-    let v = (pins[0]==GPIOPinState.Low?0:1) +
-            (pins[1]==GPIOPinState.Low?0:2) +
-            (pins[2]==GPIOPinState.Low?0:4) +
-            (pins[3]==GPIOPinState.Low?0:8) +
-            (pins[4]==GPIOPinState.Low?0:16) +
-            (pins[5]==GPIOPinState.Low?0:32) +
-            (pins[6]==GPIOPinState.Low?0:64) +
-            (pins[7]==GPIOPinState.Low?0:128);
-    //console.log("value: " + v.toString(16));
-  }
-}
+let pin_state: GPIOPinState[] = [0,0,0,0,0,0,0,0,0];
+let pin_name: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"];
+let pin_id: string[] = ["!", "§", "$", "%", "&", "/", "(", ")", "="];
 
 function pinListener(pin: number) {
-  return (state: GPIOPinState, oldState: GPIOPinState) => { pins[pin] = state; };
+  return (state: GPIOPinState, oldState: GPIOPinState) => {
+    let v: number = (state===GPIOPinState.Low)?0:1;
+    console.log("#"+cycle+` ${v}`+pin_id[pin]);
+    pin_state[pin] = state;
+  };
 }
 
-mcu1.gpio[2].addListener(pinClkListener);
-mcu1.gpio[3].addListener(pinListener(0));
-mcu1.gpio[4].addListener(pinListener(1));
-mcu1.gpio[5].addListener(pinListener(2));
-mcu1.gpio[6].addListener(pinListener(3));
-mcu1.gpio[7].addListener(pinListener(4));
-mcu1.gpio[8].addListener(pinListener(5));
-mcu1.gpio[9].addListener(pinListener(6));
-mcu1.gpio[10].addListener(pinListener(7));
+mcu1.gpio[2].addListener(pinListener(0));
+mcu1.gpio[3].addListener(pinListener(1));
+mcu1.gpio[4].addListener(pinListener(2));
+mcu1.gpio[5].addListener(pinListener(3));
+mcu1.gpio[6].addListener(pinListener(4));
+mcu1.gpio[7].addListener(pinListener(5));
+mcu1.gpio[8].addListener(pinListener(6));
+mcu1.gpio[9].addListener(pinListener(7));
+mcu1.gpio[10].addListener(pinListener(8));
 
 mcu1.core.PC = 0x10000000;
 mcu2.core.PC = 0x10000000;
 
+console.log("$timescale 1ns $end");
+console.log("$scope module logic $end");
+for(let i = 0; i < 9; i++) {
+  console.log(`$var wire 1 ${pin_id[i]} ${pin_name[i]} $end`);
+}
+console.log("$upscope $end");
+console.log("$enddefinitions $end");
+
 function run_mcus() {
   for (let i = 0; i < 100000; i++) {
       cycle++;
-      if((cycle%(1<<20))===0) console.log(cycle);
+      //if((cycle%(1<<20))===0) console.log(cycle);
       mcu1.step();
       mcu2.step();
   }
