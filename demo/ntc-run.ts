@@ -31,25 +31,28 @@ export enum GPIOPinState {
 }
 */
 
-let pin_state: GPIOPinState[][] = [[3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
+let pin_state: number[][] = [[0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
 let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "ack"];
 let vcd_file = fs.createWriteStream('/tmp/ntc64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
 function pinListener(mcu_id: number, pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
-    pin_state[mcu_id][pin] = state;
-    let v: number = ((pin_state[0][pin]===0)||(pin_state[1][pin]===0))?0:1;
+    pin_state[mcu_id+1][pin] = state;
+    let v: number = ((pin_state[0+1][pin]===0)||(pin_state[1+1][pin]===0))?0:1;
     mcu1.gpio[pin+2].setInputValue((v==1)?true:false);
     mcu2.gpio[pin+2].setInputValue((v==1)?true:false);
 
     // write signal to VCD file
     let pin_vcd_id = String.fromCharCode(pin+34);
-    vcd_file.write(`#${mcu1.core.cycles} ${v}${pin_vcd_id}\n`);
+    if(pin_state[0][pin]!==v) {
+      pin_state[0][pin]=v;
+      vcd_file.write(`#${mcu1.core.cycles} ${v}${pin_vcd_id}\n`);
+    }
 
     // write conflict flag to VCD file
-    let conflict: boolean = ((pin_state[0][pin]===0)&&(pin_state[1][pin]===1))||((pin_state[0][pin]===1)&&(pin_state[1][pin]===0));
-    if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core.cycles} (${pin_state[0][pin]}/${pin_state[1][pin]})`);
+    let conflict: boolean = ((pin_state[0+1][pin]===0)&&(pin_state[1+1][pin]===1))||((pin_state[0+1][pin]===1)&&(pin_state[1+1][pin]===0));
+    if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
     let have_new_conflict = conflict&&(last_conflict_cycle === -1);
     let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
     let write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
@@ -68,17 +71,20 @@ for(let i = 0; i < pin_label.length; i++) {
 mcu1.core.PC = 0x10000000;
 mcu2.core.PC = 0x10000000;
 
+// write VCD file header
 vcd_file.write("$timescale 1ns $end\n");
 vcd_file.write("$scope module logic $end\n");
-for(let i = 0; i < pin_name.length; i++) {
-  vcd_file.write(`$var wire 1 ${pin_id[i]} ${pin_name[i]} $end\n`);
+vcd_file.write(`$var wire 1 ! bus_conflict $end\n`);
+for(let pin = 0; pin < pin_label.length; pin++) {
+  let pin_vcd_id = String.fromCharCode(pin+34);
+  vcd_file.write(`$var wire 1 ${pin_vcd_id} ${pin_label[pin]} $end\n`);
 }
 vcd_file.write("$upscope $end\n");
-vcd_file.write("$enddefinitions $end");
+vcd_file.write("$enddefinitions $end\n");
 
 function run_mcus() {
   for (let i = 0; i < 100000; i++) {
-      if((mcu1.core.cycles%(1<<21))===0) console.log(`wall clock: ${mcu1.core.cycles/300000000} secs`);
+      if((mcu1.core.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core.cycles/300000000} secs`);
       mcu1.step();
       mcu2.step();
   }
