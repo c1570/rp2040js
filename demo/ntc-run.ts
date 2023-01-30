@@ -31,8 +31,9 @@ export enum GPIOPinState {
 }
 */
 
-let pin_state: number[][] = [[0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
-let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "ack"];
+let pin_state: number[][] = [[0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
+let pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,16,28];
+let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "ack", "main_busy", "vic_busy"];
 let vcd_file = fs.createWriteStream('/tmp/ntc64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
@@ -55,6 +56,11 @@ function pinListener(mcu_id: number, pin: number) {
     if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
     let have_new_conflict = conflict&&(last_conflict_cycle === -1);
     let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
+    if(conflict_recently_resolved && (mcu1.core.cycles === last_conflict_cycle)) {
+      // one mcu set conflict and other resolved in same cycle:
+      // delay until next signal change so that the conflict signal is visible in VCD
+      return;
+    }
     let write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
     if(write_conflict_flag) {
       vcd_file.write(`#${mcu1.core.cycles} ${conflict?1:0}!\n`);
@@ -64,8 +70,12 @@ function pinListener(mcu_id: number, pin: number) {
 }
 
 for(let i = 0; i < pin_label.length; i++) {
-  mcu1.gpio[i+2].addListener(pinListener(0, i));
-  mcu2.gpio[i+2].addListener(pinListener(1, i));
+  if((pin_label[i] != "ack")&&(pin_label[i] != "vic_busy")) mcu1.gpio[pin_gpio[i]].addListener(pinListener(0, i));
+  if(pin_label[i] != "main_busy") mcu2.gpio[pin_gpio[i]].addListener(pinListener(1, i));
+}
+
+for(let i = 11; i < 16; i++) {
+  mcu1.gpio[i].setInputValue(true);
 }
 
 mcu1.core.PC = 0x10000000;
