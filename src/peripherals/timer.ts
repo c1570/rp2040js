@@ -1,6 +1,7 @@
 import { IClock, IClockTimer } from '../clock/clock';
 import { IRQ } from '../irq';
 import { RP2040 } from '../rp2040';
+import { CortexM0Core } from '../cortex-m0-core';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const TIMEHR = 0x08;
@@ -35,6 +36,7 @@ class RPTimerAlarm {
 
 export class RPTimer extends BasePeripheral implements Peripheral {
   private readonly clock: IClock;
+  private readonly core: CortexM0Core;
   private latchedTimeHigh = 0;
   private readonly alarms = [
     new RPTimerAlarm('Alarm 0', ALARM_0),
@@ -50,6 +52,7 @@ export class RPTimer extends BasePeripheral implements Peripheral {
   constructor(rp2040: RP2040, name: string) {
     super(rp2040, name);
     this.clock = rp2040.clock;
+    this.core = rp2040.core;
   }
 
   get intStatus() {
@@ -57,7 +60,7 @@ export class RPTimer extends BasePeripheral implements Peripheral {
   }
 
   readUint32(offset: number) {
-    const time = this.clock.micros;
+    const time = this.core.cycles / 125;
 
     switch (offset) {
       case TIMEHR:
