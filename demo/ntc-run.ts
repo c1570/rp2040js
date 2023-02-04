@@ -93,10 +93,19 @@ vcd_file.write("$upscope $end\n");
 vcd_file.write("$enddefinitions $end\n");
 
 function run_mcus() {
+  let cycles_mcu2_behind = 0;
   for (let i = 0; i < 100000; i++) {
       if((mcu1.core.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core.cycles/300000000} secs`);
+      // run mcu1 for one step, take note of how many cycles that took,
+      // then step mcu2 until it caught up.
+      let cycles = mcu1.core.cycles;
       mcu1.step();
-      mcu2.step();
+      cycles_mcu2_behind += mcu1.core.cycles - cycles;
+      while(cycles_mcu2_behind > 0) {
+        cycles = mcu2.core.cycles;
+        mcu2.step();
+        cycles_mcu2_behind -= mcu2.core.cycles - cycles;
+      }
   }
   setTimeout(() => run_mcus(), 0);
 }
