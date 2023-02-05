@@ -6,7 +6,7 @@ import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
 
 // Create an array with the compiled code of blink
 // Execute the instructions from this array, one by one.
-const hex = fs.readFileSync('demo/systick/build/systick.hex', 'utf-8');
+const hex = fs.readFileSync('demo/cyclecheck/build/cyclecheck.hex', 'utf-8');
 const mcu = new RP2040();
 mcu.loadBootrom(bootromB1);
 loadHex(hex, mcu.flash, 0x10000000);
