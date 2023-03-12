@@ -14,7 +14,7 @@ const INTS = 0x40054040;
 describe('RPTimer', () => {
   describe('Alarms', () => {
     it('should set Alarm 1 to armed when writing to ALARM1 register', () => {
-      const rp2040 = new RP2040();
+      const rp2040 = new RP2040(new MockClock());
       rp2040.writeUint32(ALARM1, 0x1000);
       expect(rp2040.readUint32(ARMED)).toEqual(0x2);
     });
@@ -39,16 +39,16 @@ describe('RPTimer', () => {
       expect(rp2040.readUint32(ARMED)).toEqual(0);
       expect(rp2040.readUint32(INTR)).toEqual(0x8);
       expect(rp2040.readUint32(INTS)).toEqual(0);
-      expect(rp2040.core.pendingInterrupts).toBe(0);
+      expect(rp2040.core0.pendingInterrupts).toBe(0);
       // Enable the interrupts for all alarms
       rp2040.writeUint32(INTE, 0xff);
       expect(rp2040.readUint32(INTS)).toEqual(0x8);
-      expect(rp2040.core.pendingInterrupts).toBe(0x8);
-      expect(rp2040.core.interruptsUpdated).toEqual(true);
+      expect(rp2040.core0.pendingInterrupts).toBe(0x8);
+      expect(rp2040.core0.interruptsUpdated).toEqual(true);
       // Clear the alarm's interrupt
       rp2040.writeUint32(INTR_CLEAR, 0x8);
       expect(rp2040.readUint32(INTS)).toEqual(0);
-      expect(rp2040.core.pendingInterrupts).toBe(0);
+      expect(rp2040.core0.pendingInterrupts).toBe(0);
     });
 
     it('should generate an interrupt if INTF is 1 even when the INTE bit is 0', () => {

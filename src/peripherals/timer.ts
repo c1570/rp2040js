@@ -52,7 +52,7 @@ export class RPTimer extends BasePeripheral implements Peripheral {
   constructor(rp2040: RP2040, name: string) {
     super(rp2040, name);
     this.clock = rp2040.clock;
-    this.core = rp2040.core;
+    this.core = rp2040.core0;
   }
 
   get intStatus() {
