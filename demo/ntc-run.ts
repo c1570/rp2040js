@@ -1,3 +1,6 @@
+const GIFEncoder = require('gifencoder');
+const { createCanvas, loadImage } = require('canvas');
+
 import * as fs from 'fs';
 import { RP2040 } from '../src';
 import { GPIOPinState } from '../src/gpio-pin';
@@ -53,7 +56,7 @@ function pinListener(mcu_id: number, pin: number) {
 
     // write conflict flag to VCD file
     let conflict: boolean = ((pin_state[0+1][pin]===0)&&(pin_state[1+1][pin]===1))||((pin_state[0+1][pin]===1)&&(pin_state[1+1][pin]===0));
-    if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
+    //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
     let have_new_conflict = conflict&&(last_conflict_cycle === -1);
     let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
     if(conflict_recently_resolved && (mcu1.core.cycles === last_conflict_cycle)) {
@@ -92,9 +95,38 @@ for(let pin = 0; pin < pin_label.length; pin++) {
 vcd_file.write("$upscope $end\n");
 vcd_file.write("$enddefinitions $end\n");
 
+const width = 400;
+const height = 300;
+const canvas = createCanvas(width, height);
+const ctx = canvas.getContext('2d');
+
+function write_pic() {
+  const encoder = new GIFEncoder(width, height);
+  encoder.createReadStream().pipe(fs.createWriteStream('/tmp/_new_ntc64_gif'));
+  encoder.start();
+  //encoder.setRepeat(0);
+  //encoder.setDelay(1000);
+  encoder.setQuality(10);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const FRAMEBUFFER_START: number = parseInt(process.env.FRAMEBUFFER_START?process.env.FRAMEBUFFER_START:"0");
+  for (let i = 0; i < width*height; i++) {
+    const pixel = mcu2.readUint8(FRAMEBUFFER_START + i);
+    data[i*4+0] = (pixel&0b11100000)<<0;
+    data[i*4+1] = (pixel&0b00011100)<<3;
+    data[i*4+2] = (pixel&0b00000011)<<6;
+    data[i*4+3] = 255;
+  }
+  data[0] = 255;
+  ctx.putImageData(imageData, 0, 0);
+  encoder.addFrame(ctx);
+  encoder.finish();
+  fs.rename('/tmp/_new_ntc64_gif', '/tmp/ntc64.gif', (err) => {});
+}
+
 function run_mcus() {
   let cycles_mcu2_behind = 0;
-  for (let i = 0; i < 100000; i++) {
+  for (let i = 0; i < 1000000; i++) {
       if((mcu1.core.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core.cycles/300000000} secs`);
       // run mcu1 for one step, take note of how many cycles that took,
       // then step mcu2 until it caught up.
@@ -107,6 +139,7 @@ function run_mcus() {
         cycles_mcu2_behind -= mcu2.core.cycles - cycles;
       }
   }
+  write_pic();
   setTimeout(() => run_mcus(), 0);
 }
 
