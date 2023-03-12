@@ -82,7 +82,9 @@ for(let i = 11; i < 16; i++) {
 }
 
 mcu1.core0.PC = 0x10000000;
+mcu1.core1.PC = 0x10000000;
 mcu2.core0.PC = 0x10000000;
+mcu2.core1.PC = 0x10000000;
 
 // write VCD file header
 vcd_file.write("$timescale 1ns $end\n");
@@ -131,10 +133,12 @@ function run_mcus() {
       // run mcu1 for one step, take note of how many cycles that took,
       // then step mcu2 until it caught up.
       let cycles = mcu1.core0.cycles;
+      //console.log("MCU1");
       mcu1.step();
       cycles_mcu2_behind += mcu1.core0.cycles - cycles;
       while(cycles_mcu2_behind > 0) {
         cycles = mcu2.core0.cycles;
+        //console.log("MCU2");
         mcu2.step();
         cycles_mcu2_behind -= mcu2.core0.cycles - cycles;
       }

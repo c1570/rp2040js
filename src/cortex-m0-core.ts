@@ -585,6 +585,10 @@ export class CortexM0Core {
   }
 
   executeInstruction() {
+    if (this.waiting) {
+      this.cycles++;
+      return;
+    }
     if (this.interruptsUpdated) {
       if (this.checkForInterrupts()) {
         this.waiting = false;

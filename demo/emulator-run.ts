@@ -6,13 +6,13 @@ import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
 
 // Create an array with the compiled code of blink
 // Execute the instructions from this array, one by one.
-const hex = fs.readFileSync('demo/cyclecheck/build/cyclecheck.hex', 'utf-8');
+const hex = fs.readFileSync('/home/mayne/project/pico-examples/build/multicore/hello_multicore/hello_multicore.hex', 'utf-8');
 const mcu = new RP2040();
 mcu.loadBootrom(bootromB1);
 loadHex(hex, mcu.flash, 0x10000000);
 
-const gdbServer = new GDBTCPServer(mcu, 3333);
-console.log(`RP2040 GDB Server ready! Listening on port ${gdbServer.port}`);
+//const gdbServer = new GDBTCPServer(mcu, 3333);
+//console.log(`RP2040 GDB Server ready! Listening on port ${gdbServer.port}`);
 
 mcu.uart[0].onByte = (value) => {
   process.stdout.write(new Uint8Array([value]));
@@ -20,4 +20,6 @@ mcu.uart[0].onByte = (value) => {
 
 mcu.core0.PC = 0x10000000;
 mcu.core1.PC = 0x10000000;
-mcu.execute();
+while(1) {
+  mcu.step();
+}
