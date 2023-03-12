@@ -51,24 +51,24 @@ function pinListener(mcu_id: number, pin: number) {
     let pin_vcd_id = String.fromCharCode(pin+34);
     if(pin_state[0][pin]!==v) {
       pin_state[0][pin]=v;
-      vcd_file.write(`#${mcu1.core.cycles} ${v}${pin_vcd_id}\n`);
+      vcd_file.write(`#${mcu1.core0.cycles} ${v}${pin_vcd_id}\n`);
     }
 
     // write conflict flag to VCD file
     let conflict: boolean = ((pin_state[0+1][pin]===0)&&(pin_state[1+1][pin]===1))||((pin_state[0+1][pin]===1)&&(pin_state[1+1][pin]===0));
-    //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
+    //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core0.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
     let have_new_conflict = conflict&&(last_conflict_cycle === -1);
     let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
-    if(conflict_recently_resolved && (mcu1.core.cycles === last_conflict_cycle)) {
+    if(conflict_recently_resolved && (mcu1.core0.cycles === last_conflict_cycle)) {
       // one mcu set conflict and other resolved in same cycle:
       // delay until next signal change so that the conflict signal is visible in VCD
       return;
     }
     let write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
     if(write_conflict_flag) {
-      vcd_file.write(`#${mcu1.core.cycles} ${conflict?1:0}!\n`);
+      vcd_file.write(`#${mcu1.core0.cycles} ${conflict?1:0}!\n`);
     }
-    last_conflict_cycle = conflict ? mcu1.core.cycles : -1;
+    last_conflict_cycle = conflict ? mcu1.core0.cycles : -1;
   };
 }
 
@@ -81,8 +81,8 @@ for(let i = 11; i < 16; i++) {
   mcu1.gpio[i].setInputValue(true);
 }
 
-mcu1.core.PC = 0x10000000;
-mcu2.core.PC = 0x10000000;
+mcu1.core0.PC = 0x10000000;
+mcu2.core0.PC = 0x10000000;
 
 // write VCD file header
 vcd_file.write("$timescale 1ns $end\n");
@@ -127,16 +127,16 @@ function write_pic() {
 function run_mcus() {
   let cycles_mcu2_behind = 0;
   for (let i = 0; i < 1000000; i++) {
-      if((mcu1.core.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core.cycles/300000000} secs`);
+      if((mcu1.core0.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core0.cycles/300000000} secs`);
       // run mcu1 for one step, take note of how many cycles that took,
       // then step mcu2 until it caught up.
-      let cycles = mcu1.core.cycles;
+      let cycles = mcu1.core0.cycles;
       mcu1.step();
-      cycles_mcu2_behind += mcu1.core.cycles - cycles;
+      cycles_mcu2_behind += mcu1.core0.cycles - cycles;
       while(cycles_mcu2_behind > 0) {
-        cycles = mcu2.core.cycles;
+        cycles = mcu2.core0.cycles;
         mcu2.step();
-        cycles_mcu2_behind -= mcu2.core.cycles - cycles;
+        cycles_mcu2_behind -= mcu2.core0.cycles - cycles;
       }
   }
   write_pic();
