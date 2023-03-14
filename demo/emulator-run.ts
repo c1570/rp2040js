@@ -20,6 +20,7 @@ mcu.uart[0].onByte = (value) => {
 
 mcu.core0.PC = 0x10000000;
 mcu.core1.PC = 0x10000000;
+mcu.core1.waiting = true;
 while(1) {
   mcu.step();
 }

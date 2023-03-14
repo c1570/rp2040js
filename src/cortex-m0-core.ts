@@ -47,8 +47,6 @@ enum StackPointerBank {
   SPprocess,
 }
 
-const LOG_NAME = 'CortexM0Core';
-
 export class CortexM0Core {
   readonly registers = new Uint32Array(16);
   bankedSP: number = 0;
@@ -93,7 +91,7 @@ export class CortexM0Core {
 
   stopped = true;
 
-  constructor(readonly rp2040: RP2040) {
+  constructor(readonly rp2040: RP2040, readonly coreLabel: string) {
     this.SP = 0xfffffffc;
     this.bankedSP = 0xfffffffc;
   }
@@ -498,7 +496,7 @@ export class CortexM0Core {
         return (this.SPSEL === StackPointerBank.SPprocess ? 2 : 0) | (this.nPRIV ? 1 : 0);
 
       default:
-        this.logger.warn(LOG_NAME, `MRS with unimplemented SYSm value: ${sysm}`);
+        this.logger.warn(this.coreLabel, `MRS with unimplemented SYSm value: ${sysm}`);
         return 0;
     }
   }
@@ -538,7 +536,7 @@ export class CortexM0Core {
         break;
 
       default:
-        this.logger.warn(LOG_NAME, `MRS with unimplemented SYSm value: ${sysm}`);
+        this.logger.warn(this.coreLabel, `MRS with unimplemented SYSm value: ${sysm}`);
         return 0;
     }
   }
@@ -1141,6 +1139,7 @@ export class CortexM0Core {
     }
     // SEV
     else if (opcode === 0b1011111101000000) {
+      this.logger.info(this.coreLabel, 'SEV');
       this.onSEV?.();
     }
     // STMIA
@@ -1317,13 +1316,13 @@ export class CortexM0Core {
     // YIELD
     else if (opcode === 0b1011111100010000) {
       // do nothing for now. Wait for event!
-      this.logger.info(LOG_NAME, 'Yield');
+      this.logger.info(this.coreLabel, 'Yield');
     } else {
       this.logger.warn(
-        LOG_NAME,
+        this.coreLabel,
         `Warning: Instruction at ${opcodePC.toString(16)} is not implemented yet!`
       );
-      this.logger.warn(LOG_NAME, `Opcode: 0x${opcode.toString(16)} (0x${opcode2.toString(16)})`);
+      this.logger.warn(this.coreLabel, `Opcode: 0x${opcode.toString(16)} (0x${opcode2.toString(16)})`);
     }
   }
 }

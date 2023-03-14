@@ -76,4 +76,5 @@ process.stdin.on('data', (chunk) => {
 
 mcu.core0.PC = 0x10000000;
 mcu.core1.PC = 0x10000000;
+mcu.core1.waiting = true;
 mcu.execute();
