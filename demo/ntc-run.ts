@@ -83,8 +83,10 @@ for(let i = 11; i < 16; i++) {
 
 mcu1.core0.PC = 0x10000000;
 mcu1.core1.PC = 0x10000000;
+mcu1.core1.waiting = true;
 mcu2.core0.PC = 0x10000000;
 mcu2.core1.PC = 0x10000000;
+mcu2.core1.waiting = true;
 
 // write VCD file header
 vcd_file.write("$timescale 1ns $end\n");
@@ -101,6 +103,7 @@ const width = 400;
 const height = 300;
 const canvas = createCanvas(width, height);
 const ctx = canvas.getContext('2d');
+const palette = [0x00,0xff,0x84,0x7b,0x86,0x55,0x26,0xfd,0x88,0x44,0xcd,0x49,0x6d,0xbe,0x6f,0xb6];
 
 function write_pic() {
   const encoder = new GIFEncoder(width, height);
@@ -113,7 +116,7 @@ function write_pic() {
   const data = imageData.data;
   const FRAMEBUFFER_START: number = parseInt(process.env.FRAMEBUFFER_START?process.env.FRAMEBUFFER_START:"0");
   for (let i = 0; i < width*height; i++) {
-    const pixel = mcu2.readUint8(FRAMEBUFFER_START + i);
+    const pixel = palette[mcu2.readUint8(FRAMEBUFFER_START + i)];
     data[i*4+0] = (pixel&0b11100000)<<0;
     data[i*4+1] = (pixel&0b00011100)<<3;
     data[i*4+2] = (pixel&0b00000011)<<6;
