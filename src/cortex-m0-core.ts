@@ -93,6 +93,12 @@ export class CortexM0Core {
 
   stopped = true;
 
+  /** Hook to listen for function calls - branch-link (BL/BLX) instructions */
+  blTaken = (core: CortexM0Core, blx: boolean) => {
+    void core; // surpress unused variable warnings
+    void blx;
+  };
+
   constructor(readonly rp2040: RP2040, readonly coreLabel: string) {
     this.SP = 0xfffffffc;
     this.bankedSP = 0xfffffffc;
@@ -761,6 +767,7 @@ export class CortexM0Core {
       this.LR = (this.PC + 2) | 0x1;
       this.PC += 2 + imm32;
       this.cycles += 2;
+      this.blTaken(this, false);
     }
     // BLX
     else if (opcode >> 7 === 0b010001111 && (opcode & 0x7) === 0) {
@@ -768,6 +775,7 @@ export class CortexM0Core {
       this.LR = this.PC | 0x1;
       this.PC = this.registers[Rm] & ~1;
       this.cycles++;
+      this.blTaken(this, true);
     }
     // BX
     else if (opcode >> 7 === 0b010001110 && (opcode & 0x7) === 0) {
