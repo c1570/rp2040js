@@ -66,7 +66,7 @@ export class RP2040 implements IRPChip {
   readonly uart = [
     new RPUART(this, 'UART0', IRQ.UART0, {
       rx: DREQChannel.DREQ_UART0_RX,
-      tx: DREQChannel.DREQ_UART0_RX,
+      tx: DREQChannel.DREQ_UART0_TX,
     }),
     new RPUART(this, 'UART1', IRQ.UART1, {
       rx: DREQChannel.DREQ_UART1_RX,
