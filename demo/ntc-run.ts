@@ -7,10 +7,12 @@ import { GPIOPinState } from '../src/gpio-pin';
 import { bootromB1 } from './bootrom';
 import { loadHex } from './intelhex';
 
-const hex1 = fs.readFileSync('/home/mayne/project/PicoDVI/software/build/apps/ntc64_main/ntc64_main.hex', 'utf-8');
-const hex2 = fs.readFileSync('/home/mayne/project/PicoDVI/software/build/apps/ntc64_vic/ntc64_vic.hex', 'utf-8');
+const homedir = require('os').homedir();
+const hex1 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_main/ntc64_main.hex', 'utf-8');
+const hex2 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_vic/ntc64_vic.hex', 'utf-8');
 const mcu1 = new RP2040();
 const mcu2 = new RP2040();
+//const mcu2 = new RP2040(true);
 mcu1.loadBootrom(bootromB1);
 mcu2.loadBootrom(bootromB1);
 loadHex(hex1, mcu1.flash, 0x10000000);

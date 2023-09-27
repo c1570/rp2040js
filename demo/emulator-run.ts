@@ -4,9 +4,13 @@ import { bootromB1 } from './bootrom';
 import { loadHex } from './intelhex';
 import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
 
+const homedir = require('os').homedir();
+
 // Create an array with the compiled code of blink
 // Execute the instructions from this array, one by one.
-const hex = fs.readFileSync('/home/mayne/project/pico-examples/build/multicore/hello_multicore/hello_multicore.hex', 'utf-8');
+//const hex = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_main/ntc64_main.hex', 'utf-8');
+//const hex = fs.readFileSync(homedir + '/project/pico-examples/build/multicore/hello_multicore/hello_multicore.hex', 'utf-8');
+const hex = fs.readFileSync('hello_uart.hex', 'utf-8');
 const mcu = new RP2040();
 mcu.loadBootrom(bootromB1);
 loadHex(hex, mcu.flash, 0x10000000);

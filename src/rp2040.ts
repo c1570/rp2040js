@@ -153,7 +153,7 @@ export class RP2040 {
     0x50300: this.pio[1],
   };
 
-  constructor(readonly clock: IClock = new RealtimeClock()) {
+  constructor(readonly debug: boolean = false, readonly clock: IClock = new RealtimeClock()) {
     this.reset();
     this.core0.onSEV = () => {
       if (this.core1.waiting) {

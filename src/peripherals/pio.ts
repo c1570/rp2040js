@@ -406,11 +406,13 @@ export class StateMachine {
   }
 
   setOutPinDirs(value: number) {
+if(this.rp2040.debug) console.log(`DIRS: PIO SM ${this.index} (PC ${this.pc}, cycles? ${this.cycles}) changed pin dirs: ${value}`);
     this.outPinDirection = value;
     this.pio.pinDirectionsChanged(value, this.outBase, this.outCount);
   }
 
   setOutPins(value: number) {
+if(this.rp2040.debug) console.log(`VALS: PIO SM ${this.index} (PC ${this.pc}, cycles? ${this.cycles}) changed pin vals: ${value}`);
     this.outPinValues = value;
     this.pio.pinValuesChanged(value, this.outBase, this.outCount);
   }
@@ -440,6 +442,7 @@ export class StateMachine {
   }
 
   executeInstruction(opcode: number) {
+if(this.rp2040.debug) console.log(`PC:  PIO SM ${this.index} (PC ${this.pc}, cycles? ${this.cycles})`);
     const arg = opcode & 0xff;
     switch (opcode >>> 13) {
       /* JMP */
@@ -711,6 +714,7 @@ export class StateMachine {
     if (this.waiting) {
       this.checkWait();
       if (this.waiting) {
+        this.cycles++;
         return;
       }
       if (this.remainingDelay > 0) {

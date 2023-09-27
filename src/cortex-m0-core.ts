@@ -1139,7 +1139,7 @@ export class CortexM0Core {
     }
     // SEV
     else if (opcode === 0b1011111101000000) {
-      this.logger.info(this.coreLabel, 'SEV');
+      //this.logger.info(this.coreLabel, 'SEV');
       this.onSEV?.();
     }
     // STMIA
@@ -1302,6 +1302,7 @@ export class CortexM0Core {
     // WFE
     else if (opcode === 0b1011111100100000) {
       this.cycles++;
+      //this.logger.warn(this.coreLabel, `WFE`);
       if (this.eventRegistered) {
         this.eventRegistered = false;
       } else {
@@ -1310,6 +1311,7 @@ export class CortexM0Core {
     }
     // WFI
     else if (opcode === 0b1011111100110000) {
+      //this.logger.warn(this.coreLabel, `WFI`);
       this.cycles++;
       this.waiting = true;
     }
