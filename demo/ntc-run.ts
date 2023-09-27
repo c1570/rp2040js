@@ -10,13 +10,17 @@ import { loadHex } from './intelhex';
 const homedir = require('os').homedir();
 const hex1 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_main/ntc64_main.hex', 'utf-8');
 const hex2 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_vic/ntc64_vic.hex', 'utf-8');
+const hex3 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_output/ntc64_output.hex', 'utf-8');
 const mcu1 = new RP2040();
 const mcu2 = new RP2040();
+const mcu3 = new RP2040();
 //const mcu2 = new RP2040(true);
 mcu1.loadBootrom(bootromB1);
 mcu2.loadBootrom(bootromB1);
+mcu3.loadBootrom(bootromB1);
 loadHex(hex1, mcu1.flash, 0x10000000);
 loadHex(hex2, mcu2.flash, 0x10000000);
+loadHex(hex3, mcu3.flash, 0x10000000);
 
 mcu1.uart[0].onByte = (value) => {
   process.stdout.write(new Uint8Array([value]));
@@ -48,6 +52,7 @@ function pinListener(mcu_id: number, pin: number) {
     let v: number = ((pin_state[0+1][pin]===0)||(pin_state[1+1][pin]===0))?0:1;
     mcu1.gpio[pin+2].setInputValue((v==1)?true:false);
     mcu2.gpio[pin+2].setInputValue((v==1)?true:false);
+    mcu3.gpio[pin+2].setInputValue((v==1)?true:false);
 
     // write signal to VCD file
     let pin_vcd_id = String.fromCharCode(pin+34);
@@ -89,6 +94,9 @@ mcu1.core1.waiting = true;
 mcu2.core0.PC = 0x10000000;
 mcu2.core1.PC = 0x10000000;
 mcu2.core1.waiting = true;
+mcu3.core0.PC = 0x10000000;
+mcu3.core1.PC = 0x10000000;
+mcu3.core1.waiting = true;
 
 // write VCD file header
 vcd_file.write("$timescale 1ns $end\n");
@@ -116,9 +124,11 @@ function write_pic() {
   encoder.setQuality(10);
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
-  const FRAMEBUFFER_START: number = parseInt(process.env.FRAMEBUFFER_START?process.env.FRAMEBUFFER_START:"0");
+  const FRAMEBUFFER_START_VIC: number = parseInt(process.env.FRAMEBUFFER_START_VIC?process.env.FRAMEBUFFER_START_VIC:"0");
+  const FRAMEBUFFER_START_OUT: number = parseInt(process.env.FRAMEBUFFER_START_OUT?process.env.FRAMEBUFFER_START_OUT:"0");
   for (let i = 0; i < width*height; i++) {
-    const pixel = palette[mcu2.readUint8(FRAMEBUFFER_START + i)];
+    //const pixel = palette[mcu2.readUint8(FRAMEBUFFER_START_VIC + i)];
+    const pixel = mcu3.readUint8(FRAMEBUFFER_START_OUT + i);
     data[i*4+0] = (pixel&0b11100000)<<0;
     data[i*4+1] = (pixel&0b00011100)<<3;
     data[i*4+2] = (pixel&0b00000011)<<6;
@@ -133,19 +143,27 @@ function write_pic() {
 
 function run_mcus() {
   let cycles_mcu2_behind = 0;
+  let cycles_mcu3_behind = 0;
   for (let i = 0; i < 1000000; i++) {
-      if((mcu1.core0.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core0.cycles/300000000} secs`);
+      if((mcu1.core0.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core0.cycles/400000000} secs`);
       // run mcu1 for one step, take note of how many cycles that took,
       // then step mcu2 until it caught up.
       let cycles = mcu1.core0.cycles;
       //console.log("MCU1");
       mcu1.step();
       cycles_mcu2_behind += mcu1.core0.cycles - cycles;
+      cycles_mcu3_behind += (mcu1.core0.cycles - cycles)*(295/400);
       while(cycles_mcu2_behind > 0) {
         cycles = mcu2.core0.cycles;
         //console.log("MCU2");
         mcu2.step();
         cycles_mcu2_behind -= mcu2.core0.cycles - cycles;
+      }
+      while(cycles_mcu3_behind > 0) {
+        cycles = mcu3.core0.cycles;
+        //console.log("MCU3");
+        mcu3.step();
+        cycles_mcu3_behind -= mcu3.core0.cycles - cycles;
       }
   }
   write_pic();
