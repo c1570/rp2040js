@@ -5,6 +5,8 @@ import { BasePeripheral, Peripheral } from './peripheral';
 
 const UARTDR = 0x0;
 const UARTFR = 0x18;
+const UARTIBRD = 0x24;
+const UARTFBRD = 0x28;
 const UARTLCR_H = 0x2c;
 const UARTCR = 0x30;
 const UARTIMSC = 0x38;
@@ -39,8 +41,11 @@ export class RPUART extends BasePeripheral implements Peripheral {
   private rxFIFO = new FIFO(32);
   private interruptMask = 0;
   private interruptStatus = 0;
+  private intDivisor = 0;
+  private fracDivisor = 0;
 
   public onByte?: (value: number) => void;
+  public onBaudRateChange?: (baudRate: number) => void;
 
   constructor(rp2040: IRPChip, name: string, readonly irq: number, readonly dreq: IUARTDMAChannels) {
     super(rp2040, name);
@@ -78,6 +83,14 @@ export class RPUART extends BasePeripheral implements Peripheral {
     }
   }
 
+  get baudDivider() {
+    return this.intDivisor + this.fracDivisor / 64;
+  }
+
+  get baudRate() {
+    return Math.round(this.rp2040.clkPeri / (this.baudDivider * 16));
+  }
+
   get flags() {
     return (this.rxFIFO.full ? RXFF : 0) | (this.rxFIFO.empty ? RXFE : 0) | TXFE;
   }
@@ -105,6 +118,10 @@ export class RPUART extends BasePeripheral implements Peripheral {
       }
       case UARTFR:
         return this.flags;
+      case UARTIBRD:
+        return this.intDivisor;
+      case UARTFBRD:
+        return this.fracDivisor;
       case UARTLCR_H:
         return this.lineCtrlRegister;
       case UARTCR:
@@ -123,6 +140,16 @@ export class RPUART extends BasePeripheral implements Peripheral {
     switch (offset) {
       case UARTDR:
         this.onByte?.(value & 0xff);
+        break;
+
+      case UARTIBRD:
+        this.intDivisor = value & 0xffff;
+        this.onBaudRateChange?.(this.baudRate);
+        break;
+
+      case UARTFBRD:
+        this.fracDivisor = value & 0x3f;
+        this.onBaudRateChange?.(this.baudRate);
         break;
 
       case UARTLCR_H:
