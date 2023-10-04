@@ -26,6 +26,7 @@ import { RPTimer } from './peripherals/timer';
 import { RPUART } from './peripherals/uart';
 import { RPUSBController } from './peripherals/usb';
 import { RPSIO } from './sio';
+import { RPWatchdog } from './peripherals/watchdog';
 import { Core } from './core';
 import { ConsoleLogger, Logger, LogLevel } from './utils/logging';
 
@@ -166,7 +167,7 @@ export class RP2040 implements IRPChip {
     0x4004c: this.adc,
     0x40050: this.pwm,
     0x40054: new RPTimer(this, 'TIMER_BASE', IRQ.TIMER_0),
-    0x40058: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
+    0x40058: new RPWatchdog(this, 'WATCHDOG_BASE'),
     0x4005c: new RP2040RTC(this, 'RTC_BASE'),
     0x40060: new UnimplementedPeripheral(this, 'ROSC_BASE'),
     0x40064: new UnimplementedPeripheral(this, 'VREG_AND_CHIP_RESET_BASE'),
