@@ -1,3 +1,12 @@
+# THIS IS THE C1570/WIP BRANCH OF RP2040.
+
+Features:
+- somewhat accurate PIO timings (also, MUCH slower emulation)
+- an unfinished built-in cycle profiler using markers in the code
+- Dual Core support (by mingpepe)
+- remnants of another project
+- a lot of dirty hacks and tests not suitable for pushing upstream
+
 # rp2040js
 
 Raspberry Pi Pico Emulator for the [Wokwi Simulation Platform](https://wokwi.com). It blinks, runs Arduino code, and even the MicroPython REPL!
