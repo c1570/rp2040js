@@ -8,9 +8,9 @@ import { bootromB1 } from './bootrom';
 import { loadHex } from './intelhex';
 
 const homedir = require('os').homedir();
-const hex1 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_main/ntc64_main.hex', 'utf-8');
-const hex2 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_vic/ntc64_vic.hex', 'utf-8');
-const hex3 = fs.readFileSync(homedir + '/project/PicoDVI/software/build/apps/ntc64_output/ntc64_output.hex', 'utf-8');
+const hex1 = fs.readFileSync(homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_main/cnm64_main.hex', 'utf-8');
+const hex2 = fs.readFileSync(homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_vic/cnm64_vic.hex', 'utf-8');
+const hex3 = fs.readFileSync(homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_output/cnm64_output.hex', 'utf-8');
 const mcu1 = new RP2040();
 const mcu2 = new RP2040();
 const mcu3 = new RP2040();
@@ -43,7 +43,7 @@ export enum GPIOPinState {
 let pin_state: number[][] = [[0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
 let pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,16,28];
 let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "ack", "main_busy", "vic_busy"];
-let vcd_file = fs.createWriteStream('/tmp/ntc64rp2040.vcd', {});
+let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
 function pinListener(mcu_id: number, pin: number) {
@@ -117,7 +117,7 @@ const palette = [0x00,0xff,0x84,0x7b,0x86,0x55,0x26,0xfd,0x88,0x44,0xcd,0x49,0x6
 
 function write_pic() {
   const encoder = new GIFEncoder(width, height);
-  encoder.createReadStream().pipe(fs.createWriteStream('/tmp/_new_ntc64_gif'));
+  encoder.createReadStream().pipe(fs.createWriteStream('/tmp/_new_cnm64_gif'));
   encoder.start();
   //encoder.setRepeat(0);
   //encoder.setDelay(1000);
@@ -138,7 +138,7 @@ function write_pic() {
   ctx.putImageData(imageData, 0, 0);
   encoder.addFrame(ctx);
   encoder.finish();
-  fs.rename('/tmp/_new_ntc64_gif', '/tmp/ntc64.gif', (err) => {});
+  fs.rename('/tmp/_new_cnm64_gif', '/tmp/cnm64.gif', (err) => {});
 }
 
 function run_mcus() {
