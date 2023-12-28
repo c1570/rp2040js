@@ -114,6 +114,8 @@ const height = 300;
 const canvas = createCanvas(width, height);
 const ctx = canvas.getContext('2d');
 const palette = [0x00,0xff,0x84,0x7b,0x86,0x55,0x26,0xfd,0x88,0x44,0xcd,0x49,0x6d,0xbe,0x6f,0xb6];
+let cpu_addr = 0;
+const cpu_addr_off = parseInt(process.env.MAIN_CPU_ADDR?process.env.MAIN_CPU_ADDR:"0");
 
 function write_pic() {
   const encoder = new GIFEncoder(width, height);
@@ -144,26 +146,42 @@ function write_pic() {
 function run_mcus() {
   let cycles_mcu2_behind = 0;
   let cycles_mcu3_behind = 0;
+  let mcu3_pio_cycles_behind = 0;
   for (let i = 0; i < 1000000; i++) {
       if((mcu1.core0.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core0.cycles/400000000} secs`);
+
       // run mcu1 for one step, take note of how many cycles that took,
-      // then step mcu2 until it caught up.
-      let cycles = mcu1.core0.cycles;
+      // then step mcu2 and mcu3 until they caught up.
       //console.log("MCU1");
-      mcu1.step();
-      cycles_mcu2_behind += mcu1.core0.cycles - cycles;
-      cycles_mcu3_behind += (mcu1.core0.cycles - cycles)*(295/400);
+      let cycles = mcu1.stepCores();
+      //if(mcu1.core0.cycles>15000000) if(cycles>2) console.log(`cycles MCU1: ${cycles}`);
+      cycles_mcu2_behind += cycles;
+      let mcu3_cycles = cycles*(295/400);
+      cycles_mcu3_behind += mcu3_cycles;
+      mcu3_pio_cycles_behind += mcu3_cycles;
       while(cycles_mcu2_behind > 0) {
-        cycles = mcu2.core0.cycles;
         //console.log("MCU2");
-        mcu2.step();
-        cycles_mcu2_behind -= mcu2.core0.cycles - cycles;
+        cycles_mcu2_behind -= mcu2.stepCores();
       }
       while(cycles_mcu3_behind > 0) {
-        cycles = mcu3.core0.cycles;
         //console.log("MCU3");
-        mcu3.step();
-        cycles_mcu3_behind -= mcu3.core0.cycles - cycles;
+        cycles_mcu3_behind -= mcu3.stepCores();
+      }
+
+      // now, let PIOs catch up - done separately from MCU cores to reduce jitter
+      for(let pCycles = 0; pCycles < cycles; pCycles++) {
+        mcu1.stepPios(1);
+        mcu2.stepPios(1);
+        if(mcu3_pio_cycles_behind > 0) {
+          mcu3_pio_cycles_behind--;
+          mcu3.stepPios(1);
+        }
+      }
+
+      let cpu_addr_new = mcu1.readUint16(cpu_addr_off);
+      if(cpu_addr_new != cpu_addr) {
+        cpu_addr = cpu_addr_new;
+        //console.log("CPU6510 is at $" + cpu_addr.toString(16));
       }
   }
   write_pic();

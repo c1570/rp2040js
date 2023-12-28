@@ -371,7 +371,7 @@ export class RP2040 {
     this.setInterrupt(IRQ.IO_BANK0, interruptValue);
   }
 
-  step() {
+  stepCores() {
     this.core0.stopped = false;
     this.core1.stopped = false;
     let core0StartCycles = this.core0.cycles;
@@ -383,10 +383,18 @@ export class RP2040 {
       //if(this.core0.cycles>(1<<0)) console.log(`core1: ${this.core1.cycles}, waiting: ${this.core1.waiting}`);
       this.core1.executeInstruction();
     }
-    for(let cycle = core0StartCycles; cycle < this.core0.cycles; cycle++) {
+    return this.core0.cycles - core0StartCycles;
+  }
+
+  stepPios(cycles: number) {
+    for(let cycle = 0; cycle < cycles; cycle++) {
       this.pio[0].step();
       this.pio[1].step();
     }
+  }
+
+  step() {
+    this.stepPios(this.stepCores());
   }
 
   stop() {}
