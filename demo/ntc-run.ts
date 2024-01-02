@@ -22,6 +22,16 @@ loadHex(hex1, mcu1.flash, 0x10000000);
 loadHex(hex2, mcu2.flash, 0x10000000);
 loadHex(hex3, mcu3.flash, 0x10000000);
 
+function getVarOffs(map_file: string, var_name: string) {
+  const filename = homedir + '/project/connomore64/PicoDVI/software/build/apps/' + map_file;
+  const content = fs.readFileSync(filename, 'utf-8');
+  const search = var_name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  const re = new RegExp(search + ".*\n *(0x[0-9a-f]+) ");
+  const res = re.exec(content);
+  if(res == null) throw new Error(`Could not find offset of variable ${var_name} in map file ${filename}`);
+  return parseInt(res[1]);
+}
+
 mcu1.uart[0].onByte = (value) => {
   process.stdout.write(new Uint8Array([value]));
 };
@@ -115,7 +125,8 @@ const canvas = createCanvas(width, height);
 const ctx = canvas.getContext('2d');
 const palette = [0x00,0xff,0x84,0x7b,0x86,0x55,0x26,0xfd,0x88,0x44,0xcd,0x49,0x6d,0xbe,0x6f,0xb6];
 let cpu_addr = 0;
-const cpu_addr_off = parseInt(process.env.MAIN_CPU_ADDR?process.env.MAIN_CPU_ADDR:"0");
+const cpu_addr_off = getVarOffs("cnm64_main/cnm64_main.elf.map", ".bss.addr");
+const framebuffer_off = getVarOffs("cnm64_output/cnm64_output.elf.map", ".bss.frame_buffer");
 
 function write_pic() {
   const encoder = new GIFEncoder(width, height);
@@ -126,11 +137,9 @@ function write_pic() {
   encoder.setQuality(10);
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
-  const FRAMEBUFFER_START_VIC: number = parseInt(process.env.FRAMEBUFFER_START_VIC?process.env.FRAMEBUFFER_START_VIC:"0");
-  const FRAMEBUFFER_START_OUT: number = parseInt(process.env.FRAMEBUFFER_START_OUT?process.env.FRAMEBUFFER_START_OUT:"0");
   for (let i = 0; i < width*height; i++) {
-    //const pixel = palette[mcu2.readUint8(FRAMEBUFFER_START_VIC + i)];
-    const pixel = mcu3.readUint8(FRAMEBUFFER_START_OUT + i);
+    //const pixel = palette[mcu2.readUint8(framebuffer_off + i)];  // framebuffer in VIC
+    const pixel = mcu3.readUint8(framebuffer_off + i);  // framebuffer in OUTPUT
     data[i*4+0] = (pixel&0b11100000)<<0;
     data[i*4+1] = (pixel&0b00011100)<<3;
     data[i*4+2] = (pixel&0b00000011)<<6;
