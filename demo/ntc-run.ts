@@ -56,6 +56,8 @@ let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d
 let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
+const vcd_enabled = false;
+
 function pinListener(mcu_id: number, pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
     pin_state[mcu_id+1][pin] = state;
@@ -65,27 +67,31 @@ function pinListener(mcu_id: number, pin: number) {
     mcu3.gpio[pin+2].setInputValue((v==1)?true:false);
 
     // write signal to VCD file
-    let pin_vcd_id = String.fromCharCode(pin+34);
     if(pin_state[0][pin]!==v) {
       pin_state[0][pin]=v;
-      vcd_file.write(`#${mcu1.core0.cycles} ${v}${pin_vcd_id}\n`);
+      if(vcd_enabled) {
+        let pin_vcd_id = String.fromCharCode(pin+34);
+        vcd_file.write(`#${mcu1.core0.cycles} ${v}${pin_vcd_id}\n`);
+      }
     }
 
-    // write conflict flag to VCD file
-    let conflict: boolean = ((pin_state[0+1][pin]===0)&&(pin_state[1+1][pin]===1))||((pin_state[0+1][pin]===1)&&(pin_state[1+1][pin]===0));
-    //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core0.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
-    let have_new_conflict = conflict&&(last_conflict_cycle === -1);
-    let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
-    if(conflict_recently_resolved && (mcu1.core0.cycles === last_conflict_cycle)) {
-      // one mcu set conflict and other resolved in same cycle:
-      // delay until next signal change so that the conflict signal is visible in VCD
-      return;
+    if(vcd_enabled) {
+      // write conflict flag to VCD file
+      let conflict: boolean = ((pin_state[0+1][pin]===0)&&(pin_state[1+1][pin]===1))||((pin_state[0+1][pin]===1)&&(pin_state[1+1][pin]===0));
+      //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core0.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
+      let have_new_conflict = conflict&&(last_conflict_cycle === -1);
+      let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
+      if(conflict_recently_resolved && (mcu1.core0.cycles === last_conflict_cycle)) {
+        // one mcu set conflict and other resolved in same cycle:
+        // delay until next signal change so that the conflict signal is visible in VCD
+        return;
+      }
+      let write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
+      if(write_conflict_flag) {
+        vcd_file.write(`#${mcu1.core0.cycles} ${conflict?1:0}!\n`);
+      }
+      last_conflict_cycle = conflict ? mcu1.core0.cycles : -1;
     }
-    let write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
-    if(write_conflict_flag) {
-      vcd_file.write(`#${mcu1.core0.cycles} ${conflict?1:0}!\n`);
-    }
-    last_conflict_cycle = conflict ? mcu1.core0.cycles : -1;
   };
 }
 
