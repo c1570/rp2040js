@@ -86,6 +86,7 @@ export class CortexM0Core {
   SHPR2 = 0;
   SHPR3 = 0;
   profilerTags = new Map();
+  profilerTag = "";
 
   public onSEV?: () => void;
   public onBreak?: (code: number) => void;
@@ -744,7 +745,7 @@ export class CortexM0Core {
         } else if(profType === 0x53574446 || profType === 0x53574453) { //SWDF Stopwatch Diff Print or SWDR Diff Print and Reset
           if(this.profilerTags.has(profPar>>16)) {
             let elapsed = this.cycles - this.profilerTags.get(profPar>>16);
-            console.log(`SWDF at ${opcodePC.toString(16)}, cycle ${this.cycles}: ${profPar.toString(16)}, ${profTag}, elapsed ${elapsed}`);
+            //console.log(`SWDF at ${opcodePC.toString(16)}, cycle ${this.cycles}: ${profPar.toString(16)}, ${profTag}, elapsed ${elapsed}`);
             if(profType === 0x53574453) {
               this.profilerTags.set(profPar>>16, this.cycles);
             }
@@ -752,13 +753,14 @@ export class CortexM0Core {
             this.profilerTags.set(profPar>>16, this.cycles);
           }
         } else if(profType === 0x54505052) { //TPPR Tracepoint Print
-          console.log(`tracepoint,${profTag},${this.cycles}`);
+          //console.log(`tracepoint,${profTag},${this.cycles}`);
+          this.profilerTag = profTag;
         } else if(profType === 0x434e5449) { //CNTI Counter Increment
           let cnti_key = `CNTI_${profPar}`;
           if(this.profilerTags.has(cnti_key)) {
             let cur_cnt = this.profilerTags.get(cnti_key) + 1;
             this.profilerTags.set(cnti_key, cur_cnt);
-            console.log(`CNTI at ${opcodePC.toString(16)}, cycle ${this.cycles}: ${profPar.toString(16)}, ${profTag} to ${cur_cnt}`);
+            //console.log(`CNTI at ${opcodePC.toString(16)}, cycle ${this.cycles}: ${profPar.toString(16)}, ${profTag} to ${cur_cnt}`);
           } else {
             this.profilerTags.set(cnti_key, 1);
           }
