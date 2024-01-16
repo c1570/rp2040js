@@ -57,6 +57,7 @@ let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
 const vcd_enabled = false;
+const tracing_enabled = true;
 
 function pinListener(mcu_id: number, pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
@@ -163,10 +164,21 @@ function run_mcus() {
   let cycles_mcu2_behind = 0;
   let cycles_mcu3_behind = 0;
   let logs: string[] = [];
+  let pTags: string[] = ["", "", "", ""];
+  const tagContinue = "...".padEnd(22);
+
   function log_state() {
     const vic_h_count = mcu2.readUint32(vic_h_count_off);
-    logs.push(`MAIN0@${mcu1.core0.PC.toString(16)}/${mcu1.core0.profilerTag} MAIN1@${mcu1.core1.PC.toString(16)}/${mcu1.core1.profilerTag} VIC0@${mcu2.core0.PC.toString(16)}/${mcu2.core0.profilerTag} VIC1@${mcu2.core1.PC.toString(16)}/${mcu2.core1.profilerTag} VIC_PIO@${mcu2.pio[1].machines[0].pc} VIC_H_COUNT@${vic_h_count} CPU6510@${cpu_addr.toString(16)}`);
+    let wTags: string[] = [];
+    const pTags_updated: string[] = [mcu1.core0.profilerTag, mcu1.core1.profilerTag, mcu2.core0.profilerTag, mcu2.core1.profilerTag];
+    for(let i = 0; i < pTags.length; i++) {
+      const tag = pTags_updated[i];
+      wTags.push(tag==pTags[i]?tagContinue:tag.padEnd(22));
+    }
+    pTags = pTags_updated;
+    logs.push(`MAIN0@${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} MAIN1@${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} VIC0@${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} VIC1@${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} VIC_PIO@${mcu2.pio[1].machines[0].pc.toString().padStart(2,"0")} VIC_H_COUNT@${vic_h_count.toString().padStart(2,"0")} CPU6510@${cpu_addr.toString(16).padStart(4,"0")}`);
   }
+
   let mcu3_pio_cycles_behind = 0;
   try {
   for (let i = 0; i < 1000000; i++) {
@@ -189,7 +201,7 @@ function run_mcus() {
         //console.log("MCU3");
         cycles_mcu3_behind -= mcu3.stepCores();
       }
-      log_state();
+      if(tracing_enabled) log_state();
 
       // now, let PIOs catch up - done separately from MCU cores to reduce jitter
       for(let pCycles = 0; pCycles < cycles; pCycles++) {
