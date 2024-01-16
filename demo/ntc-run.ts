@@ -195,8 +195,9 @@ function run_mcus() {
       for(let pCycles = 0; pCycles < cycles; pCycles++) {
         mcu1.stepPios(1);
         mcu2.stepPios(1);
-        if(mcu2.pio[1].fdebug & 0x0f000000) {
-          throw new Error(`VIC PIO TXSTALL: ${(mcu2.pio[1].fdebug>>24)&15}`);
+        if(mcu2.pio[1].fdebug & 0x0f0f0000) {
+          if(mcu2.pio[1].fdebug & 0x0f000000) throw new Error(`VIC PIO TX STALL: ${(mcu2.pio[1].fdebug>>24)&15}`);
+          if(mcu2.pio[1].fdebug & 0x000f0000) throw new Error(`VIC PIO TX OVERFLOW: ${(mcu2.pio[1].fdebug>>16)&15}`);
         }
         if(mcu3_pio_cycles_behind > 0) {
           mcu3_pio_cycles_behind--;
