@@ -50,9 +50,9 @@ export enum GPIOPinState {
 }
 */
 
-let pin_state: number[][] = [[0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
-let pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,16,28];
-let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "ack", "main_busy", "vic_busy"];
+let pin_state: number[][] = [[0,0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
+let pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,0,1,24];
+let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "vic_ack", "iec_clk", "iec_data", "iec_atn"];
 let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
@@ -97,8 +97,9 @@ function pinListener(mcu_id: number, pin: number) {
 }
 
 for(let i = 0; i < pin_label.length; i++) {
-  if((pin_label[i] != "ack")&&(pin_label[i] != "vic_busy")) mcu1.gpio[pin_gpio[i]].addListener(pinListener(0, i));
-  if(pin_label[i] != "main_busy") mcu2.gpio[pin_gpio[i]].addListener(pinListener(1, i));
+  if(i != 9) mcu1.gpio[pin_gpio[i]].addListener(pinListener(0, i)); // MAIN is source for all GPIOs but vic_ack
+  if(i <= 9) mcu2.gpio[pin_gpio[i]].addListener(pinListener(1, i)); // VIC is source for bus GPIOs and vic_ack only
+  // OUTPUT is not source for any GPIOs
 }
 
 for(let i = 11; i < 16; i++) {
