@@ -1,3 +1,8 @@
+const vcd_enabled = false;
+const tracing_enabled = true;
+const debug_crash_cycle = 0; //69816205;
+const start_tracing_at_cycle = debug_crash_cycle - 10000;
+
 const GIFEncoder = require('gifencoder');
 const { createCanvas, loadImage } = require('canvas');
 
@@ -14,7 +19,6 @@ const hex3 = fs.readFileSync(homedir + '/project/connomore64/PicoDVI/software/bu
 const mcu1 = new RP2040();
 const mcu2 = new RP2040();
 const mcu3 = new RP2040();
-//const mcu2 = new RP2040(true);
 mcu1.loadBootrom(bootromB1);
 mcu2.loadBootrom(bootromB1);
 mcu3.loadBootrom(bootromB1);
@@ -55,9 +59,6 @@ let pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,0,1,24];
 let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "vic_ack", "iec_clk", "iec_data", "iec_atn"];
 let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
-
-const vcd_enabled = false;
-const tracing_enabled = true;
 
 function pinListener(mcu_id: number, pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
@@ -132,7 +133,6 @@ const height = 300;
 const canvas = createCanvas(width, height);
 const ctx = canvas.getContext('2d');
 const palette = [0x00,0xff,0x84,0x7b,0x86,0x55,0x26,0xfd,0x88,0x44,0xcd,0x49,0x6d,0xbe,0x6f,0xb6];
-let cpu_addr = 0;
 const cpu_addr_off = getVarOffs("cnm64_main/cnm64_main.elf.map", ".bss.addr");
 const framebuffer_off = getVarOffs("cnm64_output/cnm64_output.elf.map", ".bss.frame_buffer");
 const vic_h_count_off = getVarOffs("cnm64_vic/cnm64_vic.elf.map", ".bss.vic_h_count");
@@ -161,6 +161,10 @@ function write_pic() {
   fs.rename('/tmp/_new_cnm64_gif', '/tmp/cnm64.gif', (err) => {});
 }
 
+const main_pio_state_str: string[] = ["p1 ", "p2a", "p2b", "p3 ", "p4 "];
+let main_pio_state = -1;
+let main_cycle_start_mark = 0;
+
 function run_mcus() {
   let cycles_mcu2_behind = 0;
   let cycles_mcu3_behind = 0;
@@ -170,14 +174,20 @@ function run_mcus() {
 
   function log_state() {
     const vic_h_count = mcu2.readUint32(vic_h_count_off);
+    const cpu_addr = mcu1.readUint16(cpu_addr_off);
     let wTags: string[] = [];
-    const pTags_updated: string[] = [mcu1.core0.profilerTag, mcu1.core1.profilerTag, mcu2.core0.profilerTag, mcu2.core1.profilerTag];
-    for(let i = 0; i < pTags.length; i++) {
+    const pTags_updated: string[] = [mcu1.core0.profilerTag, mcu1.core1.profilerTag, mcu2.core0.profilerTag, mcu2.core1.profilerTag, mcu1.pio[0].machines[0].pc.toString(), mcu2.pio[1].machines[0].pc.toString(), mcu2.pio[1].machines[1].pc.toString(), mcu3.pio[1].machines[0].pc.toString()];
+    for(let i = 0; i < 4; i++) {
       const tag = pTags_updated[i];
       wTags.push(tag==pTags[i]?tagContinue:tag.padEnd(22));
     }
+    for(let i = 4; i < 8; i++) {
+      const tag = pTags_updated[i];
+      wTags.push(tag==pTags[i]?"~~":tag.padStart(2,"0"));
+    }
     pTags = pTags_updated;
-    logs.push(`MAIN0@${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} MAIN1@${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} VIC0@${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} VIC1@${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} VIC_PIO@${mcu2.pio[1].machines[0].pc.toString().padStart(2,"0")} VIC_H_COUNT@${vic_h_count.toString().padStart(2,"0")} CPU6510@${cpu_addr.toString(16).padStart(4,"0")}`);
+    //if(wTags[0] == "cycle start".padEnd(22)) { console.log(`${mcu1.core0.cycles - main_cycle_start_mark}`); main_cycle_start_mark = mcu1.core0.cycles; }
+    logs.push(`${mcu1.core0.cycles} MAIN0@${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} MAIN1@${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} VIC0@${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} VIC1@${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} MAIN_PIO@${wTags[4]}/${main_pio_state_str[main_pio_state]} VIC_PIO@${wTags[5]}/${mcu2.pio[1].machines[0].rxFIFO.itemCount} VIC_OUT@${wTags[6]} OUT_INP@${wTags[7]} VIC_H_COUNT@${vic_h_count.toString().padStart(2,"0")} CPU6510@${cpu_addr.toString(16).padStart(4,"0")}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
@@ -202,10 +212,12 @@ function run_mcus() {
         //console.log("MCU3");
         cycles_mcu3_behind -= mcu3.stepCores();
       }
-      if(tracing_enabled) log_state();
+
+      if(tracing_enabled && (mcu1.core0.cycles > start_tracing_at_cycle)) log_state();
 
       // now, let PIOs catch up - done separately from MCU cores to reduce jitter
       for(let pCycles = 0; pCycles < cycles; pCycles++) {
+        if(mcu1.pio[0].machines[0].pc==1) main_pio_state = (main_pio_state + 1) % 5; // out PC
         mcu1.stepPios(1);
         mcu2.stepPios(1);
         if(mcu2.pio[1].fdebug & 0x0f0f0000) {
@@ -218,16 +230,14 @@ function run_mcus() {
         }
       }
 
-      let cpu_addr_new = mcu1.readUint16(cpu_addr_off);
-      if(cpu_addr_new != cpu_addr) {
-        cpu_addr = cpu_addr_new;
-        //logs.push(`CPU6510 is at \$${cpu_addr.toString(16)}, cycle ${mcu1.core0.cycles}`);
-      }
   }
+
+  if(debug_crash_cycle>0 && mcu1.core0.cycles>debug_crash_cycle) throw new Error("Debug crash");
+
   write_pic();
   setTimeout(() => run_mcus(), 0);
   } catch(e) {
-    logs.push(`*** ${e} ***`);
+    logs.push(`*** ${e} at ARM cycle ${mcu1.core0.cycles} ***`);
     log_state();
     console.error(logs.join("\n"));
     vcd_file.destroy();
