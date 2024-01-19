@@ -134,7 +134,7 @@ export class StateMachine {
 
   execOpcode: number = 0;
   execValid = false;
-  updatePC = true;
+  nextPC: number = 0;
 
   clockDivInt: number = 1;
   clockDivFrac: number = 0;
@@ -337,8 +337,7 @@ export class StateMachine {
 
       // PC
       case 0b101:
-        this.pc = value & 0x1f;
-        this.updatePC = false;
+        this.nextPC = value & 0x1f;
         break;
 
       // ISR (also sets ISR shift counter to Bit count)
@@ -406,13 +405,11 @@ export class StateMachine {
   }
 
   setOutPinDirs(value: number) {
-if(this.rp2040.debug) console.log(`DIRS: PIO SM ${this.index} (PC ${this.pc}, cycles? ${this.cycles}) changed pin dirs: ${value}`);
     this.outPinDirection = value;
     this.pio.pinDirectionsChanged(value, this.outBase, this.outCount);
   }
 
   setOutPins(value: number) {
-if(this.rp2040.debug) console.log(`VALS: PIO SM ${this.index} (PC ${this.pc}, cycles? ${this.cycles}) changed pin vals: ${value}`);
     this.outPinValues = value;
     this.pio.pinValuesChanged(value, this.outBase, this.outCount);
   }
@@ -442,14 +439,12 @@ if(this.rp2040.debug) console.log(`VALS: PIO SM ${this.index} (PC ${this.pc}, cy
   }
 
   executeInstruction(opcode: number) {
-if(this.rp2040.debug) console.log(`PC:  PIO SM ${this.index} (PC ${this.pc}, cycles? ${this.cycles})`);
     const arg = opcode & 0xff;
     switch (opcode >>> 13) {
       /* JMP */
       case 0b000:
         if (this.jmpCondition(arg >> 5)) {
-          this.pc = arg & 0x1f;
-          this.updatePC = false;
+          this.nextPC = arg & 0x1f;
         }
         break;
 
@@ -676,14 +671,13 @@ if(this.rp2040.debug) console.log(`PC:  PIO SM ${this.index} (PC ${this.pc}, cyc
     this.waitPolarity = polarity;
     this.waitIndex = index;
     this.waitDelay = -1;
-    this.updatePC = false;
   }
 
-  nextPC() {
+  advancePC() {
     if (this.pc === this.wrapTop) {
       this.pc = this.wrapBottom;
     } else {
-      this.pc = (this.pc + 1) & 0x1f;
+      this.pc = this.nextPC & 0x1f;
     }
   }
 
@@ -723,11 +717,9 @@ if(this.rp2040.debug) console.log(`PC:  PIO SM ${this.index} (PC ${this.pc}, cyc
       }
     }
 
-    this.updatePC = true;
+    this.advancePC();
+    this.nextPC = this.pc + 1;
     this.executeInstruction(this.pio.instructions[this.pc]);
-    if (this.updatePC) {
-      this.nextPC();
-    }
   }
 
   setSetPinDirs(value: number) {
@@ -789,8 +781,7 @@ if(this.rp2040.debug) console.log(`PC:  PIO SM ${this.index} (PC ${this.pc}, cyc
 
       // PC
       case 0b101:
-        this.pc = value & 0x1f;
-        this.updatePC = false;
+        this.nextPC = value & 0x1f;
         break;
 
       // ISR (Input shift counter is reset to 0 by this operation, i.e. empty)
@@ -940,7 +931,6 @@ if(this.rp2040.debug) console.log(`PC:  PIO SM ${this.index} (PC ${this.pc}, cyc
     }
 
     if (!this.waiting) {
-      this.nextPC();
       this.remainingDelay += this.waitDelay;
       this.execCtrl &= ~EXECCTRL_EXEC_STALLED;
     }
