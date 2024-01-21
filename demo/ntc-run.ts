@@ -1,6 +1,6 @@
 const vcd_enabled = false;
-const tracing_enabled = true;
-const debug_crash_cycle = 0; //69816205;
+const debug_crash_cycle = parseInt(process.env.CNM64_RUN_TO_CYCLE || "0");
+const tracing_enabled = debug_crash_cycle>0;
 const start_tracing_at_cycle = debug_crash_cycle - 10000;
 
 const GIFEncoder = require('gifencoder');
@@ -168,26 +168,43 @@ let main_cycle_start_mark = 0;
 function run_mcus() {
   let cycles_mcu2_behind = 0;
   let cycles_mcu3_behind = 0;
+  const colLen = 18;
   let logs: string[] = [];
   let pTags: string[] = ["", "", "", ""];
-  const tagContinue = "...".padEnd(22);
+  const tagContinue = "...".padEnd(colLen);
+  const tagCycleStart = "cycle start".padEnd(colLen);
 
   function log_state() {
     const vic_h_count = mcu2.readUint32(vic_h_count_off);
     const cpu_addr = mcu1.readUint16(cpu_addr_off);
     let wTags: string[] = [];
-    const pTags_updated: string[] = [mcu1.core0.profilerTag, mcu1.core1.profilerTag, mcu2.core0.profilerTag, mcu2.core1.profilerTag, mcu1.pio[0].machines[0].pc.toString(), mcu2.pio[1].machines[0].pc.toString(), mcu2.pio[1].machines[1].pc.toString(), mcu3.pio[1].machines[0].pc.toString()];
+    const pTags_updated: string[] = [mcu1.core0.profilerTag, mcu1.core1.profilerTag, mcu2.core0.profilerTag, mcu2.core1.profilerTag,
+                                     mcu1.pio[0].machines[0].pc.toString(), mcu2.pio[1].machines[0].pc.toString(), mcu2.pio[1].machines[1].pc.toString(), mcu3.pio[1].machines[0].pc.toString()];
+    const pInstrs: number[] = [0, 0, 0, 0, mcu1.pio[0].instructions[mcu1.pio[0].machines[0].pc],
+                                           mcu2.pio[1].instructions[mcu2.pio[1].machines[0].pc],
+                                           mcu2.pio[1].instructions[mcu2.pio[1].machines[1].pc],
+                                           mcu3.pio[1].instructions[mcu3.pio[1].machines[0].pc]];
     for(let i = 0; i < 4; i++) {
       const tag = pTags_updated[i];
-      wTags.push(tag==pTags[i]?tagContinue:tag.padEnd(22));
+      wTags.push(tag==pTags[i]?tagContinue:tag.padEnd(colLen));
     }
     for(let i = 4; i < 8; i++) {
       const tag = pTags_updated[i];
-      wTags.push(tag==pTags[i]?"~~":tag.padStart(2,"0"));
+      let instrAnn = " ";
+      const opcPar = pInstrs[i]&0b1110000011100000;
+      if(opcPar==0b0100000000000000) instrAnn = "i"; // IN PINS
+      else if(opcPar==0b0110000000000000) instrAnn = "o"; // OUT PINS
+      else if(opcPar==0b0110000010000000) instrAnn = "d"; // OUT PINDIRS
+      wTags.push(tag==pTags[i]?"~~ ":(tag.padStart(2,"0")+instrAnn));
     }
     pTags = pTags_updated;
-    //if(wTags[0] == "cycle start".padEnd(22)) { console.log(`${mcu1.core0.cycles - main_cycle_start_mark}`); main_cycle_start_mark = mcu1.core0.cycles; }
-    logs.push(`${mcu1.core0.cycles} MAIN0@${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} MAIN1@${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} VIC0@${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} VIC1@${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} MAIN_PIO@${wTags[4]}/${main_pio_state_str[main_pio_state]} VIC_PIO@${wTags[5]}/${mcu2.pio[1].machines[0].rxFIFO.itemCount} VIC_OUT@${wTags[6]} OUT_INP@${wTags[7]} VIC_H_COUNT@${vic_h_count.toString().padStart(2,"0")} CPU6510@${cpu_addr.toString(16).padStart(4,"0")}`);
+    let cycleTag = "";
+    if(wTags[0] == tagCycleStart) {
+      main_cycle_start_mark = mcu1.core0.cycles; cycleTag = mcu1.core0.cycles.toString().padStart(10, " ");
+    } else {
+      cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_mark).toString())).padStart(10, " ");
+    }
+    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_pio_state_str[main_pio_state]} V_PIO@${wTags[5]}/${mcu2.pio[1].machines[0].rxFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
@@ -237,8 +254,9 @@ function run_mcus() {
   write_pic();
   setTimeout(() => run_mcus(), 0);
   } catch(e) {
-    logs.push(`*** ${e} at ARM cycle ${mcu1.core0.cycles} ***`);
+    logs.push(`*** Exception ${e} - try running with CNM64_RUN_TO_CYCLE=${mcu1.core0.cycles} ***`);
     log_state();
+    if(logs.length>5000) logs=logs.slice(logs.length-5000);
     console.error(logs.join("\n"));
     vcd_file.destroy();
     fs.writeFileSync("/tmp/rp2040_crash.bin", Buffer.from(mcu1.sram));
