@@ -237,9 +237,10 @@ function run_mcus() {
         if(mcu1.pio[0].machines[0].pc==1) main_pio_state = (main_pio_state + 1) % 5; // out PC
         mcu1.stepPios(1);
         mcu2.stepPios(1);
-        if(mcu2.pio[1].fdebug & 0x0f0f0000) {
+        if(mcu2.pio[1].fdebug & 0x0f0f0f00) {
           if(mcu2.pio[1].fdebug & 0x0f000000) throw new Error(`VIC PIO TX STALL: ${(mcu2.pio[1].fdebug>>24)&15}`);
           if(mcu2.pio[1].fdebug & 0x000f0000) throw new Error(`VIC PIO TX OVERFLOW: ${(mcu2.pio[1].fdebug>>16)&15}`);
+          if(mcu2.pio[1].fdebug & 0x00000f00) throw new Error(`VIC PIO RX UNDERFLOW: ${(mcu2.pio[1].fdebug>>8)&15}`);
         }
         if(mcu3_pio_cycles_behind > 0) {
           mcu3_pio_cycles_behind--;
