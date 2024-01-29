@@ -163,7 +163,13 @@ function write_pic() {
 
 const main_pio_state_str: string[] = ["p1 ", "p2a", "p2b", "p3 ", "p4 "];
 let main_pio_state = -1;
-let main_cycle_start_mark = 0;
+
+const tagCycleStart = "cycle start";
+let main_cycle_start_off = 0;
+class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number = 0; vic_h: number = 0; }
+let main_loop_stats: MainLoopStats[] = [];
+let main_cycle_start_at = 0;
+
 let got_sigint = false;
 process.on('SIGINT', () => {got_sigint = true;});
 
@@ -174,7 +180,6 @@ function run_mcus() {
   let logs: string[] = [];
   let pTags: string[] = ["", "", "", ""];
   const tagContinue = "...".padEnd(colLen);
-  const tagCycleStart = "cycle start".padEnd(colLen);
 
   function log_state() {
     const vic_h_count = mcu2.readUint32(vic_h_count_off);
@@ -201,10 +206,10 @@ function run_mcus() {
     }
     pTags = pTags_updated;
     let cycleTag = "";
-    if(wTags[0] == tagCycleStart) {
-      main_cycle_start_mark = mcu1.core0.cycles; cycleTag = mcu1.core0.cycles.toString().padStart(10, " ");
+    if(mcu1.core0.PC==main_cycle_start_off) {
+      cycleTag = mcu1.core0.cycles.toString().padStart(10, " ");
     } else {
-      cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_mark).toString())).padStart(10, " ");
+      cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_at).toString())).padStart(10, " ");
     }
     logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_pio_state_str[main_pio_state]} V_PIO@${wTags[5]}/${mcu2.pio[1].machines[0].rxFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")}`);
   }
@@ -248,11 +253,17 @@ function run_mcus() {
         }
       }
 
+      if((main_cycle_start_off==0)&&(mcu1.core0.profilerTag=="cycle start")) {
+        main_cycle_start_off=mcu1.core0.PC;
+        main_cycle_start_at = mcu1.core0.cycles;
+      } else if(mcu1.core0.PC==main_cycle_start_off) {
+        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: 0, vic_h: mcu2.readUint32(vic_h_count_off)});
+        main_cycle_start_at = mcu1.core0.cycles;
+      }
       if(tracing_enabled && (mcu1.core0.cycles > start_tracing_at_cycle)) log_state();
       if(got_sigint) throw new Error("caught sigint");
+      if(debug_crash_cycle>0 && mcu1.core0.cycles>debug_crash_cycle) throw new Error("Debug crash");
   }
-
-  if(debug_crash_cycle>0 && mcu1.core0.cycles>debug_crash_cycle) throw new Error("Debug crash");
 
   write_pic();
   setTimeout(() => run_mcus(), 0);
@@ -263,6 +274,12 @@ function run_mcus() {
     console.error(logs.join("\n"));
     vcd_file.destroy();
     fs.writeFileSync("/tmp/rp2040_crash.bin", Buffer.from(mcu1.sram));
+    console.error("\n*** Statistics ***");
+    if(main_loop_stats.length>100) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-50);
+    for(let l of main_loop_stats) {
+      console.error(`${l.startCycle} took ${l.duration} cycles, vic_h ${l.vic_h}`);
+    }
+    write_pic();
     throw e;
   }
 }
