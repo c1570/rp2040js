@@ -164,6 +164,8 @@ function write_pic() {
 const main_pio_state_str: string[] = ["p1 ", "p2a", "p2b", "p3 ", "p4 "];
 let main_pio_state = -1;
 let main_cycle_start_mark = 0;
+let got_sigint = false;
+process.on('SIGINT', () => {got_sigint = true;});
 
 function run_mcus() {
   let cycles_mcu2_behind = 0;
@@ -230,8 +232,6 @@ function run_mcus() {
         cycles_mcu3_behind -= mcu3.stepCores();
       }
 
-      if(tracing_enabled && (mcu1.core0.cycles > start_tracing_at_cycle)) log_state();
-
       // now, let PIOs catch up - done separately from MCU cores to reduce jitter
       for(let pCycles = 0; pCycles < cycles; pCycles++) {
         if(mcu1.pio[0].machines[0].pc==1) main_pio_state = (main_pio_state + 1) % 5; // out PC
@@ -248,6 +248,8 @@ function run_mcus() {
         }
       }
 
+      if(tracing_enabled && (mcu1.core0.cycles > start_tracing_at_cycle)) log_state();
+      if(got_sigint) throw new Error("caught sigint");
   }
 
   if(debug_crash_cycle>0 && mcu1.core0.cycles>debug_crash_cycle) throw new Error("Debug crash");
