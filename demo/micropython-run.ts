@@ -1,4 +1,5 @@
 import { RP2040 } from '../src';
+import { Simulator } from '../src/simulator';
 import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
 import { USBCDC } from '../src/usb/cdc';
 import { ConsoleLogger, LogLevel } from '../src/utils/logging';
@@ -19,7 +20,8 @@ const args = minimist(process.argv.slice(2), {
 });
 const expectText = args['expect-text'];
 
-const mcu = new RP2040();
+const simulator = new Simulator();
+const mcu = simulator.rp2040;
 mcu.loadBootrom(bootromB1);
 mcu.logger = new ConsoleLogger(LogLevel.Error);
 
@@ -42,7 +44,7 @@ if (fs.existsSync('littlefs.img') && !args.circuitpython) {
 }
 
 if (args.gdb) {
-  const gdbServer = new GDBTCPServer(mcu, 3333);
+  const gdbServer = new GDBTCPServer(simulator, 3333);
   console.log(`RP2040 GDB Server ready! Listening on port ${gdbServer.port}`);
 }
 
@@ -89,7 +91,5 @@ process.stdin.on('data', (chunk) => {
   }
 });
 
-mcu.core0.PC = 0x10000000;
-mcu.core1.PC = 0x10000000;
-mcu.core1.waiting = true;
-mcu.execute();
+simulator.rp2040.core0.PC = 0x10000000;
+simulator.execute();

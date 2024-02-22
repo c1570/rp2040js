@@ -5,10 +5,10 @@
  */
 
 import { SYSM_CONTROL, SYSM_MSP, SYSM_PRIMASK, SYSM_PSP } from '../cortex-m0-core';
-import { RP2040 } from '../rp2040';
 import { ConsoleLogger, Logger, LogLevel } from '../utils/logging';
 import { GDBConnection } from './gdb-connection';
 import { Core } from '../core';
+import { IGDBTarget } from './gdb-target';
 import {
   decodeHexBuf,
   encodeHexBuf,
@@ -83,10 +83,10 @@ export class GDBServer {
 
   private readonly connections = new Set<GDBConnection>();
 
-  constructor(readonly rp2040: RP2040) {}
+  constructor(readonly target: IGDBTarget) {}
 
   processGDBMessage(cmd: string) {
-    const { rp2040 } = this;
+    const { rp2040 } = this.target;
     const { core0: core } = rp2040;
     if (cmd === 'Hg0') {
       return gdbMessage('OK');
@@ -129,8 +129,8 @@ export class GDBServer {
           return gdbMessage('vCont;c;C;s;S');
         }
         if (cmd.startsWith('vCont;c')) {
-          if (!rp2040.executing(Core.Core0)) {
-            rp2040.execute();
+          if (!this.target.executing(Core.Core0)) {
+            this.target.execute();
           }
           return;
         }
@@ -146,8 +146,8 @@ export class GDBServer {
         break;
 
       case 'c':
-        if (!rp2040.executing(Core.Core0)) {
-          rp2040.execute();
+        if (!this.target.executing(Core.Core0)) {
+          this.target.execute();
         }
         return gdbMessage('OK');
 
@@ -190,7 +190,7 @@ export class GDBServer {
 
       case 'P': {
         // Write register
-        const params = cmd.substr(1).split('=');
+        const params = cmd.substring(1).split('=');
         const registerIndex = parseInt(params[0], 16);
         const registerValue = params[1].trim();
         const registerBytes = registerIndex > 0x12 ? 1 : 4;
@@ -260,10 +260,11 @@ export class GDBServer {
   }
 
   addConnection(connection: GDBConnection) {
+    const { rp2040 } = this.target;
     this.connections.add(connection);
-    this.rp2040.core0.onBreak = () => {
-      this.rp2040.stop();
-      this.rp2040.core0.PC -= this.rp2040.core0.breakRewind;
+    rp2040.core0.onBreak = () => {
+      this.target.stop();
+      rp2040.core0.PC -= rp2040.core.breakRewind;
       for (const connection of this.connections) {
         connection.onBreakpoint();
       }

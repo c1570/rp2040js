@@ -1,6 +1,6 @@
 import { IRPChip } from './rpchip';
 import { IClock } from './clock/clock';
-import { RealtimeClock } from './clock/realtime-clock';
+import { SimulationClock } from './clock/simulation-clock';
 import { CortexM0Core } from './cortex-m0-core';
 import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } from './gpio-pin';
 import { IRQ } from './irq';
@@ -138,11 +138,7 @@ export class RP2040 implements IRPChip {
     }),
   ];
 
-  private stopped = true;
-
   public logger: Logger = new ConsoleLogger(LogLevel.Debug, true);
-
-  private executeTimer: NodeJS.Timeout | null = null;
 
   readonly peripherals: { [index: number]: Peripheral } = {
     0x18000: new RPSSI(this, 'SSI'),
@@ -179,7 +175,14 @@ export class RP2040 implements IRPChip {
     0x50300: this.pio[1],
   };
 
-  constructor(readonly debug: boolean = false, readonly clock: IClock = new RealtimeClock()) {
+  // Debugging
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  public onBreak = (code: number) => {
+    // TODO: raise HardFault exception
+    // console.error('Breakpoint!', code);
+  };
+
+  constructor(readonly clock: IClock = new SimulationClock()) {
     this.reset();
     this.core0.onSEV = () => {
       if (this.core1.waiting) {

@@ -10,7 +10,7 @@ export { USBCDC } from './usb/cdc';
 export {
   DataDirection,
   DescriptorType,
-  ISetupPacketParams,
+  type ISetupPacketParams,
   SetupRecipient,
   SetupRequest,
   SetupType,
@@ -21,4 +21,4 @@ export {
   setDeviceAddressPacket,
   setDeviceConfigurationPacket,
 } from './usb/setup';
-export { ConsoleLogger, Logger, LogLevel } from './utils/logging';
+export { ConsoleLogger, Logger, type LogLevel } from './utils/logging';

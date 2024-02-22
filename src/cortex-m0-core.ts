@@ -593,7 +593,7 @@ export class CortexM0Core {
   executeInstruction() {
     if (this.waiting) {
       this.cycles++;
-      return;
+      return 1;
     }
     if (this.interruptsUpdated) {
       if (this.checkForInterrupts()) {
@@ -606,7 +606,7 @@ export class CortexM0Core {
     const wideInstruction = opcode >> 12 === 0b1111 || opcode >> 11 === 0b11101;
     const opcode2 = wideInstruction ? this.readUint16(opcodePC + 2) : 0;
     this.PC += 2;
-    this.cycles++;
+    let deltaCycles = 1;
     // ADCS
     if (opcode >> 6 === 0b0100000101) {
       const Rm = (opcode >> 3) & 0x7;
@@ -658,7 +658,7 @@ export class CortexM0Core {
         this.registers[Rdn] = result;
       } else if (Rdn === pcRegister) {
         this.registers[Rdn] = result & ~0x1;
-        this.cycles++;
+        deltaCycles++;
       } else if (Rdn === spRegister) {
         this.registers[Rdn] = result & ~0x3;
       }
@@ -712,7 +712,7 @@ export class CortexM0Core {
       }
       if (this.checkCondition(cond)) {
         this.PC += imm8 + 2;
-        this.cycles++;
+        deltaCycles++;
       }
     }
     // B
@@ -733,7 +733,7 @@ export class CortexM0Core {
         imm11 = (imm11 & 0x7ff) - 0x800;
       }
       this.PC += imm11 + 2;
-      this.cycles++;
+      deltaCycles++;
     }
     // BICS
     else if (opcode >> 6 === 0b0100001110) {
@@ -763,7 +763,7 @@ export class CortexM0Core {
         ((S ? 0b11111111 : 0) << 24) | ((I1 << 23) | (I2 << 22) | (imm10 << 12) | (imm11 << 1));
       this.LR = (this.PC + 2) | 0x1;
       this.PC += 2 + imm32;
-      this.cycles += 2;
+      deltaCycles += 2;
       this.blTaken(this, false);
     }
     // BLX
@@ -771,14 +771,14 @@ export class CortexM0Core {
       const Rm = (opcode >> 3) & 0xf;
       this.LR = this.PC | 0x1;
       this.PC = this.registers[Rm] & ~1;
-      this.cycles++;
+      deltaCycles++;
       this.blTaken(this, true);
     }
     // BX
     else if (opcode >> 7 === 0b010001110 && (opcode & 0x7) === 0) {
       const Rm = (opcode >> 3) & 0xf;
       this.BXWritePC(this.registers[Rm]);
-      this.cycles++;
+      deltaCycles++;
     }
     // CMN (register)
     else if (opcode >> 6 === 0b0100001011) {
@@ -816,12 +816,12 @@ export class CortexM0Core {
     // DMB SY
     else if (opcode === 0xf3bf && (opcode2 & 0xfff0) === 0x8f50) {
       this.PC += 2;
-      this.cycles += 2;
+      deltaCycles += 2;
     }
     // DSB SY
     else if (opcode === 0xf3bf && (opcode2 & 0xfff0) === 0x8f40) {
       this.PC += 2;
-      this.cycles += 2;
+      deltaCycles += 2;
     }
     // EORS
     else if (opcode >> 6 === 0b0100000001) {
@@ -835,7 +835,7 @@ export class CortexM0Core {
     // ISB SY
     else if (opcode === 0xf3bf && (opcode2 & 0xfff0) === 0x8f60) {
       this.PC += 2;
-      this.cycles += 2;
+      deltaCycles += 2;
     }
     // LDMIA
     else if (opcode >> 11 === 0b11001) {
@@ -846,7 +846,7 @@ export class CortexM0Core {
         if (registers & (1 << i)) {
           this.registers[i] = this.readUint32(address);
           address += 4;
-          this.cycles++;
+          deltaCycles++;
         }
       }
       // Write back
@@ -860,7 +860,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rn] + imm5;
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint32(addr);
     }
     // LDR (sp + immediate)
@@ -868,7 +868,7 @@ export class CortexM0Core {
       const Rt = (opcode >> 8) & 0x7;
       const imm8 = opcode & 0xff;
       const addr = this.SP + (imm8 << 2);
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint32(addr);
     }
     // LDR (literal)
@@ -877,7 +877,7 @@ export class CortexM0Core {
       const Rt = (opcode >> 8) & 7;
       const nextPC = this.PC + 2;
       const addr = (nextPC & 0xfffffffc) + imm8;
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint32(addr);
     }
     // LDR (register)
@@ -886,7 +886,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint32(addr);
     }
     // LDRB (immediate)
@@ -895,7 +895,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rn] + imm5;
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint8(addr);
     }
     // LDRB (register)
@@ -904,7 +904,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint8(addr);
     }
     // LDRH (immediate)
@@ -913,7 +913,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rn] + (imm5 << 1);
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint16(addr);
     }
     // LDRH (register)
@@ -922,7 +922,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = this.readUint16(addr);
     }
     // LDRSB
@@ -931,7 +931,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = signExtend8(this.readUint8(addr));
     }
     // LDRSH
@@ -940,7 +940,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const addr = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(addr);
+      deltaCycles += this.cyclesIO(addr);
       this.registers[Rt] = signExtend16(this.readUint16(addr));
     }
     // LSLS (immediate)
@@ -997,7 +997,7 @@ export class CortexM0Core {
       const Rd = ((opcode >> 4) & 0x8) | (opcode & 0x7);
       let value = Rm === pcRegister ? this.PC + 2 : this.registers[Rm];
       if (Rd === pcRegister) {
-        this.cycles++;
+        deltaCycles++;
         value &= ~1;
       } else if (Rd === spRegister) {
         value &= ~3;
@@ -1018,7 +1018,7 @@ export class CortexM0Core {
       const Rd = (opcode2 >> 8) & 0xf;
       this.registers[Rd] = this.readSpecialRegister(SYSm);
       this.PC += 2;
-      this.cycles += 2;
+      deltaCycles += 2;
     }
     // MSR
     else if (opcode >> 4 === 0b111100111000 && opcode2 >> 8 == 0b10001000) {
@@ -1026,7 +1026,7 @@ export class CortexM0Core {
       const Rn = opcode & 0xf;
       this.writeSpecialRegister(SYSm, this.registers[Rn]);
       this.PC += 2;
-      this.cycles += 2;
+      deltaCycles += 2;
     }
     // MULS
     else if (opcode >> 6 === 0b0100001101) {
@@ -1063,13 +1063,13 @@ export class CortexM0Core {
         if (opcode & (1 << i)) {
           this.registers[i] = this.readUint32(address);
           address += 4;
-          this.cycles++;
+          deltaCycles++;
         }
       }
       if (P) {
         this.SP = address + 4;
         this.BXWritePC(this.readUint32(address));
-        this.cycles += 2;
+        deltaCycles += 2;
       } else {
         this.SP = address;
       }
@@ -1086,7 +1086,7 @@ export class CortexM0Core {
       for (let i = 0; i <= 7; i++) {
         if (opcode & (1 << i)) {
           this.writeUint32(address, this.registers[i]);
-          this.cycles++;
+          deltaCycles++;
           address += 4;
         }
       }
@@ -1169,7 +1169,7 @@ export class CortexM0Core {
         if (registers & (1 << i)) {
           this.writeUint32(address, this.registers[i]);
           address += 4;
-          this.cycles++;
+          deltaCycles++;
         }
       }
       // Write back
@@ -1183,7 +1183,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const address = this.registers[Rn] + imm5;
-      this.cycles += this.cyclesIO(address, true);
+      deltaCycles += this.cyclesIO(address, true);
       this.writeUint32(address, this.registers[Rt]);
     }
     // STR (sp + immediate)
@@ -1191,7 +1191,7 @@ export class CortexM0Core {
       const Rt = (opcode >> 8) & 0x7;
       const imm8 = opcode & 0xff;
       const address = this.SP + (imm8 << 2);
-      this.cycles += this.cyclesIO(address, true);
+      deltaCycles += this.cyclesIO(address, true);
       this.writeUint32(address, this.registers[Rt]);
     }
     // STR (register)
@@ -1200,7 +1200,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const address = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(address, true);
+      deltaCycles += this.cyclesIO(address, true);
       this.writeUint32(address, this.registers[Rt]);
     }
     // STRB (immediate)
@@ -1209,7 +1209,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const address = this.registers[Rn] + imm5;
-      this.cycles += this.cyclesIO(address, true);
+      deltaCycles += this.cyclesIO(address, true);
       this.writeUint8(address, this.registers[Rt]);
     }
     // STRB (register)
@@ -1218,7 +1218,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const address = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(address, true);
+      deltaCycles += this.cyclesIO(address, true);
       this.writeUint8(address, this.registers[Rt]);
     }
     // STRH (immediate)
@@ -1227,7 +1227,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const address = this.registers[Rn] + imm5;
-      this.cycles += this.cyclesIO(address, true);
+      deltaCycles += this.cyclesIO(address, true);
       this.writeUint16(address, this.registers[Rt]);
     }
     // STRH (register)
@@ -1236,7 +1236,7 @@ export class CortexM0Core {
       const Rn = (opcode >> 3) & 0x7;
       const Rt = opcode & 0x7;
       const address = this.registers[Rm] + this.registers[Rn];
-      this.cycles += this.cyclesIO(address, true);
+      deltaCycles += this.cyclesIO(address, true);
       this.writeUint16(address, this.registers[Rt]);
     }
     // SUB (SP minus immediate)
@@ -1319,8 +1319,7 @@ export class CortexM0Core {
     }
     // WFE
     else if (opcode === 0b1011111100100000) {
-      this.cycles++;
-      //this.logger.warn(this.coreLabel, `WFE`);
+      deltaCycles++;
       if (this.eventRegistered) {
         this.eventRegistered = false;
       } else {
@@ -1329,8 +1328,7 @@ export class CortexM0Core {
     }
     // WFI
     else if (opcode === 0b1011111100110000) {
-      //this.logger.warn(this.coreLabel, `WFI`);
-      this.cycles++;
+      deltaCycles++;
       this.waiting = true;
     }
     // YIELD
@@ -1344,5 +1342,8 @@ export class CortexM0Core {
       );
       this.logger.warn(this.coreLabel, `Opcode: 0x${opcode.toString(16)} (0x${opcode2.toString(16)})`);
     }
+
+    this.cycles += deltaCycles;
+    return deltaCycles;
   }
 }

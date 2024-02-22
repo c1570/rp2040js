@@ -1,4 +1,4 @@
-import { IClock, IClockTimer } from '../clock/clock';
+import { IClock, IAlarm } from '../clock/clock';
 import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
@@ -21,20 +21,17 @@ const ALARM_3 = 1 << 3;
 class RPTimerAlarm {
   armed = false;
   targetMicros = 0;
-  timer: IClockTimer | null = null;
 
-  constructor(readonly name: string, readonly bitValue: number) {}
+  constructor(
+    readonly bitValue: number,
+    readonly clockAlarm: IAlarm,
+  ) {}
 }
 
 export class RPTimer extends BasePeripheral implements Peripheral {
   private readonly clock: IClock;
   private latchedTimeHigh = 0;
-  private readonly alarms = [
-    new RPTimerAlarm('Alarm 0', ALARM_0),
-    new RPTimerAlarm('Alarm 1', ALARM_1),
-    new RPTimerAlarm('Alarm 2', ALARM_2),
-    new RPTimerAlarm('Alarm 3', ALARM_3),
-  ];
+  private readonly alarms;
   private intRaw = 0;
   private intEnable = 0;
   private intForce = 0;
@@ -63,6 +60,24 @@ export class RPTimer extends BasePeripheral implements Peripheral {
       default:
         throw Error("Unknown rpchip identifier");
     }
+    this.alarms = [
+      new RPTimerAlarm(
+        ALARM_0,
+        this.clock.createAlarm(() => this.fireAlarm(0)),
+      ),
+      new RPTimerAlarm(
+        ALARM_1,
+        this.clock.createAlarm(() => this.fireAlarm(1)),
+      ),
+      new RPTimerAlarm(
+        ALARM_2,
+        this.clock.createAlarm(() => this.fireAlarm(2)),
+      ),
+      new RPTimerAlarm(
+        ALARM_3,
+        this.clock.createAlarm(() => this.fireAlarm(3)),
+      ),
+    ];
   }
 
   get intStatus() {
@@ -70,7 +85,7 @@ export class RPTimer extends BasePeripheral implements Peripheral {
   }
 
   readUint32(offset: number) {
-    const time = this.rp2040.cycles / 125;
+    const time = this.clock.nanos / 1000;
 
     switch (offset) {
       case TIMEHR:
@@ -126,11 +141,10 @@ export class RPTimer extends BasePeripheral implements Peripheral {
       case ALARM3: {
         const alarmIndex = (offset - ALARM0) / 4;
         const alarm = this.alarms[alarmIndex];
-        const delta = (value - this.clock.micros) >>> 0;
-        this.disarmAlarm(alarm);
+        const deltaMicros = (value - this.clock.nanos / 1000) >>> 0;
         alarm.armed = true;
         alarm.targetMicros = value;
-        alarm.timer = this.clock.createTimer(delta, () => this.fireAlarm(alarmIndex));
+        alarm.clockAlarm.schedule(deltaMicros * 1000);
         break;
       }
       case ARMED:
@@ -179,10 +193,7 @@ export class RPTimer extends BasePeripheral implements Peripheral {
   }
 
   private disarmAlarm(alarm: RPTimerAlarm) {
-    if (alarm.timer) {
-      this.clock.deleteTimer(alarm.timer);
-      alarm.timer = null;
-    }
+    alarm.clockAlarm.cancel();
     alarm.armed = false;
   }
 }

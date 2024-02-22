@@ -4,7 +4,7 @@ import { gdbChecksum, gdbMessage } from './gdb-utils';
 export type GDBResponseHandler = (value: string) => void;
 
 export class GDBConnection {
-  readonly rp2040 = this.server.rp2040;
+  readonly target = this.server.target;
   private buf = '';
 
   constructor(private server: GDBServer, private onResponse: GDBResponseHandler) {
@@ -16,7 +16,7 @@ export class GDBConnection {
     const { onResponse } = this;
     if (data.charCodeAt(0) === 3) {
       this.server.info('BREAK');
-      this.rp2040.stop();
+      this.target.stop();
       onResponse(gdbMessage(STOP_REPLY_SIGINT));
       data = data.slice(1);
     }

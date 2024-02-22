@@ -1,13 +1,16 @@
 import { createServer, Socket } from 'net';
 import { GDBConnection } from './gdb-connection';
 import { GDBServer } from './gdb-server';
-import { RP2040 } from '../rp2040';
+import { IGDBTarget } from './gdb-target';
 
 export class GDBTCPServer extends GDBServer {
   private socketServer = createServer();
 
-  constructor(rp2040: RP2040, readonly port: number = 3333) {
-    super(rp2040);
+  constructor(
+    target: IGDBTarget,
+    readonly port: number = 3333,
+  ) {
+    super(target);
     this.socketServer.listen(port);
     this.socketServer.on('connection', (socket) => this.handleConnection(socket));
   }

@@ -1,13 +1,14 @@
-import { GPIOPinState, RP2040 } from '../src';
+import fs from 'fs';
+import minimist from 'minimist';
+import { GPIOPinState, Simulator } from '../src';
 import { ConsoleLogger, LogLevel } from '../src/utils/logging';
 import { bootromB1 } from '../demo/bootrom';
 import { loadUF2, loadMicropythonFlashImage } from '../demo/load-flash';
-import fs from 'fs';
-import minimist from 'minimist';
 
 const args = minimist(process.argv.slice(2));
 
-const mcu = new RP2040();
+const simulator = new Simulator();
+const mcu = simulator.rp2040;
 mcu.loadBootrom(bootromB1);
 mcu.logger = new ConsoleLogger(LogLevel.Error);
 
@@ -44,10 +45,13 @@ mcu.gpio[5].addListener((state: GPIOPinState, oldState: GPIOPinState) => {
   }
 });
 
+const transmitAlarm = mcu.clock.createAlarm(() => {
+  mcu.spi[0].completeTransmit(0);
+});
 mcu.spi[0].onTransmit = (char) => {
   spiBuf += String.fromCharCode(char);
-  mcu.spi[0].completeTransmit(0);
+  transmitAlarm.schedule(2000); // 2us per byte, so 4 MHz SPI
 };
 
 mcu.core.PC = 0x10000000;
-mcu.execute();
+simulator.execute();
