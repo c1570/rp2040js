@@ -119,7 +119,7 @@ export class RPUSBController extends BasePeripheral {
   onEndpointWrite?: (endpoint: number, buffer: Uint8Array) => void;
   onEndpointRead?: (endpoint: number, byteCount: number) => void;
 
-  readDelayMicroseconds = 1;
+  readDelayMicroseconds = 10;
   writeDelayMicroseconds = 10; // Determined empirically
 
   get intStatus() {
