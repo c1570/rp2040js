@@ -2,6 +2,7 @@ const vcd_enabled = false;
 const debug_crash_cycle = parseInt(process.env.CNM64_RUN_TO_CYCLE || "0");
 let do_tracing = false;
 const debug_crash_emu_cycle = parseInt(process.env.CNM64_RUN_TO_EMU_CYCLE || "0");
+const debug_run_to_emu_addr = parseInt(process.env.CNM64_RUN_TO_EMU_ADDR || "0");
 
 const GIFEncoder = require('gifencoder');
 const { createCanvas, loadImage } = require('canvas');
@@ -166,7 +167,7 @@ function write_pic() {
 }
 
 const main_pio_state_str: string[] = ["p1 ", "p2a", "p2b", "p3 ", "p4 "];
-let main_pio_state = -1;
+let main_pio_state = -2;
 
 const tagCycleStart = "cycle start";
 let main_cycle_start_off = 0;
@@ -221,7 +222,8 @@ function run_mcus() {
     } else {
       cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_at).toString())).padStart(10, " ");
     }
-    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_pio_state_str[main_pio_state]} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")}`);
+    let main_state_str = main_pio_state>=0 ? main_pio_state_str[main_pio_state] : "---";
+    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
@@ -260,6 +262,11 @@ function run_mcus() {
         if(mcu1.pio[0].machines[0].pc==1) main_pio_state = (main_pio_state + 1) % 5; // out PC
         mcu1.stepPios(1);
         mcu2.stepPios(1);
+        if(mcu1.pio[0].fdebug & 0x0f0f0f00) {
+          if(mcu1.pio[0].fdebug & 0x0f000000) throw new Error(`MAIN PIO TX STALL: ${(mcu1.pio[0].fdebug>>24)&15}`);
+          if(mcu1.pio[0].fdebug & 0x000f0000) throw new Error(`MAIN PIO TX OVERFLOW: ${(mcu1.pio[0].fdebug>>16)&15}`);
+          if(mcu1.pio[0].fdebug & 0x00000f00) throw new Error(`MAIN PIO RX UNDERFLOW: ${(mcu1.pio[0].fdebug>>8)&15}`);
+        }
         if(mcu2.pio[1].fdebug & 0x0f0f0f00) {
           if(mcu2.pio[1].fdebug & 0x0f000000) throw new Error(`VIC PIO TX STALL: ${(mcu2.pio[1].fdebug>>24)&15}`);
           if(mcu2.pio[1].fdebug & 0x000f0000) throw new Error(`VIC PIO TX OVERFLOW: ${(mcu2.pio[1].fdebug>>16)&15}`);
@@ -289,6 +296,7 @@ function run_mcus() {
         if(debug_crash_emu_cycle>0 && cycles_6510>(debug_crash_emu_cycle-10)) do_tracing = true;
       }
       if(got_sigint) throw new Error("caught sigint");
+      if(debug_run_to_emu_addr>0 && mcu1.readUint16(cpu_addr_off)==debug_run_to_emu_addr) throw new Error("Debug EMU crash, reached addr");
   }
 
   write_pic();
