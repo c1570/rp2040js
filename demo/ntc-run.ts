@@ -60,39 +60,43 @@ let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d
 let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
+let gpio_cycle: number = 0;
+
 function pinListener(mcu_id: number, pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
     pin_state[mcu_id+1][pin] = state;
     let v: number = ((pin_state[0+1][pin]===0)||(pin_state[1+1][pin]===0))?0:1;
-    mcu1.gpio[pin+2].setInputValue((v==1)?true:false);
-    mcu2.gpio[pin+2].setInputValue((v==1)?true:false);
-    mcu3.gpio[pin+2].setInputValue((v==1)?true:false);
+    let gpio_pin = pin_gpio[pin];
+    let tfv = (v===1);
+    mcu1.gpio[gpio_pin].setInputValue(tfv);
+    mcu2.gpio[gpio_pin].setInputValue(tfv);
+    mcu3.gpio[gpio_pin].setInputValue(tfv);
 
     // write signal to VCD file
     if(pin_state[0][pin]!==v) {
       pin_state[0][pin]=v;
       if(vcd_enabled) {
         let pin_vcd_id = String.fromCharCode(pin+34);
-        vcd_file.write(`#${mcu1.core0.cycles} ${v}${pin_vcd_id}\n`);
+        vcd_file.write(`#${gpio_cycle} ${v}${pin_vcd_id}\n`);
       }
     }
 
     if(vcd_enabled) {
       // write conflict flag to VCD file
       let conflict: boolean = ((pin_state[0+1][pin]===0)&&(pin_state[1+1][pin]===1))||((pin_state[0+1][pin]===1)&&(pin_state[1+1][pin]===0));
-      //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${mcu1.core0.cycles} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
+      //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${gpio_cycle} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
       let have_new_conflict = conflict&&(last_conflict_cycle === -1);
       let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
-      if(conflict_recently_resolved && (mcu1.core0.cycles === last_conflict_cycle)) {
+      if(conflict_recently_resolved && (gpio_cycle === last_conflict_cycle)) {
         // one mcu set conflict and other resolved in same cycle:
         // delay until next signal change so that the conflict signal is visible in VCD
         return;
       }
       let write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
       if(write_conflict_flag) {
-        vcd_file.write(`#${mcu1.core0.cycles} ${conflict?1:0}!\n`);
+        vcd_file.write(`#${gpio_cycle} ${conflict?1:0}!\n`);
       }
-      last_conflict_cycle = conflict ? mcu1.core0.cycles : -1;
+      last_conflict_cycle = conflict ? gpio_cycle : -1;
     }
   };
 }
@@ -228,6 +232,7 @@ function run_mcus() {
       // run mcu1 for one step, take note of how many cycles that took,
       // then step mcu2 and mcu3 until they caught up.
       //console.log("MCU1");
+      gpio_cycle = mcu1.core0.cycles;
       let cycles = mcu1.stepCores();
       //if(mcu1.core0.cycles>15000000) if(cycles>2) console.log(`cycles MCU1: ${cycles}`);
       cycles_mcu2_behind += cycles;
@@ -264,6 +269,7 @@ function run_mcus() {
           mcu3_pio_cycles_behind--;
           mcu3.stepPios(1);
         }
+        gpio_cycle++;
       }
 
       if((main_cycle_start_off==0)&&(mcu1.core0.profilerTag=="cycle start")) {
