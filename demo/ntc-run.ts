@@ -181,6 +181,8 @@ let vic_cycle_start_at = 0;
 let vic_cycle_start_off = 0;
 let vic_cycle_end_off = 0;
 
+let next_cycle_time_output = 0;
+
 let got_sigint = false;
 process.on('SIGINT', () => {got_sigint = true;});
 
@@ -223,20 +225,23 @@ function run_mcus() {
       cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_at).toString())).padStart(10, " ");
     }
     let main_state_str = main_pio_state>=0 ? main_pio_state_str[main_pio_state] : "---";
-    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")}`);
+    let bus_pins = "";
+    for(let i = 0; i < 9; i++) bus_pins = bus_pins + ((mcu1.gpio[pin_gpio[i]].status>>17)&1).toString();
+    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
   try {
   for (let i = 0; i < 1000000; i++) {
-      if((mcu1.core0.cycles%(1<<25))===0) console.log(`clock: ${mcu1.core0.cycles/400000000} secs`);
+      if(mcu1.core0.cycles>next_cycle_time_output) {
+        next_cycle_time_output += 40000000;
+        console.log(`clock: ${((mcu1.core0.cycles/40000000)>>>0)/10} secs`);
+      }
 
       // run mcu1 for one step, take note of how many cycles that took,
       // then step mcu2 and mcu3 until they caught up.
-      //console.log("MCU1");
       gpio_cycle = mcu1.core0.cycles;
       let cycles = mcu1.stepCores();
-      //if(mcu1.core0.cycles>15000000) if(cycles>2) console.log(`cycles MCU1: ${cycles}`);
       cycles_mcu2_behind += cycles;
       let mcu3_cycles = cycles*(295/400);
       cycles_mcu3_behind += mcu3_cycles;
