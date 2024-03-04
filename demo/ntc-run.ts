@@ -1,11 +1,12 @@
 const vcd_enabled = false;
 const debug_crash_cycle = parseInt(process.env.CNM64_RUN_TO_CYCLE || "0");
-let do_tracing = false;
 const debug_crash_emu_cycle = parseInt(process.env.CNM64_RUN_TO_EMU_CYCLE || "0");
 const debug_run_to_emu_addr = parseInt(process.env.CNM64_RUN_TO_EMU_ADDR || "0");
+let trace_6510 = parseInt(process.env.CNM64_TRACE_6510 || "0"); //1: Verify, 2: Write
 
 const GIFEncoder = require('gifencoder');
 const { createCanvas, loadImage } = require('canvas');
+const readline = require('readline');
 
 import * as fs from 'fs';
 import { RP2040 } from '../src';
@@ -175,6 +176,14 @@ class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number
 let main_loop_stats: MainLoopStats[] = [];
 let main_cycle_start_at = 0;
 let cycles_6510 = 0;
+let do_tracing = false;
+
+let trace_6510_file = fs.createWriteStream(trace_6510==2?'/tmp/cnm64_trace_6510.txt':'/tmp/dummy3457.txt', {});
+let trace_6510_file_it: any = null;
+if(trace_6510==1) {
+  const rl = readline.createInterface({input: fs.createReadStream('/tmp/cnm64_trace_6510.txt', {})});
+  trace_6510_file_it = rl[Symbol.asyncIterator]();
+}
 
 let vic_loop_stats: MainLoopStats[] = [];
 let vic_cycle_start_at = 0;
@@ -183,10 +192,13 @@ let vic_cycle_end_off = 0;
 
 let next_cycle_time_output = 0;
 
+let addr_6510_last = -1;
+let trace_6510_step = 0;
+
 let got_sigint = false;
 process.on('SIGINT', () => {got_sigint = true;});
 
-function run_mcus() {
+async function run_mcus() {
   let cycles_mcu2_behind = 0;
   let cycles_mcu3_behind = 0;
   const colLen = 18;
@@ -302,6 +314,21 @@ function run_mcus() {
       }
       if(got_sigint) throw new Error("caught sigint");
       if(debug_run_to_emu_addr>0 && mcu1.readUint16(cpu_addr_off)==debug_run_to_emu_addr) throw new Error("Debug EMU crash, reached addr");
+
+      if(trace_6510>0) {
+        let addr_6510 = mcu1.readUint16(cpu_addr_off);
+        if(addr_6510 != addr_6510_last) {
+          trace_6510_step++;
+          if(trace_6510==2) {
+            trace_6510_file.write(`${addr_6510}\n`);
+          } else {
+            let line = await trace_6510_file_it.next();
+            if(line.done) { console.log("Trace validation ended without mismatches."); trace_6510=0; }
+            else if(line.value != addr_6510) throw new Error(`6510 addr mismatch, expected ${line.value}, got ${addr_6510}, step ${trace_6510_step}`);
+          }
+          addr_6510_last = addr_6510;
+        }
+      }
   }
 
   write_pic();
@@ -312,6 +339,7 @@ function run_mcus() {
     if(logs.length>5000) logs=logs.slice(logs.length-5000);
     console.error(logs.join("\n"));
     vcd_file.destroy();
+    if(trace_6510>0) trace_6510_file.destroy();
     fs.writeFileSync("/tmp/rp2040_crash.bin", Buffer.from(mcu1.sram));
     console.error("\n*** 6510 statistics ***");
     if(main_loop_stats.length>100) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-50);
