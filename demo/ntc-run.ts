@@ -109,7 +109,7 @@ for(let i = 0; i < pin_label.length; i++) {
   // OUTPUT is not source for any GPIOs
 }
 
-for(let i = 11; i < 16; i++) {
+for(let i = 11; i < 30; i++) {
   mcu1.gpio[i].setInputValue(true);
 }
 
@@ -238,8 +238,10 @@ async function run_mcus() {
     }
     let main_state_str = main_pio_state>=0 ? main_pio_state_str[main_pio_state] : "---";
     let bus_pins = "";
-    for(let i = 0; i < 9; i++) bus_pins = bus_pins + ((mcu1.gpio[pin_gpio[i]].status>>17)&1).toString();
-    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins}`);
+    let bus_bin = 0;
+    for(let i = 8; i > 0; i--) { let bus_pin = (mcu1.gpio[pin_gpio[i]].status>>17)&1; bus_bin = (bus_bin<<1) + bus_pin; bus_pins = bus_pins + bus_pin.toString(); }
+    bus_pins = ((mcu1.gpio[pin_gpio[0]].status>>17)&1).toString() + " " + bus_pins;
+    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
@@ -320,11 +322,11 @@ async function run_mcus() {
         if(addr_6510 != addr_6510_last) {
           trace_6510_step++;
           if(trace_6510==2) {
-            trace_6510_file.write(`${addr_6510}\n`);
+            trace_6510_file.write(`${addr_6510.toString(16).padStart(4,"0")}\n`);
           } else {
             let line = await trace_6510_file_it.next();
             if(line.done) { console.log("Trace validation ended without mismatches."); trace_6510=0; }
-            else if(line.value != addr_6510) throw new Error(`6510 addr mismatch, expected ${line.value}, got ${addr_6510}, step ${trace_6510_step}`);
+            else if(Number(`0x${line.value}`) != addr_6510) throw new Error(`6510 addr mismatch, expected ${line.value}, got ${addr_6510.toString(16).padStart(4,"0")}, step ${trace_6510_step}`);
           }
           addr_6510_last = addr_6510;
         }
