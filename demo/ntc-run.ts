@@ -2,7 +2,7 @@ const vcd_enabled = false;
 const debug_crash_cycle = parseInt(process.env.CNM64_RUN_TO_CYCLE || "0");
 const debug_crash_emu_cycle = parseInt(process.env.CNM64_RUN_TO_EMU_CYCLE || "0");
 const debug_run_to_emu_addr = parseInt(process.env.CNM64_RUN_TO_EMU_ADDR || "0");
-let trace_6510 = parseInt(process.env.CNM64_TRACE_6510 || "0"); //1: Verify, 2: Write
+let trace_6510_filename = process.env.CNM64_TRACE_6510; //CNM64_FINISH_WITH_TRACE to exit(0) on trace validation end
 
 const GIFEncoder = require('gifencoder');
 const { createCanvas, loadImage } = require('canvas');
@@ -134,18 +134,17 @@ for(let pin = 0; pin < pin_label.length; pin++) {
 vcd_file.write("$upscope $end\n");
 vcd_file.write("$enddefinitions $end\n");
 
-const width = 400;
-const height = 300;
-const canvas = createCanvas(width, height);
-const ctx = canvas.getContext('2d');
-const palette = [0x00,0xff,0x84,0x7b,0x86,0x55,0x26,0xfd,0x88,0x44,0xcd,0x49,0x6d,0xbe,0x6f,0xb6];
 const cpu_addr_off = getVarOffs("cnm64_main/cnm64_main.elf.map", ".bss.addr");
 const framebuffer_off = getVarOffs("cnm64_output/cnm64_output.elf.map", ".bss.frame_buffer");
 const vic_h_count_off = getVarOffs("cnm64_vic/cnm64_vic.elf.map", ".bss.vic_h_count");
 
-function write_pic() {
+function write_pic(filename: string) {
+  const width = 400;
+  const height = 300;
+  const palette = [0x00,0xff,0x84,0x7b,0x86,0x55,0x26,0xfd,0x88,0x44,0xcd,0x49,0x6d,0xbe,0x6f,0xb6];
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
   const encoder = new GIFEncoder(width, height);
-  encoder.createReadStream().pipe(fs.createWriteStream('/tmp/_new_cnm64_gif'));
   encoder.start();
   //encoder.setRepeat(0);
   //encoder.setDelay(1000);
@@ -164,7 +163,9 @@ function write_pic() {
   ctx.putImageData(imageData, 0, 0);
   encoder.addFrame(ctx);
   encoder.finish();
-  fs.rename('/tmp/_new_cnm64_gif', '/tmp/cnm64.gif', (err) => {});
+  const buf = encoder.out.getData();
+  fs.writeFileSync(`${filename}_new`, buf);
+  fs.renameSync(`${filename}_new`, filename);
 }
 
 const main_pio_state_str: string[] = ["p1 ", "p2a", "p2b", "p3 ", "p4 "];
@@ -178,11 +179,15 @@ let main_cycle_start_at = 0;
 let cycles_6510 = 0;
 let do_tracing = false;
 
-let trace_6510_file = fs.createWriteStream(trace_6510==2?'/tmp/cnm64_trace_6510.txt':'/tmp/dummy3457.txt', {});
+let trace_6510_file: any = null;
 let trace_6510_file_it: any = null;
-if(trace_6510==1) {
-  const rl = readline.createInterface({input: fs.createReadStream('/tmp/cnm64_trace_6510.txt', {})});
-  trace_6510_file_it = rl[Symbol.asyncIterator]();
+if(trace_6510_filename != undefined) {
+  if(fs.existsSync(trace_6510_filename)) {
+    const rl = readline.createInterface({input: fs.createReadStream(trace_6510_filename, {})});
+    trace_6510_file_it = rl[Symbol.asyncIterator]();
+  } else {
+    trace_6510_file = fs.createWriteStream(trace_6510_filename, {});
+  }
 }
 
 let vic_loop_stats: MainLoopStats[] = [];
@@ -317,23 +322,31 @@ async function run_mcus() {
       if(got_sigint) throw new Error("caught sigint");
       if(debug_run_to_emu_addr>0 && mcu1.readUint16(cpu_addr_off)==debug_run_to_emu_addr) throw new Error("Debug EMU crash, reached addr");
 
-      if(trace_6510>0) {
+      if(trace_6510_file || trace_6510_file_it) {
         let addr_6510 = mcu1.readUint16(cpu_addr_off);
         if(addr_6510 != addr_6510_last) {
           trace_6510_step++;
-          if(trace_6510==2) {
+          if(trace_6510_file) {
             trace_6510_file.write(`${addr_6510.toString(16).padStart(4,"0")}\n`);
           } else {
             let line = await trace_6510_file_it.next();
-            if(line.done) { console.log("Trace validation ended without mismatches."); trace_6510=0; }
-            else if(Number(`0x${line.value}`) != addr_6510) throw new Error(`6510 addr mismatch, expected ${line.value}, got ${addr_6510.toString(16).padStart(4,"0")}, step ${trace_6510_step}`);
+            if(line.done) {
+              console.log("Trace validation ended without mismatches.");
+              write_pic(`${trace_6510_filename}.current.gif`);
+              var tstBuf = fs.readFileSync(`${trace_6510_filename}.gif`);
+              var curBuf = fs.readFileSync(`${trace_6510_filename}.current.gif`);
+              if(curBuf.toString() !== tstBuf.toString()) throw new Error(`Video output differs after trace, see ${trace_6510_filename}.current.gif`);
+              trace_6510_file_it=null;
+              if(process.env.CNM64_FINISH_WITH_TRACE) process.exit(0);
+            }
+            else if(Number(`0x${line.value}`) != addr_6510) throw new Error(`6510 addr mismatch, expected ${line.value}, got ${addr_6510.toString(16).padStart(4,"0")}, step ${trace_6510_step}, tracefile ${trace_6510_filename}`);
           }
           addr_6510_last = addr_6510;
         }
       }
   }
 
-  write_pic();
+  write_pic("/tmp/cnm64.gif");
   setTimeout(() => run_mcus(), 0);
   } catch(e) {
     logs.push(`*** Exception ${e} - try running with CNM64_RUN_TO_CYCLE=${mcu1.core0.cycles} ***`);
@@ -341,7 +354,10 @@ async function run_mcus() {
     if(logs.length>5000) logs=logs.slice(logs.length-5000);
     console.error(logs.join("\n"));
     vcd_file.destroy();
-    if(trace_6510>0) trace_6510_file.destroy();
+    if(trace_6510_file) {
+      trace_6510_file.destroy();
+      write_pic(trace_6510_filename + ".gif");
+    }
     fs.writeFileSync("/tmp/rp2040_crash.bin", Buffer.from(mcu1.sram));
     console.error("\n*** 6510 statistics ***");
     if(main_loop_stats.length>100) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-50);
@@ -353,8 +369,8 @@ async function run_mcus() {
     for(let l of vic_loop_stats) {
       console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, VIC tick took ${l.duration} cycles, vic_h ${l.vic_h}`);
     }
-    write_pic();
-    throw e;
+    write_pic("/tmp/cnm64.gif");
+    process.exit(e.message.startsWith("Debug ")?0:1);
   }
 }
 
