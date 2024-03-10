@@ -1,4 +1,5 @@
 const vcd_enabled = false;
+const useFastPinListener = false;
 const debug_crash_cycle = parseInt(process.env.CNM64_RUN_TO_CYCLE || "0");
 const debug_crash_emu_cycle = parseInt(process.env.CNM64_RUN_TO_EMU_CYCLE || "0");
 const debug_run_to_emu_addr = parseInt(process.env.CNM64_RUN_TO_EMU_ADDR || "0");
@@ -56,27 +57,66 @@ export enum GPIOPinState {
 }
 */
 
-let pin_state: number[][] = [[0,0,0,0,0,0,0,0,0,0,0,0,0],[3,3,3,3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
-let pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,0,1,24];
-let pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "vic_ack", "iec_clk", "iec_data", "iec_atn"];
+let pin_state_inp: number[][] = [[3,3,3,3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
+let pin_state_res: number[] = [0,0,0,0,0,0,0,0,0,0,0,0,0];
+const pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,0,1,24];
+const pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "vic_ack", "iec_clk", "iec_data", "iec_atn"];
 let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
 let gpio_cycle: number = 0;
 
-function pinListener(mcu_id: number, pin: number) {
+// Pin wiring implementation that implements latency but is slower.
+function exactPinListener(mcu_id: number, pin: number) {
   return (state: GPIOPinState, oldState: GPIOPinState) => {
-    pin_state[mcu_id+1][pin] = state;
-    let v: number = ((pin_state[0+1][pin]===0)||(pin_state[1+1][pin]===0))?0:1;
-    let gpio_pin = pin_gpio[pin];
-    let tfv = (v===1);
+    pin_state_inp[mcu_id][pin] = state;
+  }
+}
+
+function exactPinTick() {
+  const latency = 7; // measured at 400MHz
+  const stateMap = [0b01, 0b10, 0b00, 0b00, 0b00]; // TODO implement pullup etc.
+
+  for(let i = 0; i < pin_label.length; i++) {
+    const inp0 = pin_state_inp[0][i];
+    const inp1 = pin_state_inp[1][i];
+    let v_in = stateMap[inp0] | stateMap[inp1];
+    if(inp0>1 && inp1>1) v_in = (pin_state_res[i] >> (latency*2))&0b11; // both inputs: just keep state (TODO pullup after some time or similar)
+
+    pin_state_res[i] = pin_state_res[i] | (v_in << ((latency+1)*2));
+
+    let v_old = pin_state_res[i] & 0b11;
+    pin_state_res[i] = pin_state_res[i] >> 2;
+    let v_new = pin_state_res[i] & 0b11;
+    if(v_old != v_new) { //xxx TODO GPIO outputs should probably read back their output as input without latency, but this eats a lot of emulator performance
+      const tfv = (v_new & 0b01) == 0;
+      const gpio_pin = pin_gpio[i];
+      //xxx if(pin_state_inp[0][i]>1) mcu1.gpio[gpio_pin].setInputValue(tfv); else mcu1.gpio[gpio_pin].setInputValue(pin_state_inp[0][i]==1);
+      //xxx if(pin_state_inp[1][i]>1) mcu2.gpio[gpio_pin].setInputValue(tfv); else mcu2.gpio[gpio_pin].setInputValue(pin_state_inp[1][i]==1);
+      mcu1.gpio[gpio_pin].setInputValue(tfv);
+      mcu2.gpio[gpio_pin].setInputValue(tfv);
+      mcu3.gpio[gpio_pin].setInputValue(tfv);
+    } //xxx
+
+    // const conflict = (v_new == 0b11); // TODO
+    // TODO VCD writing
+  }
+}
+
+// Fast pin wiring implementation. Zero latency between writes and reads.
+function fastPinListener(mcu_id: number, pin: number) {
+  return (state: GPIOPinState, oldState: GPIOPinState) => {
+    pin_state_inp[mcu_id][pin] = state;
+    const v: number = ((pin_state_inp[0][pin]===0)||(pin_state_inp[1][pin]===0))?0:1;
+    const gpio_pin = pin_gpio[pin];
+    const tfv = (v===1);
     mcu1.gpio[gpio_pin].setInputValue(tfv);
     mcu2.gpio[gpio_pin].setInputValue(tfv);
     mcu3.gpio[gpio_pin].setInputValue(tfv);
 
     // write signal to VCD file
-    if(pin_state[0][pin]!==v) {
-      pin_state[0][pin]=v;
+    if(pin_state_res[pin]!==v) {
+      pin_state_res[pin]=v;
       if(vcd_enabled) {
         let pin_vcd_id = String.fromCharCode(pin+34);
         vcd_file.write(`#${gpio_cycle} ${v}${pin_vcd_id}\n`);
@@ -85,16 +125,16 @@ function pinListener(mcu_id: number, pin: number) {
 
     if(vcd_enabled) {
       // write conflict flag to VCD file
-      let conflict: boolean = ((pin_state[0+1][pin]===0)&&(pin_state[1+1][pin]===1))||((pin_state[0+1][pin]===1)&&(pin_state[1+1][pin]===0));
-      //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${gpio_cycle} (${pin_state[0+1][pin]}/${pin_state[1+1][pin]})`);
-      let have_new_conflict = conflict&&(last_conflict_cycle === -1);
-      let conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
+      const conflict: boolean = ((pin_state_inp[0][pin]===0)&&(pin_state_inp[1][pin]===1))||((pin_state_inp[0][pin]===1)&&(pin_state_inp[1][pin]===0));
+      //if(conflict) console.log(`Conflict on pin ${pin_label[pin]} at cycle ${gpio_cycle} (${pin_state_inp[0][pin]}/${pin_state_inp[1][pin]})`);
+      const have_new_conflict = conflict&&(last_conflict_cycle === -1);
+      const conflict_recently_resolved = (!conflict)&&(last_conflict_cycle !== -1);
       if(conflict_recently_resolved && (gpio_cycle === last_conflict_cycle)) {
         // one mcu set conflict and other resolved in same cycle:
         // delay until next signal change so that the conflict signal is visible in VCD
         return;
       }
-      let write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
+      const write_conflict_flag: boolean = have_new_conflict || conflict_recently_resolved;
       if(write_conflict_flag) {
         vcd_file.write(`#${gpio_cycle} ${conflict?1:0}!\n`);
       }
@@ -104,8 +144,9 @@ function pinListener(mcu_id: number, pin: number) {
 }
 
 for(let i = 0; i < pin_label.length; i++) {
-  if(i != 9) mcu1.gpio[pin_gpio[i]].addListener(pinListener(0, i)); // MAIN is source for all GPIOs but vic_ack
-  if(i <= 9) mcu2.gpio[pin_gpio[i]].addListener(pinListener(1, i)); // VIC is source for bus GPIOs and vic_ack only
+  const usePinListener = useFastPinListener ? fastPinListener : exactPinListener;
+  if(i != 9) mcu1.gpio[pin_gpio[i]].addListener(usePinListener(0, i)); // MAIN is source for all GPIOs but vic_ack
+  if(i <= 9) mcu2.gpio[pin_gpio[i]].addListener(usePinListener(1, i)); // VIC is source for bus GPIOs and vic_ack only
   // OUTPUT is not source for any GPIOs
 }
 
@@ -300,6 +341,7 @@ async function run_mcus() {
           mcu3_pio_cycles_behind--;
           mcu3.stepPios(1);
         }
+        if(!useFastPinListener) exactPinTick();
         gpio_cycle++;
       }
 
