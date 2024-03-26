@@ -673,14 +673,6 @@ export class StateMachine {
     this.waitDelay = -1;
   }
 
-  advancePC() {
-    if (this.pc === this.wrapTop) {
-      this.pc = this.wrapBottom;
-    } else {
-      this.pc = this.nextPC & 0x1f;
-    }
-  }
-
   step() {
     if (!this.enabled) {
       return;
@@ -717,8 +709,8 @@ export class StateMachine {
       }
     }
 
-    this.advancePC();
-    this.nextPC = this.pc + 1;
+    this.pc = this.nextPC & 0x1f;
+    this.nextPC = (this.pc === this.wrapTop) ? this.wrapBottom : (this.pc + 1); // set default next PC
     this.executeInstruction(this.pio.instructions[this.pc]);
   }
 
