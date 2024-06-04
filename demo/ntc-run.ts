@@ -295,7 +295,8 @@ async function run_mcus() {
   try {
   for (let i = 0; i < 1000000; i++) {
       if(mcu1.core0.cycles>next_cycle_time_output) {
-        next_cycle_time_output += 40000000;
+        write_pic("/tmp/cnm64.gif");
+        next_cycle_time_output += 4000000;
         console.log(`clock: ${((mcu1.core0.cycles/40000000)>>>0)/10} secs`);
       }
 
@@ -326,7 +327,10 @@ async function run_mcus() {
 
       // now, let PIOs catch up - done separately from MCU cores to reduce jitter
       for(let pCycles = 0; pCycles < cycles; pCycles++) {
-        if(mcu1.pio[0].machines[0].pc==1) main_pio_state = (main_pio_state + 1) % 5; // out PC
+        if(mcu1.pio[0].machines[0].pc==1) {
+          main_pio_state = (main_pio_state + 1) % 5; // out PC
+          if(main_pio_state==0) bus_cycle_start_at = gpio_cycle;
+        }
         mcu1.stepPios(1);
         mcu2.stepPios(1);
         if(mcu1.pio[0].fdebug & 0x0f0f0f00) {
