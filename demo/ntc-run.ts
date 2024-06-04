@@ -233,8 +233,7 @@ if(trace_6510_filename != undefined) {
 
 let vic_loop_stats: MainLoopStats[] = [];
 let vic_cycle_start_at = 0;
-let vic_cycle_start_off = 0;
-let vic_cycle_end_off = 0;
+let vic_cycle_state = -1;
 
 let next_cycle_time_output = 0;
 
@@ -310,10 +309,11 @@ async function run_mcus() {
         //console.log("MCU2");
         cycles_mcu2_behind -= mcu2.stepCores();
 
-        if((vic_cycle_start_off==0)&&(mcu2.core0.profilerTag=="vic tick start ")) vic_cycle_start_off=mcu2.core0.PC;
-        if((vic_cycle_end_off==0)&&(mcu2.core0.profilerTag=="vic tick end ")) vic_cycle_end_off=mcu2.core0.PC;
-        if(vic_cycle_start_off==mcu2.core0.PC) vic_cycle_start_at = mcu2.core0.cycles;
-        else if(vic_cycle_end_off==mcu2.core0.PC) {
+        if(vic_cycle_state!=0 && mcu2.core0.profilerTag=="^vic tick") {
+          vic_cycle_state = 0;
+          vic_cycle_start_at = mcu2.core0.cycles;
+        } else if(vic_cycle_state!=1 && mcu2.core0.profilerTag=="$vic tick") {
+          vic_cycle_state = 1;
           vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu2.core0.cycles-vic_cycle_start_at, vic_h: mcu2.readUint32(vic_h_count_off), cycle6510: cycles_6510, idle:0, addr6510:0});
         }
       }
@@ -351,7 +351,7 @@ async function run_mcus() {
       } else if(mcu1.core0.PC==main_cycle_start_off) {
         main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: 0, vic_h: mcu2.readUint32(vic_h_count_off), addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
         main_cycle_start_at = mcu1.core0.cycles;
-      }
+      } else if(mcu1.core0.profilerTag=="_quit") throw new Error("Debug encountered _quit");
 
       if(do_tracing) {
         log_state();
