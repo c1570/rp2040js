@@ -217,6 +217,7 @@ let main_cycle_start_off = 0;
 class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number = 0; vic_h: number = 0; addr6510: number = 0; cycle6510: number = 0; }
 let main_loop_stats: MainLoopStats[] = [];
 let main_cycle_start_at = 0;
+let bus_cycle_start_at = 0;
 let cycles_6510 = 0;
 let do_tracing = false;
 
@@ -276,17 +277,18 @@ async function run_mcus() {
     }
     pTags = pTags_updated;
     let cycleTag = "";
-    if(mcu1.core0.PC==main_cycle_start_off) {
+    if(mcu1.core0.cycles==main_cycle_start_at) {
       cycleTag = mcu1.core0.cycles.toString().padStart(10, " ");
     } else {
       cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_at).toString())).padStart(10, " ");
     }
+    let busTag = (((mcu1.core0.cycles - bus_cycle_start_at).toString())).padStart(3, " ");
     let main_state_str = main_pio_state>=0 ? main_pio_state_str[main_pio_state] : "---";
     let bus_pins = "";
     let bus_bin = 0;
-    for(let i = 8; i > 0; i--) { let bus_pin = (mcu1.gpio[pin_gpio[i]].status>>17)&1; bus_bin = (bus_bin<<1) + bus_pin; bus_pins = bus_pins + bus_pin.toString(); }
-    bus_pins = ((mcu1.gpio[pin_gpio[0]].status>>17)&1).toString() + " " + bus_pins;
-    logs.push(`${cycleTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
+    for(let i = 8; i > 0; i--) { let bus_pin = (mcu3.gpio[pin_gpio[i]].status>>17)&1; bus_bin = (bus_bin<<1) + bus_pin; bus_pins = bus_pins + bus_pin.toString(); }
+    bus_pins = ((mcu3.gpio[pin_gpio[0]].status>>17)&1).toString() + " " + bus_pins;
+    logs.push(`${cycleTag} / ${busTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
