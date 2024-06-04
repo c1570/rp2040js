@@ -145,7 +145,8 @@ export class RPDMAChannel {
     this.ctrl |= BUSY;
     this.transCount = this.transCountReload;
     if (this.transCount) {
-      this.scheduleTransfer();
+this.transfer();
+//      this.scheduleTransfer();
     }
   }
 
@@ -193,6 +194,7 @@ export class RPDMAChannel {
   transfer = () => {
     const { ctrl, dataSize, ringMask } = this;
     this.transferTimer = null;
+do {
     this.transferFn();
     if (ctrl & INCR_READ) {
       if (ringMask && !(ctrl & RING_SEL)) {
@@ -209,6 +211,7 @@ export class RPDMAChannel {
       }
     }
     this.transCount--;
+} while(this.transCount > 0);
     if (this.transCount > 0) {
       this.scheduleTransfer();
     } else {
