@@ -184,7 +184,7 @@ export class RP2040 {
     this.flash.fill(0xff);
   }
 
-  readUint32(address: number) {
+  readUint32(address: number) : number {
     address = address >>> 0; // round to 32-bits, unsigned
     if (address & 0x3) {
       this.logger.error(

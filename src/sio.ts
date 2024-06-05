@@ -46,7 +46,7 @@ export class RPSIO {
     this.core1 = cores[1];
   }
 
-  readUint32(offset: number, core: Core) {
+  readUint32(offset: number, core: Core) : number {
     if (offset >= SPINLOCK0 && offset <= SPINLOCK31) {
       const bitIndexMask = 1 << ((offset - SPINLOCK0) / 4);
       if (this.spinLock & bitIndexMask) {

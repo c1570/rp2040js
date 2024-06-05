@@ -29,7 +29,7 @@ loadHex(hex1, mcu1.flash, 0x10000000);
 loadHex(hex2, mcu2.flash, 0x10000000);
 loadHex(hex3, mcu3.flash, 0x10000000);
 
-function getVarOffs(map_file: string, var_name: string) {
+function getVarOffs(map_file: string, var_name: string) : number {
   const filename = homedir + '/project/connomore64/PicoDVI/software/build/apps/' + map_file;
   const content = fs.readFileSync(filename, 'utf-8');
   const search = var_name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
