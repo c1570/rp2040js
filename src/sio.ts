@@ -26,6 +26,10 @@ const GPIO_HI_OE_XOR = 0x04c; // QSPI output enable XOR
 
 const GPIO_MASK = 0x3fffffff;
 
+const FIFO_ST = 0x050; // Inter-core FIFO status register
+const FIFO_WR = 0x054; // Inter-core FIFO write register
+const FIFO_RD = 0x058; // Inter-core FIFO read register
+
 //SPINLOCK
 const SPINLOCK_ST = 0x5c;
 const SPINLOCK0 = 0x100;
@@ -37,6 +41,8 @@ export class RPSIO {
   qspiGpioValue = 0;
   qspiGpioOutputEnable = 0;
   spinLock = 0;
+  fifoCore0In: number[] = [];
+  fifoCore1In: number[] = [];
   readonly core0;
   readonly core1;
 
@@ -57,6 +63,19 @@ export class RPSIO {
       }
     }
     switch (offset) {
+      case FIFO_RD: {
+        let thisCoreFifo = (core == Core.Core0) ? this.fifoCore0In : this.fifoCore1In;
+        if(thisCoreFifo.length == 0) {
+          // FIXME add IRQ support
+          // console.error("reading from empty FIFO");
+        }
+        return thisCoreFifo.shift() || 0;
+      }
+      case FIFO_ST: {
+        let thisCoreFifo = (core == Core.Core0) ? this.fifoCore0In : this.fifoCore1In;
+        // FIXME add WOF/ROE support
+        return (thisCoreFifo.length < 8 ? 2 : 0) | (thisCoreFifo.length > 0 ? 1 : 0);
+      }
       case GPIO_IN:
         return this.rp2040.gpioValues;
       case GPIO_HI_IN: {
@@ -118,6 +137,14 @@ export class RPSIO {
     const prevGpioValue = this.gpioValue;
     const prevGpioOutputEnable = this.gpioOutputEnable;
     switch (offset) {
+      case FIFO_WR:
+        let otherCoreFifo = (core == Core.Core0) ? this.fifoCore1In : this.fifoCore0In;
+        if(otherCoreFifo.length == 8) {
+          console.error("writing to full FIFO");
+        } else {
+          otherCoreFifo.push(value);
+        }
+        break;
       case GPIO_OUT:
         this.gpioValue = value & GPIO_MASK;
         break;
