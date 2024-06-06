@@ -1,13 +1,19 @@
-# THIS IS THE C1570/WIP BRANCH OF RP2040.
+## This is a project specific fork of rp2040js.
+## It is used for developing the [Connomore64](https://github.com/c1570/Connomore64).
+https://github.com/c1570/rp2040js
 
 Features:
 - somewhat accurate PIO timings (also, MUCH slower emulation)
-- an unfinished built-in cycle profiler using markers in the code
+- built-in cycle profiler using markers in the code
 - Dual Core support (by mingpepe)
-- remnants of another project
+- Inter-core FIFO support (incomplete)
+- a WIP demo wiring up several RP2040s using an 8 bit bus and gathering debug info, simulating GPIO latency
+  - this is the runner used for developing the [Connomore64](https://github.com/c1570/Connomore64)
 - a lot of dirty hacks and tests not suitable for pushing upstream
 
-# rp2040js
+# Upstream documentation
+
+## rp2040js
 
 Raspberry Pi Pico Emulator for the [Wokwi Simulation Platform](https://wokwi.com). It blinks, runs Arduino code, and even the MicroPython REPL!
 
