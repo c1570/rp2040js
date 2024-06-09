@@ -209,8 +209,8 @@ function write_pic(filename: string) {
   fs.renameSync(`${filename}_new`, filename);
 }
 
-const main_pio_state_str: string[] = ["p1 ", "p2a", "p2b", "p3 ", "p4 "];
-let main_pio_state = -2;
+const bus_state_labels: string[] = ["p1 ", "p2a", "p2b", "p3 ", "p4 "];
+let bus_state = -1;
 
 const tagCycleStart = "cycle start";
 let main_cycle_start_off = 0;
@@ -235,6 +235,8 @@ if(trace_6510_filename != undefined) {
 let vic_loop_stats: MainLoopStats[] = [];
 let vic_cycle_start_at = 0;
 let vic_cycle_state = -1;
+
+let clock_pin_state = 0;
 
 let next_cycle_time_output = 0;
 
@@ -283,12 +285,12 @@ async function run_mcus() {
       cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_at).toString())).padStart(10, " ");
     }
     let busTag = (((mcu1.core0.cycles - bus_cycle_start_at).toString())).padStart(3, " ");
-    let main_state_str = main_pio_state>=0 ? main_pio_state_str[main_pio_state] : "---";
+    let bus_state_str = bus_state>=0 ? bus_state_labels[bus_state] : "---";
     let bus_pins = "";
     let bus_bin = 0;
     for(let i = 8; i > 0; i--) { let bus_pin = (mcu3.gpio[pin_gpio[i]].status>>17)&1; bus_bin = (bus_bin<<1) + bus_pin; bus_pins = bus_pins + bus_pin.toString(); }
     bus_pins = ((mcu3.gpio[pin_gpio[0]].status>>17)&1).toString() + " " + bus_pins;
-    logs.push(`${cycleTag} / ${busTag} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]}/${main_state_str} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
+    logs.push(`${cycleTag} / ${busTag} | ${bus_state_str} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
@@ -327,9 +329,13 @@ async function run_mcus() {
 
       // now, let PIOs catch up - done separately from MCU cores to reduce jitter
       for(let pCycles = 0; pCycles < cycles; pCycles++) {
-        if(mcu1.pio[0].machines[0].pc==1) {
-          main_pio_state = (main_pio_state + 1) % 5; // out PC
-          if(main_pio_state==0) bus_cycle_start_at = gpio_cycle;
+        let cur_clock_pin_state = (mcu3.gpio[pin_gpio[0]].status>>17)&1;
+        if(cur_clock_pin_state != clock_pin_state) {
+          if(cur_clock_pin_state == 1) {
+            bus_state = (bus_state + 1) % 5;
+            if(bus_state==0) bus_cycle_start_at = gpio_cycle;
+          }
+          clock_pin_state = cur_clock_pin_state;
         }
         mcu1.stepPios(1);
         mcu2.stepPios(1);
