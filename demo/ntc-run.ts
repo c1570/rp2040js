@@ -343,15 +343,17 @@ async function run_mcus() {
         }
         mcu1.stepPios(1);
         mcu2.stepPios(1);
-        if(mcu1.pio[0].fdebug & 0x0f0f0f00) {
-          if(mcu1.pio[0].fdebug & 0x0f000000) throw new Error(`MAIN PIO TX STALL: ${(mcu1.pio[0].fdebug>>24)&15}`);
-          if(mcu1.pio[0].fdebug & 0x000f0000) throw new Error(`MAIN PIO TX OVERFLOW: ${(mcu1.pio[0].fdebug>>16)&15}`);
-          if(mcu1.pio[0].fdebug & 0x00000f00) throw new Error(`MAIN PIO RX UNDERFLOW: ${(mcu1.pio[0].fdebug>>8)&15}`);
+        let pio_fdebug = mcu1.pio[0].fdebug;
+        if(pio_fdebug & 0x0f0f0f00) {
+          if(pio_fdebug & 0x0f000000) throw new Error(`MAIN PIO TX STALL: ${(pio_fdebug>>24)&15}`);
+          if(pio_fdebug & 0x000f0000) throw new Error(`MAIN PIO TX OVERFLOW: ${(pio_fdebug>>16)&15}`);
+          if(pio_fdebug & 0x00000f00) throw new Error(`MAIN PIO RX UNDERFLOW: ${(pio_fdebug>>8)&15}`);
         }
-        if(mcu2.pio[1].fdebug & 0x0f0f0f00) {
-          if(mcu2.pio[1].fdebug & 0x0f000000) throw new Error(`VIC PIO TX STALL: ${(mcu2.pio[1].fdebug>>24)&15}`);
-          if(mcu2.pio[1].fdebug & 0x000f0000) throw new Error(`VIC PIO TX OVERFLOW: ${(mcu2.pio[1].fdebug>>16)&15}`);
-          if(mcu2.pio[1].fdebug & 0x00000f00) throw new Error(`VIC PIO RX UNDERFLOW: ${(mcu2.pio[1].fdebug>>8)&15}`);
+        pio_fdebug = mcu2.pio[1].fdebug;
+        if(pio_fdebug & 0x0f0f0f00) {
+          if(pio_fdebug & 0x0f000000) throw new Error(`VIC PIO TX STALL IN SM ${(pio_fdebug>>24)&15}`);
+          if(pio_fdebug & 0x000f0000) throw new Error(`VIC PIO TX OVERFLOW IN SM ${(pio_fdebug>>16)&15}`);
+          if(pio_fdebug & 0x00000f00) throw new Error(`VIC PIO RX UNDERFLOW IN SM ${(pio_fdebug>>8)&15}`);
         }
         if(mcu3_pio_cycles_behind > 0) {
           mcu3_pio_cycles_behind--;
