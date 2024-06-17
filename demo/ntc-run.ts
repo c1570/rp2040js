@@ -1,8 +1,8 @@
 const vcd_enabled = false;
 const useFastPinListener = false;
-const debug_crash_cycle = parseInt(process.env.CNM64_RUN_TO_CYCLE || "0");
-const debug_crash_emu_cycle = parseInt(process.env.CNM64_RUN_TO_EMU_CYCLE || "0");
-const debug_run_to_emu_addr = parseInt(process.env.CNM64_RUN_TO_EMU_ADDR || "0");
+let debug_crash_cycle = parseInt(process.env.CNM64_RUN_TO_CYCLE || "0");
+const debug_trace_from_emu_cycle = parseInt(process.env.CNM64_TRACE_FROM_EMU_CYCLE || "0");
+const debug_trace_from_emu_addr = parseInt(process.env.CNM64_TRACE_FROM_EMU_ADDR || "0");
 let trace_6510_filename = process.env.CNM64_TRACE_6510; //CNM64_FINISH_WITH_TRACE to exit(0) on trace validation end
 
 const GIFEncoder = require('gifencoder');
@@ -367,14 +367,13 @@ async function run_mcus() {
 
       if(do_tracing) {
         log_state();
-        if(debug_crash_cycle>0 && mcu1.core0.cycles>debug_crash_cycle) throw new Error("Debug ARM crash");
-        if(debug_crash_emu_cycle>0 && cycles_6510>debug_crash_emu_cycle) throw new Error("Debug EMU crash");
+        if(debug_crash_cycle>0 && mcu1.core0.cycles>debug_crash_cycle) throw new Error("Debug end tracing");
       } else {
         if(debug_crash_cycle>0 && mcu1.core0.cycles>(debug_crash_cycle-10000)) do_tracing = true;
-        if(debug_crash_emu_cycle>0 && cycles_6510>(debug_crash_emu_cycle-10)) do_tracing = true;
+        if(debug_trace_from_emu_cycle>0 && cycles_6510>debug_trace_from_emu_cycle) { do_tracing = true; debug_crash_cycle = mcu1.core0.cycles + 4200; }
+        if(debug_trace_from_emu_addr>0 && mcu1.readUint16(cpu_addr_off)==debug_trace_from_emu_addr) { do_tracing = true; debug_crash_cycle = mcu1.core0.cycles + 4200; }
       }
       if(got_sigint) throw new Error("caught sigint");
-      if(debug_run_to_emu_addr>0 && mcu1.readUint16(cpu_addr_off)==debug_run_to_emu_addr) throw new Error("Debug EMU crash, reached addr");
 
       if(trace_6510_file || trace_6510_file_it) {
         let addr_6510 = mcu1.readUint16(cpu_addr_off);
