@@ -180,7 +180,6 @@ vcd_file.write("$enddefinitions $end\n");
 
 const cpu_addr_off = getVarOffs("cnm64_main/cnm64_main.elf.map", ".bss.addr");
 const framebuffer_off = getVarOffs("cnm64_output/cnm64_output.elf.map", ".bss.frame_buffer");
-const vic_h_count_off = getVarOffs("cnm64_vic/cnm64_vic.elf.map", ".bss.vic_h_count");
 
 function write_pic(filename: string) {
   const width = 400;
@@ -217,7 +216,7 @@ let bus_state = -1;
 
 const tagCycleStart = "cycle start";
 let main_cycle_start_off = 0;
-class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number = 0; vic_h: number = 0; addr6510: number = 0; cycle6510: number = 0; }
+class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number = 0; vic_h: number = 0; vic_l: number = 0; addr6510: number = 0; cycle6510: number = 0; }
 let main_loop_stats: MainLoopStats[] = [];
 let main_cycle_start_at = 0;
 let bus_cycle_start_at = 0;
@@ -238,6 +237,8 @@ if(trace_6510_filename != undefined) {
 let vic_loop_stats: MainLoopStats[] = [];
 let vic_cycle_start_at = 0;
 let vic_cycle_state = -1;
+let vic_h = 0;
+let vic_l = 0;
 
 let clock_pin_state = 0;
 
@@ -258,7 +259,6 @@ async function run_mcus() {
   const tagContinue = "...".padEnd(colLen);
 
   function log_state() {
-    const vic_h_count = mcu2.readUint32(vic_h_count_off);
     const cpu_addr = mcu1.readUint16(cpu_addr_off);
     let wTags: string[] = [];
     const pTags_updated: string[] = [mcu1.core0.profilerTag, mcu1.core1.profilerTag, mcu2.core0.profilerTag, mcu2.core1.profilerTag,
@@ -293,7 +293,7 @@ async function run_mcus() {
     let bus_bin = 0;
     for(let i = 8; i > 0; i--) { let bus_pin = (mcu3.gpio[pin_gpio[i]].status>>17)&1; bus_bin = (bus_bin<<1) + bus_pin; bus_pins = bus_pins + bus_pin.toString(); }
     bus_pins = ((mcu3.gpio[pin_gpio[0]].status>>17)&1).toString() + " " + bus_pins;
-    logs.push(`${cycleTag} / ${busTag} | ${bus_state_str} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h_count.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
+    logs.push(`${cycleTag} / ${busTag} | ${bus_state_str} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
   }
 
   let mcu3_pio_cycles_behind = 0;
@@ -322,7 +322,7 @@ async function run_mcus() {
           vic_cycle_start_at = mcu2.core0.cycles;
         } else if(vic_cycle_state!=1 && mcu2.core0.profilerTag=="$vic tick") {
           vic_cycle_state = 1;
-          vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu2.core0.cycles-vic_cycle_start_at, vic_h: mcu2.readUint32(vic_h_count_off), cycle6510: cycles_6510, idle:0, addr6510:0});
+          vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu2.core0.cycles-vic_cycle_start_at, vic_h: vic_h, vic_l: vic_l, cycle6510: cycles_6510, idle:0, addr6510:0});
           if(vic_loop_stats.length>100000) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
         }
       }
@@ -365,8 +365,9 @@ async function run_mcus() {
         main_cycle_start_off=mcu1.core0.PC;
         main_cycle_start_at = mcu1.core0.cycles;
       } else if(mcu1.core0.PC==main_cycle_start_off) {
-        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: 0, vic_h: mcu2.readUint32(vic_h_count_off), addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
+        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: 0, vic_h: vic_h, vic_l: vic_l, addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
         if(main_loop_stats.length>100000) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
+        vic_h++; if(vic_h > 62) { vic_h = 0; vic_l++; if(vic_l >= 311) vic_l = 0; }
         main_cycle_start_at = mcu1.core0.cycles;
       } else if(mcu1.core0.profilerTag=="_quit") throw new Error("Debug encountered _quit");
 
@@ -420,7 +421,7 @@ async function run_mcus() {
     console.error("\n*** 6510 statistics ***");
     if(main_loop_stats.length>max_len_main_loop_stats) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
     for(let l of main_loop_stats) {
-      console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, MAIN took ${l.duration} cycles, bus addr ${l.addr6510.toString(16).padStart(4,"0")}, vic_h ${l.vic_h}`);
+      console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, MAIN took ${l.duration} cycles, bus addr ${l.addr6510.toString(16).padStart(4,"0")}, vic_h ${l.vic_h}, vic_l ${l.vic_l}`);
     }
     console.error("\n*** VIC-II statistics ***");
     if(vic_loop_stats.length>max_len_vic_loop_stats) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
