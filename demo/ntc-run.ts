@@ -5,6 +5,9 @@ const debug_trace_from_emu_cycle = parseInt(process.env.CNM64_TRACE_FROM_EMU_CYC
 const debug_trace_from_emu_addr = parseInt(process.env.CNM64_TRACE_FROM_EMU_ADDR || "0");
 let trace_6510_filename = process.env.CNM64_TRACE_6510; //CNM64_FINISH_WITH_TRACE to exit(0) on trace validation end
 
+const max_len_main_loop_stats = 1000;
+const max_len_vic_loop_stats = 1000;
+
 const GIFEncoder = require('gifencoder');
 const { createCanvas, loadImage } = require('canvas');
 const readline = require('readline');
@@ -320,6 +323,7 @@ async function run_mcus() {
         } else if(vic_cycle_state!=1 && mcu2.core0.profilerTag=="$vic tick") {
           vic_cycle_state = 1;
           vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu2.core0.cycles-vic_cycle_start_at, vic_h: mcu2.readUint32(vic_h_count_off), cycle6510: cycles_6510, idle:0, addr6510:0});
+          if(vic_loop_stats.length>100000) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
         }
       }
       while(cycles_mcu3_behind > 0) {
@@ -362,6 +366,7 @@ async function run_mcus() {
         main_cycle_start_at = mcu1.core0.cycles;
       } else if(mcu1.core0.PC==main_cycle_start_off) {
         main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: 0, vic_h: mcu2.readUint32(vic_h_count_off), addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
+        if(main_loop_stats.length>100000) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
         main_cycle_start_at = mcu1.core0.cycles;
       } else if(mcu1.core0.profilerTag=="_quit") throw new Error("Debug encountered _quit");
 
@@ -413,12 +418,12 @@ async function run_mcus() {
     }
     fs.writeFileSync("/tmp/rp2040_crash.bin", Buffer.from(mcu1.sram));
     console.error("\n*** 6510 statistics ***");
-    if(main_loop_stats.length>100) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-50);
+    if(main_loop_stats.length>max_len_main_loop_stats) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
     for(let l of main_loop_stats) {
       console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, MAIN took ${l.duration} cycles, bus addr ${l.addr6510.toString(16).padStart(4,"0")}, vic_h ${l.vic_h}`);
     }
     console.error("\n*** VIC-II statistics ***");
-    if(vic_loop_stats.length>100) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-50);
+    if(vic_loop_stats.length>max_len_vic_loop_stats) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
     for(let l of vic_loop_stats) {
       console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, VIC tick took ${l.duration} cycles, vic_h ${l.vic_h}`);
     }
