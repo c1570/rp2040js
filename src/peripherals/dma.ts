@@ -145,8 +145,7 @@ export class RPDMAChannel {
     this.ctrl |= BUSY;
     this.transCount = this.transCountReload;
     if (this.transCount) {
-this.transfer();
-//      this.scheduleTransfer();
+      this.scheduleTransfer();
     }
   }
 
@@ -194,7 +193,6 @@ this.transfer();
   transfer = () => {
     const { ctrl, dataSize, ringMask } = this;
     this.transferTimer = null;
-do {
     this.transferFn();
     if (ctrl & INCR_READ) {
       if (ringMask && !(ctrl & RING_SEL)) {
@@ -211,7 +209,6 @@ do {
       }
     }
     this.transCount--;
-} while(this.transCount > 0);
     if (this.transCount > 0) {
       this.scheduleTransfer();
     } else {
@@ -232,8 +229,10 @@ do {
       return;
     }
     if (this.dma.dreq[this.treqValue] || this.treqValue === TREQ.Permanent) {
+      this.transfer(); return; //XXX broken timers workaround
       this.transferTimer = this.rp2040.clock.createTimer(0, this.transfer);
     } else {
+      return; //XXX workaround
       const delay = this.dma.getTimer(this.treqValue);
       if (delay) {
         this.transferTimer = this.rp2040.clock.createTimer(delay, this.transfer);
