@@ -376,7 +376,7 @@ async function run_mcus() {
         main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: main_idle_cycles, vic_h: vic_h, vic_l: vic_l, addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
         main_idle_cycles = 0;
         if(main_loop_stats.length>100000) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
-        vic_h++; if(vic_h > 62) { vic_h = 0; vic_l++; if(vic_l >= 311) vic_l = 0; }
+        vic_h++; if(vic_h > 62) { vic_h = 0; vic_l++; if(vic_l >= 312) vic_l = 0; }
         main_cycle_start_at = mcu1.core0.cycles;
       } else if(mcu1.core0.profilerTag=="_quit") throw new Error("Debug encountered _quit");
 
