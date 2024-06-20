@@ -216,7 +216,7 @@ let bus_state = -1;
 
 const tagCycleStart = "cycle start";
 let main_cycle_start_off = 0;
-class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number = 0; vic_h: number = 0; vic_l: number = 0; addr6510: number = 0; cycle6510: number = 0; }
+class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number = 0; idle2: number = 0; vic_h: number = 0; vic_l: number = 0; addr6510: number = 0; cycle6510: number = 0; }
 let main_loop_stats: MainLoopStats[] = [];
 let main_idle_cycles = 0;
 let main_cycle_start_at = 0;
@@ -237,6 +237,7 @@ if(trace_6510_filename != undefined) {
 
 let vic_loop_stats: MainLoopStats[] = [];
 let vic_idle_cycles = 0;
+let render_idle_cycles = 0;
 let vic_cycle_start_at = 0;
 let vic_cycle_state = -1;
 let vic_h = 0;
@@ -322,13 +323,14 @@ async function run_mcus() {
         cycles_mcu2_behind -= vic_cycles;
 
         if(mcu2.core0.profilerTag.startsWith("*")) vic_idle_cycles += vic_cycles;
+        if(mcu2.core1.profilerTag.startsWith("*")) render_idle_cycles += vic_cycles;
         if(vic_cycle_state!=0 && mcu2.core0.profilerTag=="^vic tick") {
           vic_cycle_state = 0;
           vic_cycle_start_at = mcu2.core0.cycles;
         } else if(vic_cycle_state!=1 && mcu2.core0.profilerTag=="$vic tick") {
           vic_cycle_state = 1;
-          vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu2.core0.cycles-vic_cycle_start_at, vic_h: vic_h, vic_l: vic_l, cycle6510: cycles_6510, idle: vic_idle_cycles, addr6510:0});
-          vic_idle_cycles = 0;
+          vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu2.core0.cycles-vic_cycle_start_at, vic_h: vic_h, vic_l: vic_l, cycle6510: cycles_6510, idle: vic_idle_cycles, idle2: render_idle_cycles, addr6510:0});
+          vic_idle_cycles = 0; render_idle_cycles = 0;
           if(vic_loop_stats.length>100000) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
         }
       }
@@ -373,7 +375,7 @@ async function run_mcus() {
         main_cycle_start_off=mcu1.core0.PC;
         main_cycle_start_at = mcu1.core0.cycles;
       } else if(mcu1.core0.PC==main_cycle_start_off) {
-        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: main_idle_cycles, vic_h: vic_h, vic_l: vic_l, addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
+        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: main_idle_cycles, idle2: 0, vic_h: vic_h, vic_l: vic_l, addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
         main_idle_cycles = 0;
         if(main_loop_stats.length>100000) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
         vic_h++; if(vic_h > 62) { vic_h = 0; vic_l++; if(vic_l >= 312) vic_l = 0; }
@@ -435,7 +437,7 @@ async function run_mcus() {
     console.error("\n*** VIC-II statistics ***");
     if(vic_loop_stats.length>max_len_vic_loop_stats) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
     for(let l of vic_loop_stats) {
-      console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, VIC tick/idle ${l.duration}/${l.idle} cycles, vic_l ${l.vic_l}, vic_h ${l.vic_h}`);
+      console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, VIC tick/idle ${l.duration}/${l.idle} cycles, render idle ${l.idle2} cycles, vic_l ${l.vic_l}, vic_h ${l.vic_h}`);
     }
     write_pic("/tmp/cnm64.gif");
     process.exit(e.message.startsWith("Debug ")?0:1);
