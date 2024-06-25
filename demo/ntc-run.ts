@@ -219,6 +219,7 @@ let main_cycle_start_off = 0;
 class MainLoopStats { startCycle: number = 0; duration: number = 0; idle: number = 0; idle2: number = 0; vic_h: number = 0; vic_l: number = 0; addr6510: number = 0; cycle6510: number = 0; }
 let main_loop_stats: MainLoopStats[] = [];
 let main_idle_cycles = 0;
+let main_idle2_cycles = 0;
 let main_cycle_start_at = 0;
 let bus_cycle_start_at = 0;
 let cycles_6510 = 0;
@@ -313,6 +314,7 @@ async function run_mcus() {
       gpio_cycle = mcu1.core0.cycles;
       let cycles = mcu1.stepCores();
       if(mcu1.core0.profilerTag.startsWith("*")) main_idle_cycles += cycles;
+      if(mcu1.core1.profilerTag.startsWith("*")) main_idle2_cycles += cycles;
       cycles_mcu2_behind += cycles;
       let mcu3_cycles = cycles*(295/400);
       cycles_mcu3_behind += mcu3_cycles;
@@ -375,8 +377,8 @@ async function run_mcus() {
         main_cycle_start_off=mcu1.core0.PC;
         main_cycle_start_at = mcu1.core0.cycles;
       } else if(mcu1.core0.PC==main_cycle_start_off) {
-        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: main_idle_cycles, idle2: 0, vic_h: vic_h, vic_l: vic_l, addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
-        main_idle_cycles = 0;
+        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: main_idle_cycles, idle2: main_idle2_cycles, vic_h: vic_h, vic_l: vic_l, addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
+        main_idle_cycles = 0; main_idle2_cycles = 0;
         if(main_loop_stats.length>100000) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
         vic_h++; if(vic_h > 62) { vic_h = 0; vic_l++; if(vic_l >= 312) vic_l = 0; }
         main_cycle_start_at = mcu1.core0.cycles;
@@ -432,7 +434,7 @@ async function run_mcus() {
     console.error("\n*** 6510 statistics ***");
     if(main_loop_stats.length>max_len_main_loop_stats) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
     for(let l of main_loop_stats) {
-      console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, MAIN total/idle ${l.duration}/${l.idle} cycles, bus addr ${l.addr6510.toString(16).padStart(4,"0")}, vic_l ${l.vic_l}, vic_h ${l.vic_h}`);
+      console.error(`6510 cycle ${l.cycle6510}, ARM cycle ${l.startCycle}, MAIN total/idle ${l.duration}/${l.idle} cycles, core1 idle ${l.idle2} cycles, bus addr ${l.addr6510.toString(16).padStart(4,"0")}, vic_l ${l.vic_l}, vic_h ${l.vic_h}`);
     }
     console.error("\n*** VIC-II statistics ***");
     if(vic_loop_stats.length>max_len_vic_loop_stats) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
