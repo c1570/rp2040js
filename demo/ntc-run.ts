@@ -78,7 +78,8 @@ function exactPinListener(mcu_id: number, pin: number) {
 
 function exactPinTick() {
   const latency = 7; // measured at 400MHz
-  const stateMap = [0b01, 0b10, 0b00, 0b00, 0b00]; // TODO implement pullup etc.
+  const stateMap = [0b01, 0b10, 0b00, 0b00, 0b00]; // Low, High, Input, InputPullUp, InputPullDown
+  // TODO implement pullup etc.
 
   for(let i = 0; i < pin_label.length; i++) {
     const inp0 = pin_state_inp[0][i];
