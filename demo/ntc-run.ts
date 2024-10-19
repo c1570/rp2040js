@@ -19,18 +19,28 @@ import { bootromB1 } from './bootrom';
 import { loadHex } from './intelhex';
 
 const homedir = require('os').homedir();
-const hex1 = fs.readFileSync(homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_main/cnm64_main.hex', 'utf-8');
-const hex2 = fs.readFileSync(homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_vic/cnm64_vic.hex', 'utf-8');
-const hex3 = fs.readFileSync(homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_output/cnm64_output.hex', 'utf-8');
-const mcu1 = new RP2040();
-const mcu2 = new RP2040();
-const mcu3 = new RP2040();
-mcu1.loadBootrom(bootromB1);
-mcu2.loadBootrom(bootromB1);
-mcu3.loadBootrom(bootromB1);
-loadHex(hex1, mcu1.flash, 0x10000000);
-loadHex(hex2, mcu2.flash, 0x10000000);
-loadHex(hex3, mcu3.flash, 0x10000000);
+
+const hex_files = [homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_main/cnm64_main.hex',
+                   homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_vic/cnm64_vic.hex',
+                   homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_output/cnm64_output.hex'];
+
+const pin_gpio: number[] = [2,3,4,5,6,7,8,9,10];
+const pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"];
+
+const mcu = new Array(hex_files.length).fill(null).map(() => new RP2040());
+
+for(let i = 0; i < hex_files.length; i++) {
+  mcu[i].loadBootrom(bootromB1);
+  loadHex(fs.readFileSync(hex_files[i], 'utf-8'), mcu[i].flash, 0x10000000);
+  mcu[i].core0.PC = 0x10000000;
+  mcu[i].core1.PC = 0x10000000;
+  mcu[i].core1.waiting = true;
+  mcu[i].uart[0].onByte = (value) => { process.stdout.write(new Uint8Array([value])); };
+}
+
+const mcu_main = mcu[0];
+const mcu_vic = mcu[1];
+const mcu_output = mcu[2];
 
 function getVarOffs(map_file: string, var_name: string) : number {
   const filename = homedir + '/project/connomore64/PicoDVI/software/build/apps/' + map_file;
@@ -42,14 +52,6 @@ function getVarOffs(map_file: string, var_name: string) : number {
   return parseInt(res[1]);
 }
 
-mcu1.uart[0].onByte = (value) => {
-  process.stdout.write(new Uint8Array([value]));
-};
-
-mcu2.uart[0].onByte = (value) => {
-  process.stdout.write(new Uint8Array([value]));
-};
-
 /*
 export enum GPIOPinState {
   Low,
@@ -60,10 +62,9 @@ export enum GPIOPinState {
 }
 */
 
-let pin_state_inp: number[][] = [[3,3,3,3,3,3,3,3,3,3,3,3,3], [3,3,3,3,3,3,3,3,3,3,3,3,3]]; // all start in input pullup mode
-let pin_state_res: number[] = [0,0,0,0,0,0,0,0,0,0,0,0,0];
-const pin_gpio: number[] = [2,3,4,5,6,7,8,9,10,11,0,1,24];
-const pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "vic_ack", "iec_clk", "iec_data", "iec_atn"];
+let pin_state_inp: number[][] = new Array(hex_files.length).fill(null).map(() => new Array(pin_gpio.length).fill(3)); // all start in input pullup mode
+let pin_state_res: number[] = new Array(pin_gpio.length).fill(0); // pipelined result pin state
+
 let vcd_file = fs.createWriteStream('/tmp/cnm64rp2040.vcd', {});
 let last_conflict_cycle: number = -1;
 
@@ -82,10 +83,15 @@ function exactPinTick() {
   // TODO implement pullup etc.
 
   for(let i = 0; i < pin_label.length; i++) {
-    const inp0 = pin_state_inp[0][i];
-    const inp1 = pin_state_inp[1][i];
-    let v_in = stateMap[inp0] | stateMap[inp1];
-    if(inp0>1 && inp1>1) v_in = (pin_state_res[i] >> (latency*2))&0b11; // both inputs: just keep state (TODO pullup after some time or similar)
+    let all_inputs = 1;
+    let v_in = 0;
+    for(let mcu_id = 0; mcu_id < hex_files.length; mcu_id++) {
+      const pin_state = stateMap[pin_state_inp[mcu_id][i]];
+      v_in |= pin_state;
+      if(pin_state <= 1) all_inputs = 0;
+    }
+
+    if(all_inputs) v_in = (pin_state_res[i] >> (latency*2))&0b11; // all are inputs: just keep state (TODO pullup after some time or similar)
 
     pin_state_res[i] = pin_state_res[i] | (v_in << ((latency+1)*2));
 
@@ -95,12 +101,8 @@ function exactPinTick() {
     if(v_old != v_new) { //xxx TODO GPIO outputs should probably read back their output as input without latency, but this eats a lot of emulator performance
       const tfv = (v_new & 0b01) == 0;
       const gpio_pin = pin_gpio[i];
-      //xxx if(pin_state_inp[0][i]>1) mcu1.gpio[gpio_pin].setInputValue(tfv); else mcu1.gpio[gpio_pin].setInputValue(pin_state_inp[0][i]==1);
-      //xxx if(pin_state_inp[1][i]>1) mcu2.gpio[gpio_pin].setInputValue(tfv); else mcu2.gpio[gpio_pin].setInputValue(pin_state_inp[1][i]==1);
-      mcu1.gpio[gpio_pin].setInputValue(tfv);
-      mcu2.gpio[gpio_pin].setInputValue(tfv);
-      mcu3.gpio[gpio_pin].setInputValue(tfv);
-    } //xxx
+      for(let mcu_id = 0; mcu_id < hex_files.length; mcu_id++) mcu[mcu_id].gpio[gpio_pin].setInputValue(tfv);
+    }
 
     // const conflict = (v_new == 0b11); // TODO
     // TODO VCD writing
@@ -109,14 +111,15 @@ function exactPinTick() {
 
 // Fast pin wiring implementation. Zero latency between writes and reads.
 function fastPinListener(mcu_id: number, pin: number) {
+  throw new Error("old and broken");
   return (state: GPIOPinState, oldState: GPIOPinState) => {
     pin_state_inp[mcu_id][pin] = state;
     const v: number = ((pin_state_inp[0][pin]===0)||(pin_state_inp[1][pin]===0))?0:1;
     const gpio_pin = pin_gpio[pin];
     const tfv = (v===1);
-    mcu1.gpio[gpio_pin].setInputValue(tfv);
-    mcu2.gpio[gpio_pin].setInputValue(tfv);
-    mcu3.gpio[gpio_pin].setInputValue(tfv);
+    mcu[0].gpio[gpio_pin].setInputValue(tfv);
+    mcu[1].gpio[gpio_pin].setInputValue(tfv);
+    mcu[2].gpio[gpio_pin].setInputValue(tfv);
 
     // write signal to VCD file
     if(pin_state_res[pin]!==v) {
@@ -149,24 +152,14 @@ function fastPinListener(mcu_id: number, pin: number) {
 
 for(let i = 0; i < pin_label.length; i++) {
   const usePinListener = useFastPinListener ? fastPinListener : exactPinListener;
-  if(i != 9) mcu1.gpio[pin_gpio[i]].addListener(usePinListener(0, i)); // MAIN is source for all GPIOs but vic_ack
-  if(i <= 9) mcu2.gpio[pin_gpio[i]].addListener(usePinListener(1, i)); // VIC is source for bus GPIOs and vic_ack only
-  // OUTPUT is not source for any GPIOs
+  for(let mcu_id = 0; mcu_id < hex_files.length; mcu_id++) {
+    mcu[mcu_id].gpio[pin_gpio[i]].addListener(usePinListener(mcu_id, i));
+  }
 }
 
 for(let i = 11; i < 30; i++) {
-  mcu1.gpio[i].setInputValue(true);
+  mcu_main.gpio[i].setInputValue(true);
 }
-
-mcu1.core0.PC = 0x10000000;
-mcu1.core1.PC = 0x10000000;
-mcu1.core1.waiting = true;
-mcu2.core0.PC = 0x10000000;
-mcu2.core1.PC = 0x10000000;
-mcu2.core1.waiting = true;
-mcu3.core0.PC = 0x10000000;
-mcu3.core1.PC = 0x10000000;
-mcu3.core1.waiting = true;
 
 // write VCD file header
 vcd_file.write("$timescale 1ns $end\n");
@@ -196,8 +189,8 @@ function write_pic(filename: string) {
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
   for (let i = 0; i < width*height; i++) {
-    //const pixel = palette[mcu2.readUint8(framebuffer_off + i)];  // framebuffer in VIC
-    const pixel = mcu3.readUint8(framebuffer_off + i);  // framebuffer in OUTPUT
+    //const pixel = palette[mcu1.readUint8(framebuffer_off + i)];  // framebuffer in VIC
+    const pixel = mcu_output.readUint8(framebuffer_off + i);  // framebuffer in OUTPUT
     data[i*4+0] = (pixel&0b11100000)<<0;
     data[i*4+1] = (pixel&0b00011100)<<3;
     data[i*4+2] = (pixel&0b00000011)<<6;
@@ -256,22 +249,23 @@ let got_sigint = false;
 process.on('SIGINT', () => {got_sigint = true;});
 
 async function run_mcus() {
-  let cycles_mcu2_behind = 0;
-  let cycles_mcu3_behind = 0;
+  let mcu_cycles_behind = new Array(hex_files.length).fill(0);
+  let pio_cycles_behind = new Array(hex_files.length).fill(0);
+
   const colLen = 18;
   let logs: string[] = [];
   let pTags: string[] = ["", "", "", ""];
   const tagContinue = "...".padEnd(colLen);
 
   function log_state() {
-    const cpu_addr = mcu1.readUint16(cpu_addr_off);
+    const cpu_addr = mcu_main.readUint16(cpu_addr_off);
     let wTags: string[] = [];
-    const pTags_updated: string[] = [mcu1.core0.profilerTag, mcu1.core1.profilerTag, mcu2.core0.profilerTag, mcu2.core1.profilerTag,
-                                     mcu1.pio[0].machines[0].pc.toString(), mcu2.pio[1].machines[0].pc.toString(), mcu2.pio[1].machines[1].pc.toString(), mcu3.pio[1].machines[0].pc.toString()];
-    const pInstrs: number[] = [0, 0, 0, 0, mcu1.pio[0].instructions[mcu1.pio[0].machines[0].pc],
-                                           mcu2.pio[1].instructions[mcu2.pio[1].machines[0].pc],
-                                           mcu2.pio[1].instructions[mcu2.pio[1].machines[1].pc],
-                                           mcu3.pio[1].instructions[mcu3.pio[1].machines[0].pc]];
+    const pTags_updated: string[] = [mcu_main.core0.profilerTag, mcu_main.core1.profilerTag, mcu_vic.core0.profilerTag, mcu_vic.core1.profilerTag,
+                                     mcu_main.pio[0].machines[0].pc.toString(), mcu_vic.pio[1].machines[0].pc.toString(), mcu_vic.pio[1].machines[1].pc.toString(), mcu_output.pio[1].machines[0].pc.toString()];
+    const pInstrs: number[] = [0, 0, 0, 0, mcu_main.pio[0].instructions[mcu_main.pio[0].machines[0].pc],
+                                           mcu_vic.pio[1].instructions[mcu_vic.pio[1].machines[0].pc],
+                                           mcu_vic.pio[1].instructions[mcu_vic.pio[1].machines[1].pc],
+                                           mcu_output.pio[1].instructions[mcu_output.pio[1].machines[0].pc]];
     for(let i = 0; i < 4; i++) {
       const tag = pTags_updated[i];
       wTags.push(tag==pTags[i]?tagContinue:tag.padEnd(colLen));
@@ -287,64 +281,65 @@ async function run_mcus() {
     }
     pTags = pTags_updated;
     let cycleTag = "";
-    if(mcu1.core0.cycles==main_cycle_start_at) {
-      cycleTag = mcu1.core0.cycles.toString().padStart(10, " ");
+    if(mcu_main.core0.cycles==main_cycle_start_at) {
+      cycleTag = mcu_main.core0.cycles.toString().padStart(10, " ");
     } else {
-      cycleTag = ("+" + ((mcu1.core0.cycles - main_cycle_start_at).toString())).padStart(10, " ");
+      cycleTag = ("+" + ((mcu_main.core0.cycles - main_cycle_start_at).toString())).padStart(10, " ");
     }
-    let busTag = (((mcu1.core0.cycles - bus_cycle_start_at).toString())).padStart(3, " ");
+    let busTag = (((mcu_main.core0.cycles - bus_cycle_start_at).toString())).padStart(3, " ");
     let bus_state_str = bus_state>=0 ? bus_state_labels[bus_state] : "---";
     let bus_pins = "";
     let bus_bin = 0;
-    for(let i = 8; i > 0; i--) { let bus_pin = (mcu3.gpio[pin_gpio[i]].status>>17)&1; bus_bin = (bus_bin<<1) + bus_pin; bus_pins = bus_pins + bus_pin.toString(); }
-    bus_pins = ((mcu3.gpio[pin_gpio[0]].status>>17)&1).toString() + " " + bus_pins;
-    logs.push(`${cycleTag} / ${busTag} | ${bus_state_str} | M ${mcu1.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu1.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu2.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu2.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]} V_PIO@${wTags[5]}/r${mcu2.pio[1].machines[0].rxFIFO.itemCount}/t${mcu2.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
+    for(let i = 8; i > 0; i--) { let bus_pin = (mcu_output.gpio[pin_gpio[i]].status>>17)&1; bus_bin = (bus_bin<<1) + bus_pin; bus_pins = bus_pins + bus_pin.toString(); }
+    bus_pins = ((mcu_output.gpio[pin_gpio[0]].status>>17)&1).toString() + " " + bus_pins;
+    logs.push(`${cycleTag} / ${busTag} | ${bus_state_str} | M ${mcu_main.core0.PC.toString(16).padStart(8,"0")}/${wTags[0]} ${mcu_main.core1.PC.toString(16).padStart(8,"0")}/${wTags[1]} | V ${mcu_vic.core0.PC.toString(16).padStart(8,"0")}/${wTags[2]} ${mcu_vic.core1.PC.toString(16).padStart(8,"0")}/${wTags[3]} | M_PIO@${wTags[4]} V_PIO@${wTags[5]}/r${mcu_vic.pio[1].machines[0].rxFIFO.itemCount}/t${mcu_vic.pio[1].machines[0].txFIFO.itemCount} V_OUT@${wTags[6]} O_INP@${wTags[7]} | V_H_COUNT@${vic_h.toString().padStart(2,"0")} 6510@${cpu_addr.toString(16).padStart(4,"0")} ${bus_pins} ${bus_bin.toString(16).padStart(2,"0")}`);
   }
 
-  let mcu3_pio_cycles_behind = 0;
   try {
   for (let i = 0; i < 1000000; i++) {
-      if(mcu1.core0.cycles>next_cycle_time_output) {
+      if(mcu[0].core0.cycles>next_cycle_time_output) {
         write_pic("/tmp/cnm64.gif");
         next_cycle_time_output += 4000000;
-        console.log(`clock: ${((mcu1.core0.cycles/40000000)>>>0)/10} secs`);
+        console.log(`clock: ${((mcu[0].core0.cycles/40000000)>>>0)/10} secs`);
       }
 
-      // run mcu1 for one step, take note of how many cycles that took,
-      // then step mcu2 and mcu3 until they caught up.
-      gpio_cycle = mcu1.core0.cycles;
-      let cycles = mcu1.stepCores();
-      if(mcu1.core0.profilerTag.startsWith("*")) main_idle_cycles += cycles;
-      if(mcu1.core1.profilerTag.startsWith("*")) main_idle2_cycles += cycles;
-      cycles_mcu2_behind += cycles;
-      let mcu3_cycles = cycles*(295/400);
-      cycles_mcu3_behind += mcu3_cycles;
-      mcu3_pio_cycles_behind += mcu3_cycles;
-      while(cycles_mcu2_behind > 0) {
-        //console.log("MCU2");
-        let vic_cycles = mcu2.stepCores();
-        cycles_mcu2_behind -= vic_cycles;
+      // run mcu0 for one step, take note of how many cycles that took...
+      gpio_cycle = mcu[0].core0.cycles;
+      let cycles_consumed = mcu[0].stepCores();
+      pio_cycles_behind[0] += cycles_consumed;
+      if(mcu[0].core0.profilerTag.startsWith("*")) main_idle_cycles += cycles_consumed;
+      if(mcu[0].core1.profilerTag.startsWith("*")) main_idle2_cycles += cycles_consumed;
 
-        if(mcu2.core0.profilerTag.startsWith("*")) vic_idle_cycles += vic_cycles;
-        if(mcu2.core1.profilerTag.startsWith("*")) render_idle_cycles += vic_cycles;
-        if(vic_cycle_state!=0 && mcu2.core0.profilerTag=="^vic tick") {
-          vic_cycle_state = 0;
-          vic_cycle_start_at = mcu2.core0.cycles;
-        } else if(vic_cycle_state!=1 && mcu2.core0.profilerTag=="$vic tick") {
-          vic_cycle_state = 1;
-          vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu2.core0.cycles-vic_cycle_start_at, vic_h: vic_h, vic_l: vic_l, cycle6510: cycles_6510, idle: vic_idle_cycles, idle2: render_idle_cycles, addr6510:0});
-          vic_idle_cycles = 0; render_idle_cycles = 0;
-          if(vic_loop_stats.length>100000) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
+      // ...then step other mcus until they caught up.
+      for(let mcu_id = 1; mcu_id < hex_files.length; mcu_id++) {
+        const cycles_for_mcu = (mcu_id != 2) ? cycles_consumed : (cycles_consumed*(295/400)); // mcu_output runs at 295 instead of 400MHz
+        mcu_cycles_behind[mcu_id] += cycles_for_mcu;
+        pio_cycles_behind[mcu_id] += cycles_for_mcu;
+        while(mcu_cycles_behind[mcu_id] > 0) {
+          let cycles_mcu = mcu[mcu_id].stepCores();
+          mcu_cycles_behind[mcu_id] -= cycles_mcu;
+          if(mcu_id == 1) {
+            // some VIC logging
+            if(mcu[1].core0.profilerTag.startsWith("*")) vic_idle_cycles += cycles_mcu;
+            if(mcu[1].core1.profilerTag.startsWith("*")) render_idle_cycles += cycles_mcu;
+            if(vic_cycle_state!=0 && mcu[1].core0.profilerTag=="^vic tick") {
+              vic_cycle_state = 0;
+              vic_cycle_start_at = mcu[1].core0.cycles;
+            } else if(vic_cycle_state!=1 && mcu[1].core0.profilerTag=="$vic tick") {
+              vic_cycle_state = 1;
+              //if((vic_idle_cycles<30)||(render_idle_cycles<20)) // ********
+                vic_loop_stats.push({startCycle: vic_cycle_start_at, duration: mcu[1].core0.cycles-vic_cycle_start_at, vic_h: vic_h, vic_l: vic_l, cycle6510: cycles_6510, idle: vic_idle_cycles, idle2: render_idle_cycles, addr6510:0});
+              vic_idle_cycles = 0; render_idle_cycles = 0;
+              if(vic_loop_stats.length>100000) vic_loop_stats=vic_loop_stats.slice(vic_loop_stats.length-max_len_vic_loop_stats);
+            }
+          }
         }
-      }
-      while(cycles_mcu3_behind > 0) {
-        //console.log("MCU3");
-        cycles_mcu3_behind -= mcu3.stepCores();
       }
 
       // now, let PIOs catch up - done separately from MCU cores to reduce jitter
-      for(let pCycles = 0; pCycles < cycles; pCycles++) {
-        let cur_clock_pin_state = (mcu3.gpio[pin_gpio[0]].status>>17)&1;
+      for(let pCycles = 0; pCycles < cycles_consumed; pCycles++) {
+        // bus state debug output handling, look at clock pin
+        let cur_clock_pin_state = (mcu[2].gpio[pin_gpio[0]].status>>17)&1;
         if(cur_clock_pin_state != clock_pin_state) {
           if(cur_clock_pin_state == 1) {
             bus_state = (bus_state + 1) % 5;
@@ -352,51 +347,58 @@ async function run_mcus() {
           }
           clock_pin_state = cur_clock_pin_state;
         }
-        mcu1.stepPios(1);
-        mcu2.stepPios(1);
-        let pio_fdebug = mcu1.pio[0].fdebug;
+
+        // tick PIOs
+        for(let mcu_id = 0; mcu_id < hex_files.length; mcu_id++) {
+          if(pio_cycles_behind[mcu_id] > 0) {
+            pio_cycles_behind[mcu_id] -= 1;
+            mcu[mcu_id].stepPios(1);
+          }
+        }
+
+        // check for PIO stalls
+        let pio_fdebug = mcu[0].pio[0].fdebug;
         if(pio_fdebug & 0x0f0f0f00) {
-          if(pio_fdebug & 0x0f000000) throw new Error(`MAIN PIO TX STALL: ${(pio_fdebug>>24)&15}`);
+          //if(pio_fdebug & 0x0f000000) throw new Error(`MAIN PIO TX STALL: ${(pio_fdebug>>24)&15}`);
           if(pio_fdebug & 0x000f0000) throw new Error(`MAIN PIO TX OVERFLOW: ${(pio_fdebug>>16)&15}`);
           if(pio_fdebug & 0x00000f00) throw new Error(`MAIN PIO RX UNDERFLOW: ${(pio_fdebug>>8)&15}`);
         }
-        pio_fdebug = mcu2.pio[1].fdebug;
+        pio_fdebug = mcu[1].pio[1].fdebug;
         if(pio_fdebug & 0x0f0f0f00) {
           if(pio_fdebug & 0x0f000000) throw new Error(`VIC PIO TX STALL IN SM ${(pio_fdebug>>24)&15}`);
           if(pio_fdebug & 0x000f0000) throw new Error(`VIC PIO TX OVERFLOW IN SM ${(pio_fdebug>>16)&15}`);
           if(pio_fdebug & 0x00000f00) throw new Error(`VIC PIO RX UNDERFLOW IN SM ${(pio_fdebug>>8)&15}`);
         }
-        if(mcu3_pio_cycles_behind > 0) {
-          mcu3_pio_cycles_behind--;
-          mcu3.stepPios(1);
-        }
+
         if(!useFastPinListener) exactPinTick();
         gpio_cycle++;
       }
 
-      if((main_cycle_start_off==0)&&(mcu1.core0.profilerTag=="cycle start")) {
-        main_cycle_start_off=mcu1.core0.PC;
-        main_cycle_start_at = mcu1.core0.cycles;
-      } else if(mcu1.core0.PC==main_cycle_start_off) {
-        main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu1.core0.cycles-main_cycle_start_at, idle: main_idle_cycles, idle2: main_idle2_cycles, vic_h: vic_h, vic_l: vic_l, addr6510: mcu1.readUint16(cpu_addr_off), cycle6510: cycles_6510++});
-        main_idle_cycles = 0; main_idle2_cycles = 0;
+      if((main_cycle_start_off==0)&&(mcu[0].core0.profilerTag=="cycle start")) {
+        main_cycle_start_off=mcu[0].core0.PC;
+        main_cycle_start_at = mcu[0].core0.cycles;
+      } else if(mcu[0].core0.PC==main_cycle_start_off) {
+        //if(main_idle2_cycles < 20) // ***************
+        //if((mcu[0].core0.cycles-main_cycle_start_at) > 410 && (mcu[0].core0.cycles-main_cycle_start_at) < 450) // ***************
+          main_loop_stats.push({startCycle: main_cycle_start_at, duration: mcu[0].core0.cycles-main_cycle_start_at, idle: main_idle_cycles, idle2: main_idle2_cycles, vic_h: vic_h, vic_l: vic_l, addr6510: mcu[0].readUint16(cpu_addr_off), cycle6510: cycles_6510});
+        cycles_6510++; main_idle_cycles = 0; main_idle2_cycles = 0;
         if(main_loop_stats.length>100000) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
         vic_h++; if(vic_h > 62) { vic_h = 0; vic_l++; if(vic_l >= 312) vic_l = 0; }
-        main_cycle_start_at = mcu1.core0.cycles;
-      } else if(mcu1.core0.profilerTag=="_quit") throw new Error("Debug encountered _quit");
+        main_cycle_start_at = mcu[0].core0.cycles;
+      } else if(mcu[0].core0.profilerTag=="_quit") throw new Error("Debug encountered _quit");
 
       if(do_tracing) {
         log_state();
-        if(debug_crash_cycle>0 && mcu1.core0.cycles>debug_crash_cycle) throw new Error("Debug end tracing");
+        if(debug_crash_cycle>0 && mcu[0].core0.cycles>debug_crash_cycle) throw new Error("Debug end tracing");
       } else {
-        if(debug_crash_cycle>0 && mcu1.core0.cycles>(debug_crash_cycle-10000)) do_tracing = true;
-        if(debug_trace_from_emu_cycle>0 && cycles_6510>debug_trace_from_emu_cycle) { do_tracing = true; debug_crash_cycle = mcu1.core0.cycles + 4200; }
-        if(debug_trace_from_emu_addr>0 && mcu1.readUint16(cpu_addr_off)==debug_trace_from_emu_addr) { do_tracing = true; debug_crash_cycle = mcu1.core0.cycles + 4200; }
+        if(debug_crash_cycle>0 && mcu[0].core0.cycles>(debug_crash_cycle-10000)) do_tracing = true;
+        if(debug_trace_from_emu_cycle>0 && cycles_6510>debug_trace_from_emu_cycle) { do_tracing = true; debug_crash_cycle = mcu[0].core0.cycles + 4200; }
+        if(debug_trace_from_emu_addr>0 && mcu[0].readUint16(cpu_addr_off)==debug_trace_from_emu_addr) { do_tracing = true; debug_crash_cycle = mcu[0].core0.cycles + 4200; }
       }
       if(got_sigint) throw new Error("caught sigint");
 
       if(trace_6510_file || trace_6510_file_it) {
-        let addr_6510 = mcu1.readUint16(cpu_addr_off);
+        let addr_6510 = mcu[0].readUint16(cpu_addr_off);
         if(addr_6510 != addr_6510_last) {
           trace_6510_step++;
           if(trace_6510_file) {
@@ -422,7 +424,7 @@ async function run_mcus() {
   write_pic("/tmp/cnm64.gif");
   setTimeout(() => run_mcus(), 0);
   } catch(e) {
-    logs.push(`*** Exception ${e} - try running with CNM64_RUN_TO_CYCLE=${mcu1.core0.cycles} ***`);
+    logs.push(`*** Exception ${e} - try running with CNM64_RUN_TO_CYCLE=${mcu[0].core0.cycles} ***`);
     log_state();
     if(logs.length>5000) logs=logs.slice(logs.length-5000);
     console.error(logs.join("\n"));
@@ -431,7 +433,7 @@ async function run_mcus() {
       trace_6510_file.destroy();
       write_pic(trace_6510_filename + ".gif");
     }
-    fs.writeFileSync("/tmp/rp2040_crash.bin", Buffer.from(mcu1.sram));
+    fs.writeFileSync("/tmp/rp2040_crash.bin", Buffer.from(mcu[0].sram));
     console.error("\n*** 6510 statistics ***");
     if(main_loop_stats.length>max_len_main_loop_stats) main_loop_stats=main_loop_stats.slice(main_loop_stats.length-max_len_main_loop_stats);
     for(let l of main_loop_stats) {
