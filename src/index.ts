@@ -1,5 +1,5 @@
-export { GDBConnection } from './gdb/gdb-connection';
-export { GDBServer } from './gdb/gdb-server';
+//TODO export { GDBConnection } from './gdb/gdb-connection';
+//TODO export { GDBServer } from './gdb/gdb-server';
 export { GPIOPin, GPIOPinState } from './gpio-pin';
 export { BasePeripheral, Peripheral } from './peripherals/peripheral';
 export { RPI2C, I2CSpeed, I2CMode } from './peripherals/i2c';

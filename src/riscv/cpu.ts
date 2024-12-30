@@ -1,21 +1,29 @@
 import { B_Type, I_Type, Instruction, InstructionType, J_Type, R_Type, S_Type, U_Type } from "./Assembler/instruction";
 import { getRange } from "./binaryFunctions";
+import { RP2040 } from "../rp2040";
 
 export class CPU {
 
   registerSet: RegisterSet = new RegisterSet(32);
-  ram: DataView;
+  pc = 0;
+  waiting = false; //TODO
+  stopped = false; //TODO
+  cycles = 0; //TODO
+  eventRegistered = false; //TODO
 
-  constructor(ram: ArrayBuffer, public pc: number) {
-    this.ram = new DataView(ram);
+  constructor(readonly chip: RP2040, readonly coreLabel: string) {
   }
 
-  executionStep() {
-    const instruction = this.ram.getInt32(this.pc, true);
-    this.executeInstruction(instruction);
+  reset() { } //TODO
+
+  setInterrupt(a: any, b: any) { } //TODO
+
+  executeInstruction() {
+    const instruction = this.chip.readUint32(this.pc);
+    this.step(instruction);
   }
-  
-  executeInstruction(instruction: number) {
+
+  step(instruction: number) {
 
     const instructionType = opcodeTypeTable.get(getRange(instruction, 6, 0));
 
@@ -37,6 +45,10 @@ export class CPU {
         break;
       case InstructionType.J:
         this.executeJ_Type(new J_Type({ binary: instruction }));
+        break;
+      default:
+        console.log(`Invalid instruction: 0x${instruction.toString(16)} at 0x${this.pc.toString(16)}`);
+        this.pc += 4;
         break;
     }
 
@@ -193,55 +205,55 @@ type FuncTable<T extends Instruction> = Map<number, (instruction: T, cpu: CPU) =
 
 const opcode0x03func3Table: FuncTable<I_Type> = new Map([
   [0x0, (instruction: I_Type, cpu: CPU) => {
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    const byte = ram.getInt8(rs1Value + imm);
+    const byte = chip.readUint8(rs1Value + imm); //CHECK Int8?
     registerSet.setRegister(rd, byte);
 
     cpu.pc += 4;
   }],
 
   [0x1, (instruction: I_Type, cpu: CPU) => {
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    const half = ram.getInt16(rs1Value + imm);
+    const half = chip.readUint16(rs1Value + imm); //CHECK Int16?
     registerSet.setRegister(rd, half);
 
     cpu.pc += 4;
   }],
 
   [0x2, (instruction: I_Type, cpu: CPU) => {
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    const word = ram.getInt32(rs1Value + imm);
+    const word = chip.readUint32(rs1Value + imm); //CHECK Int32?
     registerSet.setRegister(rd, word);
 
     cpu.pc += 4;
   }],
 
   [0x4, (instruction: I_Type, cpu: CPU) => {
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    const byte = ram.getUint8(rs1Value + imm);
+    const byte = chip.readUint8(rs1Value + imm);
     registerSet.setRegister(rd, byte);
 
     cpu.pc += 4;
   }],
 
   [0x5, (instruction: I_Type, cpu: CPU) => {
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    const half = ram.getUint16(rs1Value + imm);
+    const half = chip.readUint16(rs1Value + imm);
     registerSet.setRegister(rd, half);
 
     cpu.pc += 4;
@@ -362,36 +374,36 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
 const opcode0x23func3Table: FuncTable<S_Type> = new Map([
   [0x0, (instruction: S_Type, cpu: CPU) => {
     const { rs1, rs2, imm } = instruction;
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
     const byte = getRange(rs2Value, 7, 0);
 
-    ram.setInt8(rs1Value + imm, byte);
+    chip.writeUint8(rs1Value + imm, byte); //CHECK Int8?
   }],
 
   [0x1, (instruction: S_Type, cpu: CPU) => {
     const { rs1, rs2, imm } = instruction;
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
     const half = getRange(rs2Value, 15, 0);
 
-    ram.setInt16(rs1Value + imm, half);
+    chip.writeUint16(rs1Value + imm, half); //CHECK Int16?
   }],
 
   [0x2, (instruction: S_Type, cpu: CPU) => {
     const { rs1, rs2, imm } = instruction;
-    const { registerSet, ram } = cpu;
+    const { registerSet, chip } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
-    ram.setInt32(rs1Value + imm, rs2Value);
+    chip.writeUint32(rs1Value + imm, rs2Value); //CHECK Int32?
   }],
 ]);
 

@@ -1,6 +1,6 @@
 import { IClock } from './clock/clock';
 import { RealtimeClock } from './clock/realtime-clock';
-import { CortexM0Core } from './cortex-m0-core';
+import { CPU } from './riscv/cpu';
 import { GPIOPin } from './gpio-pin';
 import { IRQ } from './irq';
 import { RPADC } from './peripherals/adc';
@@ -11,13 +11,13 @@ import { RPIO } from './peripherals/io';
 import { RPPADS } from './peripherals/pads';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
 import { RPPIO } from './peripherals/pio';
-import { RPPPB } from './peripherals/ppb';
+//TODO import { RPPPB } from './peripherals/ppb';
 import { RPPWM } from './peripherals/pwm';
 import { RPReset } from './peripherals/reset';
 import { RP2040RTC } from './peripherals/rtc';
 import { RPSPI } from './peripherals/spi';
 import { RPSSI } from './peripherals/ssi';
-import { RP2040SysCfg } from './peripherals/syscfg';
+//TODO import { RP2040SysCfg } from './peripherals/syscfg';
 import { RP2040SysInfo } from './peripherals/sysinfo';
 import { RPTimer } from './peripherals/timer';
 import { RPUART } from './peripherals/uart';
@@ -49,14 +49,14 @@ export class RP2040 {
   readonly usbDPRAM = new Uint8Array(4 * KB);
   readonly usbDPRAMView = new DataView(this.usbDPRAM.buffer);
 
-  readonly core0 = new CortexM0Core(this, 'CortexM0Core0');
-  readonly core1 = new CortexM0Core(this, 'CortexM0Core1');
+  readonly core0 = new CPU(this, 'RISCVCore0');
+  readonly core1 = new CPU(this, 'RISCVCore1');
 
   /* Clocks */
   clkSys = 125 * MHz;
   clkPeri = 125 * MHz;
 
-  readonly ppb = new RPPPB(this, 'PPB');
+  //TODO readonly ppb = new RPPPB(this, 'PPB');
   readonly sio = new RPSIO(this);
 
   readonly uart = [new RPUART(this, 'UART0', IRQ.UART0), new RPUART(this, 'UART1', IRQ.UART1)];
@@ -121,7 +121,7 @@ export class RP2040 {
   readonly peripherals: { [index: number]: Peripheral } = {
     0x18000: new RPSSI(this, 'SSI'),
     0x40000: new RP2040SysInfo(this, 'SYSINFO_BASE'),
-    0x40004: new RP2040SysCfg(this, 'SYSCFG'),
+    //TODO 0x40004: new RP2040SysCfg(this, 'SYSCFG'),
     0x40008: new RPClocks(this, 'CLOCKS_BASE'),
     0x4000c: new RPReset(this, 'RESETS_BASE'),
     0x40010: new UnimplementedPeripheral(this, 'PSM_BASE'),
@@ -155,7 +155,7 @@ export class RP2040 {
 
   constructor(readonly debug: boolean = false, readonly clock: IClock = new RealtimeClock()) {
     this.reset();
-    this.core0.onSEV = () => {
+/*    this.core0.onSEV = () => {
       if (this.core1.waiting) {
         this.core1.waiting = false;
       } else {
@@ -168,7 +168,7 @@ export class RP2040 {
       } else {
         this.core0.eventRegistered = true;
       }
-    };
+    };*/ //TODO
   }
 
   isCore0Running = true;
@@ -210,7 +210,7 @@ export class RP2040 {
     ) {
       return this.usbDPRAMView.getUint32(address - DPRAM_START_ADDRESS, true);
     } else if (address >>> 12 === 0xe000e) {
-      return this.ppb.readUint32ViaCore(address & 0xfff, core);
+      //TODO return this.ppb.readUint32ViaCore(address & 0xfff, core);
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       return this.sio.readUint32(address - SIO_START_ADDRESS, core);
     }
@@ -279,7 +279,7 @@ export class RP2040 {
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       this.sio.writeUint32(address - SIO_START_ADDRESS, value, core);
     } else if (address >>> 12 === 0xe000e) {
-      this.ppb.writeUint32ViaCore(address & 0xfff, value, core);
+      //TODO this.ppb.writeUint32ViaCore(address & 0xfff, value, core);
     } else {
       this.logger.warn(LOG_NAME, `Write to undefined address: ${address.toString(16)}`);
     }
