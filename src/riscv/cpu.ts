@@ -1,11 +1,13 @@
 import { B_Type, I_Type, Instruction, InstructionType, J_Type, R_Type, S_Type, U_Type } from "./Assembler/instruction";
 import { getRange } from "./binaryFunctions";
 import { RP2040 } from "../rp2040";
+import { decompress_rv32c_inst } from "./rv32c";
 
 export class CPU {
 
   registerSet: RegisterSet = new RegisterSet(32);
   pc = 0;
+  next_pc = 0;
   waiting = false; //TODO
   stopped = false; //TODO
   cycles = 0; //TODO
@@ -18,8 +20,46 @@ export class CPU {
 
   setInterrupt(a: any, b: any) { } //TODO
 
+  private inst_buffer = 0;
+  private inst_length = 0;
+
+  private fetchInstruction(): number {
+    let inst = 0;
+    if (this.inst_buffer == 0) {
+        // fetch the next word
+        this.inst_buffer = this.chip.readUint16(this.pc) << 16 | this.chip.readUint16(this.pc + 2);
+    }
+    if ((this.inst_buffer & 3) != 3) {
+        // cut 16 bit instruction from buffer
+        inst = this.inst_buffer & 0x0000FFFF;
+        this.inst_buffer >>= 16;
+
+        // TODO: filter illegal instruction
+        if (inst == 0) {
+            console.log(`Illegal 16 bit instruction: ${inst}`);
+        }
+
+        inst = decompress_rv32c_inst(inst);
+        this.inst_length = 2;
+    } else {
+        // we have a 32 bit instruction
+        if (this.inst_buffer != 0) {
+            inst = this.inst_buffer;
+            this.inst_buffer = this.chip.readUint16(this.pc + 2) << 16 | this.chip.readUint16(this.pc + 4);
+            inst |= this.inst_buffer << 16;
+            this.inst_buffer >>= 16;
+        } else {
+            inst = this.inst_buffer;
+            this.inst_buffer = 0;
+        }
+        this.inst_length = 4;
+    }
+    return inst;
+  }
+
   executeInstruction() {
-    const instruction = this.chip.readUint32(this.pc);
+    console.log(`STEP! 0x${this.pc.toString(16)}`);
+    const instruction = this.fetchInstruction();
     this.step(instruction);
   }
 
@@ -48,8 +88,14 @@ export class CPU {
         break;
       default:
         console.log(`Invalid instruction: 0x${instruction.toString(16)} at 0x${this.pc.toString(16)}`);
-        this.pc += 4;
         break;
+    }
+
+    if(this.next_pc != this.pc) {
+      this.pc = this.next_pc;
+    } else {
+      this.pc += this.inst_length;
+      this.next_pc = this.pc;
     }
 
   }
@@ -68,9 +114,6 @@ export class CPU {
     } else {
       console.log('WARNING: Invalid Instruction');
     }
-
-    this.pc += 4;
-
   }
 
   private executeI_Type(instruction: I_Type) {
@@ -103,9 +146,6 @@ export class CPU {
     } else {
       console.log('WARNING: Invalid Instruction');
     }
-
-    this.pc += 4;
-
   }
 
   private executeB_Type(instruction: B_Type) {
@@ -136,8 +176,6 @@ export class CPU {
     } else {
       console.log('WARNING: Invalid Instruction');
     }
-
-    this.pc += 4;
   }
 
   private executeJ_Type(instruction: J_Type) {
@@ -211,8 +249,6 @@ const opcode0x03func3Table: FuncTable<I_Type> = new Map([
 
     const byte = chip.readUint8(rs1Value + imm); //CHECK Int8?
     registerSet.setRegister(rd, byte);
-
-    cpu.pc += 4;
   }],
 
   [0x1, (instruction: I_Type, cpu: CPU) => {
@@ -222,8 +258,6 @@ const opcode0x03func3Table: FuncTable<I_Type> = new Map([
 
     const half = chip.readUint16(rs1Value + imm); //CHECK Int16?
     registerSet.setRegister(rd, half);
-
-    cpu.pc += 4;
   }],
 
   [0x2, (instruction: I_Type, cpu: CPU) => {
@@ -233,8 +267,6 @@ const opcode0x03func3Table: FuncTable<I_Type> = new Map([
 
     const word = chip.readUint32(rs1Value + imm); //CHECK Int32?
     registerSet.setRegister(rd, word);
-
-    cpu.pc += 4;
   }],
 
   [0x4, (instruction: I_Type, cpu: CPU) => {
@@ -244,8 +276,6 @@ const opcode0x03func3Table: FuncTable<I_Type> = new Map([
 
     const byte = chip.readUint8(rs1Value + imm);
     registerSet.setRegister(rd, byte);
-
-    cpu.pc += 4;
   }],
 
   [0x5, (instruction: I_Type, cpu: CPU) => {
@@ -255,8 +285,6 @@ const opcode0x03func3Table: FuncTable<I_Type> = new Map([
 
     const half = chip.readUint16(rs1Value + imm);
     registerSet.setRegister(rd, half);
-
-    cpu.pc += 4;
   }],
 ]);
 
@@ -270,8 +298,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const result = rs1Value + imm;
 
     registerSet.setRegister(rd, result);
-
-    cpu.pc += 4;
   }],
 
   [0x1, (instruction: I_Type, cpu: CPU) => {
@@ -283,8 +309,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const result = rs1Value << shamt;
 
     registerSet.setRegister(rd, result);
-
-    cpu.pc += 4;
   }],
 
   [0x2, (instruction: I_Type, cpu: CPU) => {
@@ -296,8 +320,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const result = rs1Value < imm ? 1 : 0;
 
     registerSet.setRegister(rd, result);
-
-    cpu.pc += 4;
   }],
 
   [0x3, (instruction: I_Type, cpu: CPU) => {
@@ -309,8 +331,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const result = rs1Value < immU ? 1 : 0;
 
     registerSet.setRegister(rd, result);
-
-    cpu.pc += 4;
   }],
 
   [0x4, (instruction: I_Type, cpu: CPU) => {
@@ -322,8 +342,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const result = rs1Value ^ imm;
 
     registerSet.setRegister(rd, result);
-
-    cpu.pc += 4;
   }],
 
   [0x5, (instruction: I_Type, cpu: CPU) => {
@@ -340,8 +358,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
       const result = rs1Value >> shamt;
       registerSet.setRegister(rd, result);
     }
-
-    cpu.pc += 4;
   }],
 
   [0x6, (instruction: I_Type, cpu: CPU) => {
@@ -353,8 +369,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const result = rs1Value | imm;
 
     registerSet.setRegister(rd, result);
-
-    cpu.pc += 4;
   }],
 
   [0x7, (instruction: I_Type, cpu: CPU) => {
@@ -366,8 +380,6 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const result = rs1Value & imm;
 
     registerSet.setRegister(rd, result);
-
-    cpu.pc += 4;
   }],
 ]);
 
@@ -522,9 +534,7 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs2Value = registerSet.getRegister(rs2);
 
     if (rs1Value === rs2Value) {
-      cpu.pc += imm;
-    } else {
-      cpu.pc += 4;
+      cpu.next_pc = cpu.pc + imm;
     }
   }],
 
@@ -536,9 +546,7 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs2Value = registerSet.getRegister(rs2);
 
     if (rs1Value !== rs2Value) {
-      cpu.pc += imm;
-    } else {
-      cpu.pc += 4;
+      cpu.next_pc = cpu.pc + imm;
     }
   }],
 
@@ -550,9 +558,7 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs2Value = registerSet.getRegister(rs2);
 
     if (rs1Value < rs2Value) {
-      cpu.pc += imm;
-    } else {
-      cpu.pc += 4;
+      cpu.next_pc = cpu.pc + imm;
     }
   }],
 
@@ -564,9 +570,7 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs2Value = registerSet.getRegister(rs2);
 
     if (rs1Value >= rs2Value) {
-      cpu.pc += imm;
-    } else {
-      cpu.pc += 4;
+      cpu.next_pc = cpu.pc + imm;
     }
   }],
 
@@ -578,9 +582,7 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs2Value = registerSet.getRegisterU(rs2);
 
     if (rs1Value < rs2Value) {
-      cpu.pc += imm;
-    } else {
-      cpu.pc += 4;
+      cpu.next_pc = cpu.pc + imm;
     }
   }],
 
@@ -592,9 +594,7 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs2Value = registerSet.getRegisterU(rs2);
 
     if (rs1Value >= rs2Value) {
-      cpu.pc += imm;
-    } else {
-      cpu.pc += 4;
+      cpu.next_pc = cpu.pc + imm;
     }
   }],
 ]);
@@ -658,7 +658,7 @@ const j_TypeOpcodeTable: OpcodeTable<J_Type> = new Map([
     const { registerSet } = cpu;
 
     registerSet.setRegister(rd, cpu.pc + 4);
-    cpu.pc += imm;
+    cpu.next_pc = cpu.pc + imm;
   }]
 ]);
 
