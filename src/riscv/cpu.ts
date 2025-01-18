@@ -22,18 +22,13 @@ export class CPU {
 
   private inst_buffer = 0;
   private inst_length = 0;
+  private break_after_steps = 5;
 
   private fetchInstruction(): number {
-    let inst = 0;
-    if (this.inst_buffer == 0) {
-        // fetch the next word
-        this.inst_buffer = this.chip.readUint16(this.pc) << 16 | this.chip.readUint16(this.pc + 2);
-    }
-    if ((this.inst_buffer & 3) != 3) {
-        // cut 16 bit instruction from buffer
-        inst = this.inst_buffer & 0x0000FFFF;
-        this.inst_buffer >>= 16;
-
+    this.break_after_steps--;
+    if(this.break_after_steps == 0) throw Error("Ending.");
+    let inst = this.chip.readUint16(this.pc);
+    if ((inst & 3) != 3) {
         // TODO: filter illegal instruction
         if (inst == 0) {
             console.log(`Illegal 16 bit instruction: ${inst}`);
@@ -43,23 +38,16 @@ export class CPU {
         this.inst_length = 2;
     } else {
         // we have a 32 bit instruction
-        if (this.inst_buffer != 0) {
-            inst = this.inst_buffer;
-            this.inst_buffer = this.chip.readUint16(this.pc + 2) << 16 | this.chip.readUint16(this.pc + 4);
-            inst |= this.inst_buffer << 16;
-            this.inst_buffer >>= 16;
-        } else {
-            inst = this.inst_buffer;
-            this.inst_buffer = 0;
-        }
+        inst |= this.chip.readUint16(this.pc + 2) << 16;
         this.inst_length = 4;
     }
-    return inst;
+    return inst >>> 0;
   }
 
   executeInstruction() {
-    console.log(`STEP! 0x${this.pc.toString(16)}`);
+    console.log(`PC 0x${this.pc.toString(16)} - fetching`);
     const instruction = this.fetchInstruction();
+    console.log(`executing (decoded) instr 0x${instruction.toString(16)}`);
     this.step(instruction);
   }
 
@@ -92,6 +80,7 @@ export class CPU {
     }
 
     if(this.next_pc != this.pc) {
+      this.inst_buffer = 0;
       this.pc = this.next_pc;
     } else {
       this.pc += this.inst_length;
@@ -607,13 +596,19 @@ const opcode0x67func3Table: FuncTable<I_Type> = new Map([
     const rs1Value = registerSet.getRegister(rs1);
 
     registerSet.setRegister(rd, cpu.pc + 4);
-    cpu.pc = rs1Value + imm;
+    cpu.next_pc = rs1Value + imm;
   }]
 ]);
 
 const opcode0x73func3Table: FuncTable<I_Type> = new Map([
   [0x0, (instruction: I_Type, cpu: CPU) => {
     // TODO: Implement ECALL
+  }],
+  [0x2, (instruction: I_Type, cpu: CPU) => {
+    // TODO: Implement crrw properly
+    const { rd } = instruction;
+    const { registerSet } = cpu;
+    registerSet.setRegister(rd, 0);
   }]
 ]);
 

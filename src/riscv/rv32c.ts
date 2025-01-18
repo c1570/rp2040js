@@ -2,26 +2,27 @@
 export function decompress_rv32c_inst(inst: number): number {
   let index = ((inst & 0x0003) << 3) | ((inst & 0xE000) >> 13);
   let decompressor: any = decompressors[index];  //TODO
-  if(!decompressor) console.log("ASSUIDHIUSHD");
+  console.log(`decompressing: ${index}`);
   return decompressor(inst);
 }
 
-const decompressors = Array<(number) => number) = {
+const decompressors: Array<((input: number) => number) | null> = [
 //  000                001          010          011           100           101        110           111
-    caddi4spn_to_addi, NULL,        clw_to_lw,   NULL,         NULL,         NULL,      csw_to_sw,    NULL,         // 00
+    caddi4spn_to_addi, null,        clw_to_lw,   null,         null,         null,      csw_to_sw,    null,         // 00
     caddi_to_addi,     cjal_to_jal, cli_to_addi, parse_011_01, parse_100_01, cj_to_jal, cbeqz_to_beq, cbenz_to_bne, // 01
-    cslli_to_slli,     NULL,        clwsp_to_lw, NULL,         parse_100_10, NULL,      cswsp_to_sw,  NULL,         // 10
-};
+    cslli_to_slli,     null,        clwsp_to_lw, null,         parse_100_10, null,      cswsp_to_sw,  null,         // 10
+];
 
 
+function assert(a: boolean) {};
 
 
 // C.ADDI4SPN, funct3 = 000, opcode = 00
 function caddi4spn_to_addi(inst: number): number
 {
     // decode imm and rd
-    const number nzuimm = dec_ciw_imm(inst);
-    const number rd = dec_rd_short(inst);
+    const nzuimm: number = dec_ciw_imm(inst);
+    const rd: number = dec_rd_short(inst);
 
     // encode to addi rd' x2 nzuimm[9:2]
     return enc_itype(nzuimm, 2, 0b000, rd, 0b0010011);
@@ -31,9 +32,9 @@ function caddi4spn_to_addi(inst: number): number
 function clw_to_lw(inst: number): number
 {
     // decode imm, rs1 and rd
-    const number imm = dec_clw_csw_imm(inst);
-    const number rs1 = dec_rs1_short(inst);
-    const number rd = dec_rd_short(inst);
+    const imm: number = dec_clw_csw_imm(inst);
+    const rs1: number = dec_rs1_short(inst);
+    const rd: number = dec_rd_short(inst);
 
     // encode to lw rd', offset[6:2](rs1')
     return enc_itype(imm, rs1, 0b010, rd, 0b0000011);
@@ -43,9 +44,9 @@ function clw_to_lw(inst: number): number
 function csw_to_sw(inst: number): number
 {
     // decode imm, rs1 and rs2
-    const number imm = dec_clw_csw_imm(inst);
-    const number rs1 = dec_rs1_short(inst);
-    const number rs2 = dec_rs2_short(inst);
+    const imm: number = dec_clw_csw_imm(inst);
+    const rs1: number = dec_rs1_short(inst);
+    const rs2: number = dec_rs2_short(inst);
 
     // encode to sw rs2', offset[6:2](rs1')
     return enc_stype(imm, rs2, rs1, 0b010, 0b0100011);
@@ -61,10 +62,10 @@ function cnop_to_addi(): number
 function caddi_to_addi(inst: number): number
 {
     // decode nzimm and rd
-    const number rd = dec_rd(inst);
-    number nzimm = 0;
-    nzimm |= (inst & CI_MASK_12) >> 7;
-    nzimm |= (inst & (CI_MASK_6_4 | CI_MASK_3_2)) >> 2;
+    const rd: number = dec_rd(inst);
+    let nzimm: number = 0;
+    nzimm |= (inst & C.CI_MASK_12) >> 7;
+    nzimm |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
     nzimm = sign_extend(nzimm, 5);
 
     // if nzimm == 0, marked as HINT, implement as nop
@@ -79,7 +80,7 @@ function caddi_to_addi(inst: number): number
 function cjal_to_jal(inst: number): number
 {
     // decode imm
-    const number imm = dec_cj_imm(inst);
+    const imm: number = dec_cj_imm(inst);
 
     // encode to jal x1, offset[11:1]
     return enc_jtype(imm, 1, 0b1101111);
@@ -89,10 +90,10 @@ function cjal_to_jal(inst: number): number
 function cli_to_addi(inst: number): number
 {
     // decode imm and rd
-    const number rd = dec_rd(inst);
-    number imm = 0;
-    imm |= (inst & CI_MASK_12) >> 7;
-    imm |= (inst & (CI_MASK_6_4 | CI_MASK_3_2)) >> 2;
+    const rd: number = dec_rd(inst);
+    let imm: number = 0;
+    imm |= (inst & C.CI_MASK_12) >> 7;
+    imm |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
     imm = sign_extend(imm, 5);
 
     // if rd == 0, marked as HINT, implement as nop
@@ -107,7 +108,7 @@ function cli_to_addi(inst: number): number
 function caddi16sp_to_addi(inst: number): number
 {
     // decode nzimm
-    number nzimm = 0;
+    let nzimm: number = 0;
     nzimm |= (inst & 0x1000) >> 3;
     nzimm |= (inst & 0x0018) << 4;
     nzimm |= (inst & 0x0020) << 1;
@@ -126,10 +127,10 @@ function caddi16sp_to_addi(inst: number): number
 function clui_to_lui(inst: number): number
 {
     // decode nzimm and rd
-    const number rd = dec_rd(inst);
-    number nzimm = 0;
-    nzimm |= (inst & CI_MASK_12) << 5;
-    nzimm |= (inst & (CI_MASK_6_4 | CI_MASK_3_2)) << 10;
+    const rd: number = dec_rd(inst);
+    let nzimm: number = 0;
+    nzimm |= (inst & C.CI_MASK_12) << 5;
+    nzimm |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) << 10;
     nzimm = sign_extend(nzimm, 17);
 
     // ensure nzimm != 0
@@ -146,15 +147,15 @@ function clui_to_lui(inst: number): number
 function csrli_to_srli(inst: number): number
 {
     // decode shamt and rd = rs1
-    number shamt = 0;
-    shamt |= (inst & CI_MASK_12) >> 7;
+    let shamt: number = 0;
+    shamt |= (inst & C.CI_MASK_12) >> 7;
     // shamt[5] must be zero for RV32C
     assert(shamt == 0);
-    shamt |= (inst & (CI_MASK_6_4 | CI_MASK_3_2)) >> 2;
+    shamt |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
     // ensure shamt != 0
     assert(shamt != 0);
 
-    const number rd = dec_rs1_short(inst);
+    const rd: number = dec_rs1_short(inst);
 
     // encode to srli rd', rd', shamt[5:0]
     return enc_rtype(0b0000000, shamt, rd, 0b101, rd, 0b0010011);
@@ -163,15 +164,15 @@ function csrli_to_srli(inst: number): number
 function csrai_to_srai(inst: number): number
 {
     // decode shamt and rd = rs1
-    number shamt = 0;
-    shamt |= (inst & CI_MASK_12) >> 7;
+    let shamt: number = 0;
+    shamt |= (inst & C.CI_MASK_12) >> 7;
     // shamt[5] must be zero for RV32C
     assert(shamt == 0);
-    shamt |= (inst & (CI_MASK_6_4 | CI_MASK_3_2)) >> 2;
+    shamt |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
     // ensure shamt != 0
     assert(shamt != 0);
 
-    const number rd = dec_rs1_short(inst);
+    const rd: number = dec_rs1_short(inst);
 
     // encode to srai rd', rd', shamt[5:0]
     return enc_rtype(0b0100000, shamt, rd, 0b101, rd, 0b0010011);
@@ -180,10 +181,10 @@ function csrai_to_srai(inst: number): number
 function candi_to_andi(inst: number): number
 {
     // decode imm and rd = rs1
-    const number rd = dec_rs1_short(inst);
-    number imm = 0;
-    imm |= (inst & CI_MASK_12) >> 7;
-    imm |= (inst & (CI_MASK_6_4 | CI_MASK_3_2)) >> 2;
+    const rd: number = dec_rs1_short(inst);
+    let imm: number = 0;
+    imm |= (inst & C.CI_MASK_12) >> 7;
+    imm |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
     imm = sign_extend(imm, 5);
 
     // encode to andi rd', rd', imm[5:0]
@@ -193,8 +194,8 @@ function candi_to_andi(inst: number): number
 function csub_to_sub(inst: number): number
 {
     // decode rd = rs1 and rs2
-    const number rd = dec_rs1_short(inst);
-    const number rs2 = dec_rs2_short(inst);
+    const rd: number = dec_rs1_short(inst);
+    const rs2: number = dec_rs2_short(inst);
 
     // encode to sub rd', rd', rs2'
     return enc_rtype(0b0100000, rs2, rd, 0b000, rd, 0b0110011);
@@ -203,8 +204,8 @@ function csub_to_sub(inst: number): number
 function cxor_to_xor(inst: number): number
 {
     // decode rd = rs1 and rs2
-    const number rd = dec_rs1_short(inst);
-    const number rs2 = dec_rs2_short(inst);
+    const rd: number = dec_rs1_short(inst);
+    const rs2: number = dec_rs2_short(inst);
 
     // encode to xor rd', rd', rs2'
     return enc_rtype(0b0000000, rs2, rd, 0b100, rd, 0b0110011);
@@ -213,8 +214,8 @@ function cxor_to_xor(inst: number): number
 function cor_to_or(inst: number): number
 {
     // decode rd = rs1 and rs2
-    const number rd = dec_rs1_short(inst);
-    const number rs2 = dec_rs2_short(inst);
+    const rd: number = dec_rs1_short(inst);
+    const rs2: number = dec_rs2_short(inst);
 
     // encode to or rd', rd', rs2'
     return enc_rtype(0b0000000, rs2, rd, 0b110, rd, 0b0110011);
@@ -223,8 +224,8 @@ function cor_to_or(inst: number): number
 function cand_to_and(inst: number): number
 {
     // decode rd = rs1 and rs2
-    const number rd = dec_rs1_short(inst);
-    const number rs2 = dec_rs2_short(inst);
+    const rd: number = dec_rs1_short(inst);
+    const rs2: number = dec_rs2_short(inst);
 
     // encode to and rd', rd', rs2'
     return enc_rtype(0b0000000, rs2, rd, 0b111, rd, 0b0110011);
@@ -234,7 +235,7 @@ function cand_to_and(inst: number): number
 function cj_to_jal(inst: number): number
 {
     // decode imm
-    const number imm = dec_cj_imm(inst);
+    const imm: number = dec_cj_imm(inst);
 
     // encode to jal x0, offset[11:1]
     return enc_jtype(imm, 0, 0b1101111);
@@ -244,8 +245,8 @@ function cj_to_jal(inst: number): number
 function cbeqz_to_beq(inst: number): number
 {
     // decode offset and rs1
-    const number offset = dec_branch_imm(inst);
-    const number rs1 = dec_rs1_short(inst);
+    const offset: number = dec_branch_imm(inst);
+    const rs1: number = dec_rs1_short(inst);
 
     // encode to beq rs1', x0, offset[8:1]
     return enc_btype(offset, 0, rs1, 0b000, 0b1100011);
@@ -255,8 +256,8 @@ function cbeqz_to_beq(inst: number): number
 function cbenz_to_bne(inst: number): number
 {
     // decode offset and rs1
-    const number offset = dec_branch_imm(inst);
-    const number rs1 = dec_rs1_short(inst);
+    const offset: number = dec_branch_imm(inst);
+    const rs1: number = dec_rs1_short(inst);
 
     // encode to bne rs1', x0, offset[8:1]
     return enc_btype(offset, 0, rs1, 0b001, 0b1100011);
@@ -266,15 +267,15 @@ function cbenz_to_bne(inst: number): number
 function cslli_to_slli(inst: number): number
 {
     // decode shamt and rd
-    number shamt = 0;
-    shamt |= (inst & CI_MASK_12) >> 7;
+    let shamt: number = 0;
+    shamt |= (inst & C.CI_MASK_12) >> 7;
     // shamt[5] must be zero for RV32C
     assert(shamt == 0);
-    shamt |= (inst & (CI_MASK_6_4 | CI_MASK_3_2)) >> 2;
+    shamt |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
     // ensure shamt != 0
     assert(shamt != 0);
 
-    const number rd = dec_rd(inst);
+    const rd: number = dec_rd(inst);
     // if rd == 0, marked as HINT, implement as nop
     if (rd == 0)
         return cnop_to_addi();
@@ -287,12 +288,12 @@ function cslli_to_slli(inst: number): number
 function clwsp_to_lw(inst: number): number
 {
     // decode offset and rd
-    number offset = 0;
-    offset |= (inst & CI_MASK_12) >> 7;
-    offset |= (inst & CI_MASK_6_4) >> 2;
-    offset |= (inst & CI_MASK_3_2) << 4;
+    let offset: number = 0;
+    offset |= (inst & C.CI_MASK_12) >> 7;
+    offset |= (inst & C.CI_MASK_6_4) >> 2;
+    offset |= (inst & C.CI_MASK_3_2) << 4;
 
-    const number rd = dec_rd(inst);
+    const rd: number = dec_rd(inst);
     // ensure rd != 0
     assert(rd != 0);
 
@@ -303,7 +304,7 @@ function clwsp_to_lw(inst: number): number
 function cjr_to_jalr(inst: number): number
 {
     // decode rs1
-    const number rs1 = dec_rs1(inst);
+    const rs1: number = dec_rs1(inst);
     // ensure rs1 != 0
     assert(rs1 != 0);
 
@@ -314,11 +315,11 @@ function cjr_to_jalr(inst: number): number
 function cmv_to_add(inst: number): number
 {
     // decode rs2 and rd
-    const number rs2 = dec_rs2(inst);
+    const rs2: number = dec_rs2(inst);
     // ensure rs2 != 0
     assert(rs2 != 0);
 
-    const number rd = dec_rd(inst);
+    const rd: number = dec_rd(inst);
     // if rd == 0, marked as HINT, implement as nop
     if (rd == 0)
         return cnop_to_addi();
@@ -336,7 +337,7 @@ function cebreak_to_ebreak(): number
 function cjalr_to_jalr(inst: number): number
 {
     // decode rs1
-    const number rs1 = dec_rs1(inst);
+    const rs1: number = dec_rs1(inst);
     // ensure rs1 != 0
     assert(rs1 != 0);
 
@@ -347,11 +348,11 @@ function cjalr_to_jalr(inst: number): number
 function cadd_to_add(inst: number): number
 {
     // decode rs2 and rd
-    const number rs2 = dec_rs2(inst);
+    const rs2: number = dec_rs2(inst);
     // ensure rs2 != 0
     assert(rs2 != 0);
 
-    const number rd = dec_rd(inst);
+    const rd: number = dec_rd(inst);
     // if rd == 0, marked as HINT, implement as nop
     if (rd == 0)
         return cnop_to_addi();
@@ -364,8 +365,8 @@ function cadd_to_add(inst: number): number
 function cswsp_to_sw(inst: number): number
 {
     // decode imm and rs2
-    const number offset = dec_css_imm(inst);
-    const number rs2 = dec_rs2(inst);
+    const offset: number = dec_css_imm(inst);
+    const rs2: number = dec_rs2(inst);
 
     // encode to sw rs2, offset[7:2](x2)
     return enc_stype(offset, rs2, 2, 0b010, 0b0100011);
@@ -374,7 +375,7 @@ function cswsp_to_sw(inst: number): number
 // funct3 = 011, opcode = 01
 function parse_011_01(inst: number): number
 {
-    const number rd = dec_rd(inst);
+    const rd: number = dec_rd(inst);
 
     if (rd == 2)
         return caddi16sp_to_addi(inst);
@@ -385,8 +386,8 @@ function parse_011_01(inst: number): number
 // funct3 = 100, opcode = 01
 function parse_100_01(inst: number): number
 {
-    const number cb_funct2 = dec_cb_funct2(inst);
-    const number cs_funct2 = dec_cs_funct2(inst);
+    const cb_funct2: number = dec_cb_funct2(inst);
+    const cs_funct2: number = dec_cs_funct2(inst);
 
     switch (cb_funct2) {
     case 0b00:
@@ -414,9 +415,9 @@ function parse_100_01(inst: number): number
 // funct3 = 100, opcode = 10
 function parse_100_10(inst: number): number
 {
-    const number cr_funct4 = dec_cr_funct4(inst);
-    const number rs1 = dec_rs1(inst);
-    const number rs2 = dec_rs2(inst);
+    const cr_funct4: number = dec_cr_funct4(inst);
+    const rs1: number = dec_rs1(inst);
+    const rs2: number = dec_rs2(inst);
 
     if (cr_funct4 == 0b1000) {
         if (rs2 == 0)
@@ -439,7 +440,7 @@ function parse_100_10(inst: number): number
 
 
 
-enum {
+enum C {
     //                ....xxxx....xxxx
     C_RD          = 0b0000111110000000, // general
     C_RS1         = 0b0000111110000000,
@@ -488,143 +489,143 @@ enum {
 // clang-format off
 
 // decode rd field
-static inline number dec_rd(uint16_t inst)
+function dec_rd(inst: number): number
 {
-    return (inst & C_RD) >> 7;
+    return (inst & C.C_RD) >> 7;
 }
 
 // decode rs1 field
-static inline number dec_rs1(uint16_t inst)
+function dec_rs1(inst: number): number
 {
-    return (inst & C_RS1) >> 7;
+    return (inst & C.C_RS1) >> 7;
 }
 
 // decode rs2 field
-static inline number dec_rs2(uint16_t inst)
+function dec_rs2(inst: number): number
 {
-    return (inst & C_RS2) >> 2;
+    return (inst & C.C_RS2) >> 2;
 }
 
 // decode rd' field and return its correspond register
-static inline number dec_rd_short(uint16_t inst)
+function dec_rd_short(inst: number): number
 {
-    return ((inst & C_RD_S) >> 2) | 0b1000;
+    return ((inst & C.C_RD_S) >> 2) | 0b1000;
 }
 
 // decode rs1' field and return its correspond register
-static inline number dec_rs1_short(uint16_t inst)
+function dec_rs1_short(inst: number): number
 {
-    return ((inst & C_RS1_S) >> 7) | 0b1000;
+    return ((inst & C.C_RS1_S) >> 7) | 0b1000;
 }
 
 // decode rs2' field and return its correspond register
-static inline number dec_rs2_short(uint16_t inst)
+function dec_rs2_short(inst: number): number
 {
-    return ((inst & C_RS2_S) >> 2) | 0b1000;
+    return ((inst & C.C_RS2_S) >> 2) | 0b1000;
 }
 
 // sign extend from specific position to MSB
-static inline number sign_extend(number x, uint8_t sign_position)
+function sign_extend(x: number, sign_position: number): number
 {
-    number sign = (x >> sign_position) & 1;
-    for (uint8_t i = sign_position + 1; i < 32; ++i)
+    let sign: number = (x >> sign_position) & 1;
+    for (let i: number = sign_position + 1; i < 32; ++i)
         x |= sign << i;
     return x;
 }
 
 // decode CR-format instruction funct4 field
-static inline number dec_cr_funct4(uint16_t inst)
+function dec_cr_funct4(inst: number): number
 {
-    return (inst & CR_FUNCT4) >> 12;
+    return (inst & C.CR_FUNCT4) >> 12;
 }
 
 // decode CSS-format instruction immediate
-static inline number dec_css_imm(uint16_t inst)
+function dec_css_imm(inst: number): number
 {
     // zero-extended offset, scaled by 4
-    number imm = 0;
-    imm |= (inst & CSS_IMM_7_6) >> 1;
-    imm |= (inst & CSS_IMM_5_2) >> 7;
+    let imm: number = 0;
+    imm |= (inst & C.CSS_IMM_7_6) >> 1;
+    imm |= (inst & C.CSS_IMM_5_2) >> 7;
     return imm;
 }
 
 // decode CIW-format instruction immediate
-static inline number dec_ciw_imm(uint16_t inst)
+function dec_ciw_imm(inst: number): number
 {
     // zero-extended non-zero immediate, scaled by 4
-    number imm = 0;
-    imm |= (inst & CIW_IMM_9_6) >> 1;
-    imm |= (inst & CIW_IMM_5_4) >> 7;
-    imm |= (inst & CIW_IMM_3) >> 2;
-    imm |= (inst & CIW_IMM_2) >> 4;
+    let imm: number = 0;
+    imm |= (inst & C.CIW_IMM_9_6) >> 1;
+    imm |= (inst & C.CIW_IMM_5_4) >> 7;
+    imm |= (inst & C.CIW_IMM_3) >> 2;
+    imm |= (inst & C.CIW_IMM_2) >> 4;
     assert(imm != 0);
     return imm;
 }
 
 // decode immediate of C.LW and C.SW
-static inline number dec_clw_csw_imm(uint16_t inst)
+function dec_clw_csw_imm(inst: number): number
 {
     // zero-extended offset, scaled by 4
-    number imm = 0;
-    imm |= (inst & CLWSW_IMM_6) << 1;
-    imm |= (inst & CLWSW_IMM_5_3) >> 7;
-    imm |= (inst & CLWSW_IMM_2) >> 4;
+    let imm: number = 0;
+    imm |= (inst & C.CLWSW_IMM_6) << 1;
+    imm |= (inst & C.CLWSW_IMM_5_3) >> 7;
+    imm |= (inst & C.CLWSW_IMM_2) >> 4;
     return imm;
 }
 
 // decode CS-format instruction funct6 field
-static inline number dec_cs_funct6(uint16_t inst)
+function dec_cs_funct6(inst: number): number
 {
-    return (inst & CS_FUNCT6) >> 10;
+    return (inst & C.CS_FUNCT6) >> 10;
 }
 
 // decode CS-format instruction funct2 field
-static inline number dec_cs_funct2(uint16_t inst)
+function dec_cs_funct2(inst: number): number
 {
-    return (inst & CS_FUNCT2) >> 5;
+    return (inst & C.CS_FUNCT2) >> 5;
 }
 
 // decode CB-format instruction funct2 field
-static inline number dec_cb_funct2(uint16_t inst)
+function dec_cb_funct2(inst: number): number
 {
-    return (inst & CB_FUNCT2) >> 10;
+    return (inst & C.CB_FUNCT2) >> 10;
 }
 
 // decode immediate of branch instruction
-static inline number dec_branch_imm(uint16_t inst)
+function dec_branch_imm(inst: number): number
 {
     // sign-extended offset, scaled by 2
-    number imm = 0;
-    imm |= (inst & CB_OFFSET_8) >> 4;
-    imm |= (inst & CB_OFFSET_7_6) << 1;
-    imm |= (inst & CB_OFFSET_5) << 3;
-    imm |= (inst & CB_OFFSET_4_3) >> 7;
-    imm |= (inst & CB_OFFSET_2_1) >> 2;
+    let imm: number = 0;
+    imm |= (inst & C.CB_OFFSET_8) >> 4;
+    imm |= (inst & C.CB_OFFSET_7_6) << 1;
+    imm |= (inst & C.CB_OFFSET_5) << 3;
+    imm |= (inst & C.CB_OFFSET_4_3) >> 7;
+    imm |= (inst & C.CB_OFFSET_2_1) >> 2;
     imm = sign_extend(imm, 8);
     return imm;
 }
 
 // decode CJ-format instruction immediate
-static inline number dec_cj_imm(uint16_t inst)
+function dec_cj_imm(inst: number): number
 {
     // sign-extended offset, scaled by 2
-    number imm = 0;
-    imm |= (inst & CJ_OFFSET_11) >> 1;
-    imm |= (inst & CJ_OFFSET_10) << 2;
-    imm |= (inst & CJ_OFFSET_9_8) >> 1;
-    imm |= (inst & CJ_OFFSET_7) << 1;
-    imm |= (inst & CJ_OFFSET_6) >> 1;
-    imm |= (inst & CJ_OFFSET_5) << 3;
-    imm |= (inst & CJ_OFFSET_4) >> 7;
-    imm |= (inst & CJ_OFFSET_3_1) >> 2;
+    let imm: number = 0;
+    imm |= (inst & C.CJ_OFFSET_11) >> 1;
+    imm |= (inst & C.CJ_OFFSET_10) << 2;
+    imm |= (inst & C.CJ_OFFSET_9_8) >> 1;
+    imm |= (inst & C.CJ_OFFSET_7) << 1;
+    imm |= (inst & C.CJ_OFFSET_6) >> 1;
+    imm |= (inst & C.CJ_OFFSET_5) << 3;
+    imm |= (inst & C.CJ_OFFSET_4) >> 7;
+    imm |= (inst & C.CJ_OFFSET_3_1) >> 2;
     imm = sign_extend(imm, 11);
     return imm;
 }
 
 // encode R-type instruction
-static inline number enc_rtype(number funct7, number rs2, number rs1, number funct3, number rd, number opcode)
+function enc_rtype(funct7: number, rs2: number, rs1: number, funct3: number, rd: number, opcode: number): number
 {
-    inst: number = 0;
+    let inst: number = 0;
     inst |= funct7 << 25;
     inst |= rs2 << 20;
     inst |= rs1 << 15;
@@ -635,9 +636,9 @@ static inline number enc_rtype(number funct7, number rs2, number rs1, number fun
 }
 
 // encode I-type instruction
-static inline number enc_itype(number imm, number rs1, number funct3, number rd, number opcode)
+function enc_itype(imm: number, rs1: number, funct3: number, rd: number, opcode: number): number
 {
-    inst: number = 0;
+    let inst: number = 0;
     inst |= imm << 20;
     inst |= rs1 << 15;
     inst |= funct3 << 12;
@@ -647,9 +648,9 @@ static inline number enc_itype(number imm, number rs1, number funct3, number rd,
 }
 
 // encode S-type instruction
-static inline number enc_stype(number imm, number rs2, number rs1, number funct3, number opcode)
+function enc_stype(imm: number, rs2: number, rs1: number, funct3: number, opcode: number): number
 {
-    inst: number = 0;
+    let inst: number = 0;
     inst |= (imm & 0b111111100000) << 20;
     inst |= rs2 << 20;
     inst |= rs1 << 15;
@@ -660,9 +661,9 @@ static inline number enc_stype(number imm, number rs2, number rs1, number funct3
 }
 
 // encode B-type instruction
-static inline number enc_btype(number imm, number rs2, number rs1, number funct3, number opcode)
+function enc_btype(imm: number, rs2: number, rs1: number, funct3: number, opcode: number): number
 {
-    inst: number = 0;
+    let inst: number = 0;
     inst |= (imm & 0b1000000000000) << 19;
     inst |= (imm & 0b0011111100000) << 20;
     inst |= rs2 << 20;
@@ -675,9 +676,9 @@ static inline number enc_btype(number imm, number rs2, number rs1, number funct3
 }
 
 // encode U-type instruction
-static inline number enc_utype(number imm, number rd, number opcode)
+function enc_utype(imm: number, rd: number, opcode: number): number
 {
-    inst: number = 0;
+    let inst: number = 0;
     inst |= imm;
     inst |= rd << 7;
     inst |= opcode;
@@ -685,9 +686,9 @@ static inline number enc_utype(number imm, number rd, number opcode)
 }
 
 // encode J-type instruction
-static inline number enc_jtype(number imm, number rd, number opcode)
+function enc_jtype(imm: number, rd: number, opcode: number): number
 {
-    inst: number = 0;
+    let inst: number = 0;
     inst |= (imm & 0x00100000) << 11;
     inst |= (imm & 0x000007FE) << 20;
     inst |= (imm & 0x00000800) << 9;
