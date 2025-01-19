@@ -75,7 +75,7 @@ export class CPU {
         this.executeJ_Type(new J_Type({ binary: instruction }));
         break;
       default:
-        console.log(`Invalid instruction: 0x${instruction.toString(16)} at 0x${this.pc.toString(16)}`);
+        throw Error(`Invalid instruction: 0x${instruction.toString(16)} at 0x${this.pc.toString(16)}`);
         break;
     }
 
@@ -101,7 +101,7 @@ export class CPU {
     if (operation !== undefined) {
       operation(instruction, this);
     } else {
-      console.log('WARNING: Invalid Instruction');
+      throw Error(`Invalid Instruction opcode 0x${opcode.toString(16)}, func3 ${func3}`);
     }
   }
 
@@ -116,7 +116,7 @@ export class CPU {
     if (operation !== undefined) {
       operation(instruction, this);
     } else {
-      console.log('WARNING: Invalid Instruction');
+      throw Error(`Invalid Instruction opcode 0x${opcode.toString(16)}, func3 ${func3}`);
     }
 
   }
@@ -133,7 +133,7 @@ export class CPU {
     if (operation !== undefined) {
       operation(instruction, this);
     } else {
-      console.log('WARNING: Invalid Instruction');
+      throw Error(`Invalid Instruction opcode 0x${opcode.toString(16)}, func3 ${func3}`);
     }
   }
 
@@ -149,7 +149,7 @@ export class CPU {
     if (operation !== undefined) {
       operation(instruction, this);
     } else {
-      console.log('WARNING: Invalid Instruction');
+      throw Error(`Invalid Instruction opcode 0x${opcode.toString(16)}, func3 ${func3}`);
     }
 
   }
@@ -157,26 +157,26 @@ export class CPU {
   private executeU_Type(instruction: U_Type) {
     const { opcode } = instruction;
 
-    // Get func3 lookup table for U_Type instructions
+    // Get lookup table for U_Type instructions
     const operation = u_TypeOpcodeTable.get(opcode);
 
     if (operation !== undefined) {
       operation(instruction, this);
     } else {
-      console.log('WARNING: Invalid Instruction');
+      throw Error(`Invalid Instruction opcode 0x${opcode.toString(16)}`);
     }
   }
 
   private executeJ_Type(instruction: J_Type) {
     const { opcode } = instruction;
 
-    // Get func3 lookup table for J_Type instructions
+    // Get lookup table for J_Type instructions
     const operation = j_TypeOpcodeTable.get(opcode);
 
     if (operation !== undefined) {
       operation(instruction, this);
     } else {
-      console.log('WARNING: Invalid Instruction');
+      throw Error(`Invalid Instruction opcode 0x${opcode.toString(16)}`);
     }
   }
 
