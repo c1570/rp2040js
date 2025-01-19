@@ -75,7 +75,7 @@ export class CPU {
         this.executeJ_Type(new J_Type({ binary: instruction }));
         break;
       default:
-        throw Error(`Invalid instruction: 0x${instruction.toString(16)} at 0x${this.pc.toString(16)}`);
+        throw Error(`Invalid instruction: 0x${instruction.toString(16)} at 0x${this.pc.toString(16)}, OpcodeType 0x${getRange(instruction, 6, 0).toString(16)}`);
         break;
     }
 
@@ -418,6 +418,25 @@ const opcode0x23func3Table: FuncTable<S_Type> = new Map([
   }],
 ]);
 
+const opcode0x2ffunc3Table: FuncTable<R_Type> = new Map([
+  [0x2, (instruction: R_Type, cpu: CPU) => {
+
+    const { rd, rs1, rs2, func7 } = instruction;
+    const { registerSet, chip } = cpu;
+
+    const rs1Value = registerSet.getRegister(rs1);
+    const rs2Value = registerSet.getRegister(rs2);
+
+    if (func7 === 0x22) { // amoor.w.aq (rv32a)
+      // x[rd] = AMO32(M[x[rs1]] | x[rs2])
+      const rs1Mem = chip.readUint32(rs1Value);
+      registerSet.setRegister(rd, rs1Mem);
+      const value = rs1Mem | rs2Value;
+      chip.writeUint32(rs1Value, value);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
+  }],
+]);
+
 const opcode0x33func3Table: FuncTable<R_Type> = new Map([
   [0x0, (instruction: R_Type, cpu: CPU) => {
 
@@ -434,7 +453,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if (func7 === 0x20) {
       const difference = registerSet.getRegister(rs1) - registerSet.getRegister(rs2);
       registerSet.setRegister(rd, difference);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
 
   }],
 
@@ -452,7 +471,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
       const index = rs2Value & 31;
       const result = rs1Value | (1 << index);
       registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
   [0x2, (instruction: R_Type, cpu: CPU) => {
@@ -468,7 +487,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 0x10) { // sh1add (Zbb)
       const result = ((rs1Value << 1) + rs2Value) & 0xffffffff;
       registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
   [0x3, (instruction: R_Type, cpu: CPU) => {
@@ -484,7 +503,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 1) { // mulhu (rv32m)
       const result = (rs1Value * rs2Value) >> 32;
       registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
   [0x4, (instruction: R_Type, cpu: CPU) => {
@@ -500,7 +519,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 0x10) { // sh2add (Zbb)
       const result = ((rs1Value << 2) + rs2Value) & 0xffffffff;
       registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
   [0x5, (instruction: R_Type, cpu: CPU) => {
@@ -520,7 +539,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if (func7 === 0x01) { // divu (rv32m)
       const result = (rs1Value / rs2Value) >>> 0;
       registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
 
   }],
 
@@ -540,7 +559,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 0x10) { // sh3add (Zbb)
       const result = ((rs1Value << 3) + rs2Value) & 0xffffffff;
       registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
   [0x7, (instruction: R_Type, cpu: CPU) => {
@@ -556,7 +575,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 0x20) { // ANDN (Zbb)
       const result = rs1Value & ~rs2Value;
       registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: ${func7.toString(16)}`);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
 ]);
@@ -657,11 +676,11 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     console.log("CSRW not implemented");
   }],
   [0x2, (instruction: I_Type, cpu: CPU) => {
-    // TODO: Implement CSSR properly
+    // TODO: Implement CSRR properly
     const { rd } = instruction;
     const { registerSet } = cpu;
     registerSet.setRegister(rd, 0);
-    console.log("CSSR not implemented");
+    console.log("CSRR not implemented");
   }],
   [0x7, (instruction: I_Type, cpu: CPU) => {
     // TODO: Implement CSRRCI
@@ -670,6 +689,7 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
 ]);
 
 const r_TypeOpcodeTable: OpcodeFuncTable<R_Type> = new Map([
+  [0x2f, opcode0x2ffunc3Table],
   [0x33, opcode0x33func3Table]
 ]);
 
@@ -721,6 +741,7 @@ const opcodeTypeTable = new Map<number, InstructionType>([
   [0x13, InstructionType.I], // OP-IMM
   [0x17, InstructionType.U], // AUIPC
   [0x23, InstructionType.S], // STORE
+  [0x2f, InstructionType.R], // AMO
   [0x33, InstructionType.R], // OP
   [0x37, InstructionType.U], // LUI
   [0x63, InstructionType.B], // BRANCH
