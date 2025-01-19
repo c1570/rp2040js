@@ -21,8 +21,8 @@ export class CPU {
   setInterrupt(a: any, b: any) { } //TODO
 
   private inst_buffer = 0;
-  private inst_length = 0;
-  private break_after_steps = 5;
+  inst_length = 0;
+  private break_after_steps = 100000;
 
   private fetchInstruction(): number {
     this.break_after_steps--;
@@ -595,7 +595,7 @@ const opcode0x67func3Table: FuncTable<I_Type> = new Map([
 
     const rs1Value = registerSet.getRegister(rs1);
 
-    registerSet.setRegister(rd, cpu.pc + 4);
+    registerSet.setRegister(rd, cpu.pc + cpu.inst_length);
     cpu.next_pc = rs1Value + imm;
   }]
 ]);
@@ -652,7 +652,7 @@ const j_TypeOpcodeTable: OpcodeTable<J_Type> = new Map([
     const { rd, imm } = instruction;
     const { registerSet } = cpu;
 
-    registerSet.setRegister(rd, cpu.pc + 4);
+    registerSet.setRegister(rd, cpu.pc + cpu.inst_length);
     cpu.next_pc = cpu.pc + imm;
   }]
 ]);
