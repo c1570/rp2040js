@@ -324,7 +324,9 @@ export class U_Type extends Instruction implements HasImmediate {
   }
 
   get imm() {
-    return signExtend(this.immU, 20);
+    const immU = getRange(this.binary, 31, 12);
+    const imm = signExtend(immU, 20);
+    return imm << 12;
   }
 
   get immU() {
