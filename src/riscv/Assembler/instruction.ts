@@ -219,7 +219,7 @@ export class S_Type extends Instruction implements HasImmediate {
   }
 
   get immU() {
-    return getRange(this.binary, 11, 7) + (getRange(this.binary, 31, 25) << 13);
+    return getRange(this.binary, 11, 7) + (getRange(this.binary, 31, 25) << 5);
   }
 
   set imm(value: number) {
