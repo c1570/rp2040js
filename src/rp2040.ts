@@ -40,7 +40,7 @@ const MB = 1024 * KB;
 const MHz = 1_000_000;
 
 export class RP2040 {
-  readonly bootrom = new Uint32Array(4 * KB);
+  readonly bootrom = new Uint32Array((32 >>> 2) * KB);
   readonly sram = new Uint8Array((256 * 2 + 8) * KB);
   readonly sramView = new DataView(this.sram.buffer);
   readonly flash = new Uint8Array(16 * MB);

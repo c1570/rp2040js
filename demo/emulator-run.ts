@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { RP2040 } from '../src';
-import { bootromB1 } from './bootrom';
+import { bootrom_rp2350_A2 } from './bootrom_rp2350';
 import { loadHex } from './intelhex';
 import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
 
@@ -8,7 +8,7 @@ const homedir = require('os').homedir();
 
 const hex = fs.readFileSync('demo/riscv_blink/blink_simple.hex', 'utf-8');
 const mcu = new RP2040();
-mcu.loadBootrom(bootromB1);
+mcu.loadBootrom(bootrom_rp2350_A2);
 //loadHex(hex, mcu.flash, 0x20000000);
 loadHex(hex, mcu.sram, 0x20000000);
 
