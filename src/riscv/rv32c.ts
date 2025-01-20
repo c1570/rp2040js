@@ -2,13 +2,13 @@
 export function decompress_rv32c_inst(inst: number): number {
   let index = ((inst & 0x0003) << 3) | ((inst & 0xE000) >> 13);
   let decompressor: any = decompressors[index];  //TODO
-  console.log(`decompressing: ${index}`);
+  //console.log(`decompressing: ${index}`);
   return decompressor(inst);
 }
 
 const decompressors: Array<((input: number) => number) | null> = [
 //  000                001          010          011           100           101        110           111
-    caddi4spn_to_addi, null,        clw_to_lw,   null,         null,         null,      csw_to_sw,    null,         // 00
+    caddi4spn_to_addi, null,        clw_to_lw,   null,         zcb_100_00,   null,      csw_to_sw,    null,         // 00
     caddi_to_addi,     cjal_to_jal, cli_to_addi, parse_011_01, parse_100_01, cj_to_jal, cbeqz_to_beq, cbenz_to_bne, // 01
     cslli_to_slli,     null,        clwsp_to_lw, null,         parse_100_10, null,      cswsp_to_sw,  null,         // 10
 ];
@@ -38,6 +38,28 @@ function clw_to_lw(inst: number): number
 
     // encode to lw rd', offset[6:2](rs1')
     return enc_itype(imm, rs1, 0b010, rd, 0b0000011);
+}
+
+// Zcb extension, funct3 = 100, opcode = 00 part
+function zcb_100_00(inst: number): number
+{
+    if((inst & 0b1111110001000011) === 0b1000010000000000) {
+        // c.lhu
+        const uimm: number = ((inst >>> 5) & 1) << 1;
+        const rs1: number = dec_rs1_short(inst);
+        const rd: number = dec_rd_short(inst);
+
+        // encode to lhu rd', uimm(rs1')
+        return enc_itype(uimm, rs1, 0b101, rd, 0b0000011);
+    } else if((inst & 0b1111110000000011) === 0b1000000000000000) {
+        // c.lbu - e.g., 80dc lbu a5,1(s1)
+        const uimm: number = (((inst >>> 5) & 1) << 1) | ((inst >>> 6) & 1);
+        const rs1: number = dec_rs1_short(inst);
+        const rd: number = dec_rd_short(inst);
+
+        // encode to lbu rd', uimm(rs1')
+        return enc_itype(uimm, rs1, 0b100, rd, 0b0000011);
+    } else throw Error(`Unsupported Zcb instruction: 0x${inst.toString(16)}`);
 }
 
 // C.SW, funct3 = 110, opcode = 00
