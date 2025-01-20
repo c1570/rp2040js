@@ -666,25 +666,72 @@ const opcode0x67func3Table: FuncTable<I_Type> = new Map([
   }]
 ]);
 
+let mtvec: number = 0;
+
 const opcode0x73func3Table: FuncTable<I_Type> = new Map([
   [0x0, (instruction: I_Type, cpu: CPU) => {
-    // TODO: Implement ECALL
-    console.log("ECALL not implemented");
+    const { rd, func7 } = instruction;
+    throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
   [0x1, (instruction: I_Type, cpu: CPU) => {
+    const { rd, rs1, immU } = instruction; // immU is csr
+    const { registerSet } = cpu;
     // TODO: Implement CSRW
-    console.log("CSRW not implemented");
+    // 30551073                csrw    mtvec,a0
+    let value = 0;
+    if (immU === 0x305) { // MTVEC
+      value = mtvec;
+      mtvec = registerSet.getRegister(rs1);
+      console.log("CSRW MTVEC");
+    } else {
+      console.log("CSRW not implemented");
+    }
+    if(rd !== 0) {
+      registerSet.setRegister(rd, value);
+    }
   }],
   [0x2, (instruction: I_Type, cpu: CPU) => {
-    // TODO: Implement CSRR properly
-    const { rd } = instruction;
+    const { rd, rs1, immU } = instruction; // immU is csr
     const { registerSet } = cpu;
-    registerSet.setRegister(rd, 0);
-    console.log("CSRR not implemented");
+    // if(rd != 0) rd.value = csr[addr];
+    // if (rs1.value != 0) csr[addr] = csr[addr] | rs1.value;
+    if ( rd === 0x0 ) {
+      // TODO: Implement CSRS
+      // 3006a073                csrs    mstatus,a3 ; (potentially) set interupt enable bit
+      console.log(`CSRS not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+    } else if (rs1 === 0x0) {
+      // TODO: Implement CSRR
+      // 305027f3                csrr    a5,mtvec
+      if(immU == 0x305) {
+        registerSet.setRegister(rd, mtvec);
+        console.log(`CSRR read MTVEC, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+      } else if(immU == 0xbe5) {
+        // 20000e10:       be502773                csrr    a4,0xbe5
+        // 20000e14:       01071793                slli    a5,a4,0x10
+        // 20000e18:       0407da63                bgez    a5,20000e6c <best_effort_wfe_or_timeout+0x68>
+        registerSet.setRegister(rd, 0x8000); // return "not in interrupt" flag
+        console.log(`CSRR read 0xbe5, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+      } else {
+        // f1402573                csrr    a0,mhartid
+        registerSet.setRegister(rd, 0);
+        console.log(`CSRR not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+      }
+    }
+  }],
+  [0x3, (instruction: I_Type, cpu: CPU) => {
+    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
+    const { registerSet } = cpu;
+    // TODO: Implement CSRC
+    // be253073                csrc    0xbe2,a0
+    console.log(`CSRC not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
   }],
   [0x7, (instruction: I_Type, cpu: CPU) => {
+    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
+    const { registerSet } = cpu;
     // TODO: Implement CSRRCI
-    console.log("CSRRCI not implemented");
+    // 30047773                csrrci  a4,mstatus,8 ; clear Interrupt enable bit and set a4=mstatus
+    // t = CSRs[csr]; CSRs[csr] = t &∼zimm; x[rd] = t
+    console.log(`CSRRCI not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
   }]
 ]);
 
