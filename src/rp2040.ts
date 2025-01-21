@@ -4,6 +4,7 @@ import { CPU } from './riscv/cpu';
 import { GPIOPin } from './gpio-pin';
 import { IRQ } from './irq';
 import { RPADC } from './peripherals/adc';
+import { RPBootRAM } from './peripherals/bootram';
 import { RPClocks } from './peripherals/clocks';
 import { RPDMA } from './peripherals/dma';
 import { RPI2C } from './peripherals/i2c';
@@ -148,7 +149,7 @@ export class RP2040 {
 
     0x400d8: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
     //0x400xx: new RP2040RTC(this, 'RTC_BASE'),
-    0x400e0: new UnimplementedPeripheral(this, 'BOOTRAM_BASE'),
+    0x400e0: new RPBootRAM(this, 'BOOTRAM_BASE'),
     0x400e8: new UnimplementedPeripheral(this, 'ROSC_BASE'),
     0x40100: new UnimplementedPeripheral(this, 'POWMAN_BASE'),
     0x40108: new UnimplementedPeripheral(this, 'TICKS_BASE'),
