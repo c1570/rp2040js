@@ -312,39 +312,60 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
   }],
 
   [0x1, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, shamt } = instruction;
+    const { rd, rs1, func7, immU, shamt } = instruction;
     const { registerSet } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
 
-    const result = rs1Value << shamt;
-
-    registerSet.setRegister(rd, result);
+    if (func7 === 0) { // sll
+      const result = rs1Value << shamt;
+      registerSet.setRegister(rd, result);
+    } else if (func7 === 0x14) { // bseti (Zbb)
+      const result = rs1Value | ( 1 << shamt);
+      registerSet.setRegister(rd, result);
+    } else if (immU === 0b011000000001) { // ctz (Zbb)
+      let tmp = rs1Value >>> 0;
+      if (tmp === 0) {
+        registerSet.setRegister(rd, 32);
+      } else {
+        tmp &= -tmp;
+        tmp = 31 - Math.clz32(tmp);
+        registerSet.setRegister(rd, tmp);
+      }
+    } else if (immU === 0b011000000010) { // cpop (Zbb)
+      let tmp = rs1Value >>> 0;
+      tmp = tmp - ((tmp >> 1) & 0x55555555);
+      tmp = (tmp & 0x33333333) + ((tmp >> 2) & 0x33333333);
+      tmp = ((tmp + (tmp >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
+      registerSet.setRegister(rd, tmp);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
   [0x2, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, imm } = instruction;
+    const { rd, rs1, imm, func7 } = instruction;
     const { registerSet } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
 
-    const result = rs1Value < imm ? 1 : 0;
-
-    registerSet.setRegister(rd, result);
+    if ( func7 === 0) { // slt
+      const result = rs1Value < imm ? 1 : 0;
+      registerSet.setRegister(rd, result);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
   [0x3, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, immU } = instruction;
+    const { rd, rs1, immU, func7 } = instruction;
     const { registerSet } = cpu;
 
     const rs1Value = registerSet.getRegisterU(rs1);
 
-    const result = rs1Value < immU ? 1 : 0;
-
-    registerSet.setRegister(rd, result);
+    if ( func7 === 0) { // sltu
+      const result = rs1Value < immU ? 1 : 0;
+      registerSet.setRegister(rd, result);
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
-  [0x4, (instruction: I_Type, cpu: CPU) => {
+  [0x4, (instruction: I_Type, cpu: CPU) => { // xori
     const { rd, rs1, imm } = instruction;
     const { registerSet } = cpu;
 
@@ -361,35 +382,34 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
 
     const rs1Value = registerSet.getRegister(rs1);
 
-    if (func7 === 0x00) {
+    if (func7 === 0x00) { // srli
       const result = rs1Value >>> shamt;
       registerSet.setRegister(rd, result);
 
-    } else if (func7 === 0x20) {
+    } else if (func7 === 0x20) { // srai
       const result = rs1Value >> shamt;
       registerSet.setRegister(rd, result);
-    }
+
+    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
-  [0x6, (instruction: I_Type, cpu: CPU) => {
+  [0x6, (instruction: I_Type, cpu: CPU) => { // ori
     const { rd, rs1, imm } = instruction;
     const { registerSet } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
 
     const result = rs1Value | imm;
-
     registerSet.setRegister(rd, result);
   }],
 
-  [0x7, (instruction: I_Type, cpu: CPU) => {
+  [0x7, (instruction: I_Type, cpu: CPU) => { // andi
     const { rd, rs1, imm } = instruction;
     const { registerSet } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
 
     const result = rs1Value & imm;
-
     registerSet.setRegister(rd, result);
   }],
 ]);
@@ -465,6 +485,9 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if (func7 === 0x20) {
       const difference = registerSet.getRegister(rs1) - registerSet.getRegister(rs2);
       registerSet.setRegister(rd, difference);
+    } else if (func7 === 0x1) { // mul (rv32m)
+      const result = registerSet.getRegister(rs1) * registerSet.getRegister(rs2);
+      registerSet.setRegister(rd, result & 0xffffffff); // FIXME check sign
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
 
   }],
@@ -592,6 +615,9 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
       registerSet.setRegister(rd, result);
     } else if(func7 === 0x4) { // PACKH (Zbkb)
       const result = (rs1Value & 0xff) | ((rs2Value & 0xff) << 8);
+      registerSet.setRegister(rd, result);
+    } else if(func7 === 0x5) { // MAXU (Zbkb)
+      const result = (rs1Value >>> 0) > (rs2Value >>> 0) ? rs1Value : rs2Value;
       registerSet.setRegister(rd, result);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
@@ -740,6 +766,13 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     // TODO: Implement CSRC
     // be253073                csrc    0xbe2,a0
     console.log(`CSRC not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+  }],
+  [0x6, (instruction: I_Type, cpu: CPU) => {
+    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
+    const { registerSet } = cpu;
+    // 30046073                csrsi   mstatus,8 (csrrsi x0, mstatus, 8)
+    console.log(`CSRRSI not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+    registerSet.setRegister(rd, 0);
   }],
   [0x7, (instruction: I_Type, cpu: CPU) => {
     const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr

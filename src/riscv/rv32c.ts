@@ -409,8 +409,9 @@ function parse_011_01(inst: number): number
 function parse_100_01(inst: number): number
 {
     const cb_funct2: number = dec_cb_funct2(inst);
-    const cs_funct2: number = dec_cs_funct2(inst);
+    const cs_funct6_3_funct2: number = (((dec_cs_funct6(inst) >>> 2) & 1) << 2) | dec_cs_funct2(inst);
 
+    // Actual lookup order: funct3, xlen, rdRs1Val, cb_funct2, funct6[3]+funct2
     switch (cb_funct2) {
     case 0b00:
         return csrli_to_srli(inst);
@@ -418,20 +419,25 @@ function parse_100_01(inst: number): number
         return csrai_to_srai(inst);
     case 0b10:
         return candi_to_andi(inst);
-    default:
-        switch (cs_funct2) {
-        case 0b00:
+    case 0b11:
+        switch (cs_funct6_3_funct2) {
+        case 0b000:
             return csub_to_sub(inst);
-        case 0b01:
+        case 0b001:
             return cxor_to_xor(inst);
-        case 0b10:
+        case 0b010:
             return cor_to_or(inst);
-        case 0b11:
+        case 0b011:
             return cand_to_and(inst);
-        default:
-            return cnop_to_addi();  // Reserved
+        case 0b111: // c.not (Zcb)
+            // TODO remove decode sanity check
+            if((inst & 0b1111110001111111) === 0b1001110001110101) {
+              const rd: number = dec_rs1_short(inst);
+              return enc_itype(-1, rd, 0b100, rd, 0b0010011); // encode as xori rd, rd, -1
+            }
         }
     }
+    throw Error(`Unknown compressed instruction: 0x${inst.toString(16)}`);
 }
 
 // funct3 = 100, opcode = 10
