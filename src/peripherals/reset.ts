@@ -7,7 +7,7 @@ const RESET_DONE = 0x8; //Reset Done
 export class RPReset extends BasePeripheral implements Peripheral {
   private reset: number = 0;
   private wdsel: number = 0;
-  private reset_done: number = 0x1ffffff;
+  private reset_done: number = 0x1fffffff;
 
   readUint32(offset: number) {
     switch (offset) {
@@ -24,10 +24,10 @@ export class RPReset extends BasePeripheral implements Peripheral {
   writeUint32(offset: number, value: number) {
     switch (offset) {
       case RESET:
-        this.reset = value & 0x1ffffff;
+        this.reset = value & 0x1fffffff;
         break;
       case WDSEL:
-        this.wdsel = value & 0x1ffffff;
+        this.wdsel = value & 0x1fffffff;
         break;
       default:
         super.writeUint32(offset, value);
