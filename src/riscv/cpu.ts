@@ -10,8 +10,9 @@ export class CPU {
   pc = 0;
   next_pc = 0;
   stopped = false; //TODO
-  cycles = 0; //TODO
+  cycles = 0;
   eventRegistered = false; //TODO
+  mtvec: number = 0;
 
   constructor(readonly chip: RP2040, readonly coreLabel: string) {
   }
@@ -20,7 +21,6 @@ export class CPU {
 
   setInterrupt(a: any, b: any) { } //TODO
 
-  private inst_buffer = 0;
   inst_length = 0;
   private break_after_steps = 100000;
 
@@ -61,6 +61,7 @@ export class CPU {
     const instruction = this.fetchInstruction();
     console.log(`executing (decoded) instr 0x${instruction.toString(16)}`);
     this.step(instruction);
+    this.cycles++; //TODO
   }
 
   step(instruction: number) {
@@ -91,12 +92,11 @@ export class CPU {
         break;
     }
 
-    if(this.next_pc != this.pc) {
-      this.inst_buffer = 0;
+    if(this.next_pc != 0) {
       this.pc = this.next_pc;
+      this.next_pc = 0;
     } else {
       this.pc += this.inst_length;
-      this.next_pc = this.pc;
     }
 
   }
@@ -684,8 +684,6 @@ const opcode0x67func3Table: FuncTable<I_Type> = new Map([
   }]
 ]);
 
-let mtvec: number = 0;
-
 const opcode0x73func3Table: FuncTable<I_Type> = new Map([
   [0x0, (instruction: I_Type, cpu: CPU) => {
     const { rd, func7 } = instruction;
@@ -698,8 +696,8 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     // 30551073                csrw    mtvec,a0
     let value = 0;
     if (immU === 0x305) { // MTVEC
-      value = mtvec;
-      mtvec = registerSet.getRegister(rs1);
+      value = cpu.mtvec;
+      cpu.mtvec = registerSet.getRegister(rs1);
       console.log("CSRW MTVEC");
     } else {
       console.log("CSRW not implemented");
@@ -721,7 +719,7 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
       // TODO: Implement CSRR
       // 305027f3                csrr    a5,mtvec
       if(immU == 0x305) {
-        registerSet.setRegister(rd, mtvec);
+        registerSet.setRegister(rd, cpu.mtvec);
         console.log(`CSRR read MTVEC, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
       } else if(immU == 0xbe5) {
         // 20000e10:       be502773                csrr    a4,0xbe5
