@@ -7,22 +7,24 @@ const CPUID = 0x000;
 // GPIO
 const GPIO_IN = 0x004; // Input value for GPIO pins
 const GPIO_HI_IN = 0x008; // Input value for QSPI pins
+
 const GPIO_OUT = 0x010; // GPIO output value
-const GPIO_OUT_SET = 0x014; // GPIO output value set
-const GPIO_OUT_CLR = 0x018; // GPIO output value clear
-const GPIO_OUT_XOR = 0x01c; // GPIO output value XOR
-const GPIO_OE = 0x020; // GPIO output enable
-const GPIO_OE_SET = 0x024; // GPIO output enable set
-const GPIO_OE_CLR = 0x028; // GPIO output enable clear
-const GPIO_OE_XOR = 0x02c; // GPIO output enable XOR
-const GPIO_HI_OUT = 0x030; // QSPI output value
-const GPIO_HI_OUT_SET = 0x034; // QSPI output value set
-const GPIO_HI_OUT_CLR = 0x038; // QSPI output value clear
-const GPIO_HI_OUT_XOR = 0x03c; // QSPI output value XOR
-const GPIO_HI_OE = 0x040; // QSPI output enable
-const GPIO_HI_OE_SET = 0x044; // QSPI output enable set
-const GPIO_HI_OE_CLR = 0x048; // QSPI output enable clear
-const GPIO_HI_OE_XOR = 0x04c; // QSPI output enable XOR
+const GPIO_OUT_SET = 0x018; // GPIO output value set
+const GPIO_OUT_CLR = 0x020; // GPIO output value clear
+const GPIO_OUT_XOR = 0x028; // GPIO output value XOR
+const GPIO_OE = 0x030; // GPIO output enable
+const GPIO_OE_SET = 0x038; // GPIO output enable set
+const GPIO_OE_CLR = 0x040; // GPIO output enable clear
+const GPIO_OE_XOR = 0x048; // GPIO output enable XOR
+
+const GPIO_HI_OUT = 0x014; // GPIO32..47, QSPI, USB output value
+const GPIO_HI_OUT_SET = 0x01c; // GPIO32..47, QSPI, USB output value set
+const GPIO_HI_OUT_CLR = 0x024; // GPIO32..47, QSPI, USB output value clear
+const GPIO_HI_OUT_XOR = 0x02c; // GPIO32..47, QSPI, USB output value XOR
+const GPIO_HI_OE = 0x034; // GPIO32..47, QSPI, USB output enable
+const GPIO_HI_OE_SET = 0x03c; // GPIO32..47, QSPI, USB output enable set
+const GPIO_HI_OE_CLR = 0x044; // GPIO32..47, QSPI, USB output enable clear
+const GPIO_HI_OE_XOR = 0x04c; // GPIO32..47, QSPI, USB output enable XOR
 
 const GPIO_MASK = 0x3fffffff;
 
