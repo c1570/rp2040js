@@ -45,7 +45,15 @@ export class CPU {
   }
 
   executeInstruction() {
-    console.log(`PC 0x${this.pc.toString(16)} - fetching`);
+    if (this.chip.disassembly) {
+      const search = (this.pc.toString(16) + ":").replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      const re = new RegExp(search + "(.*)");
+      const res = re.exec(this.chip.disassembly);
+      const dis = (res == null) ? "?" : res[1];
+      console.log(`*** ${this.coreLabel} - PC 0x${this.pc.toString(16)} - ${dis}`);
+    } else {
+      console.log(`*** ${this.coreLabel} - PC 0x${this.pc.toString(16)}`);
+    }
     const instruction = this.fetchInstruction();
     console.log(`executing (decoded) instr 0x${instruction.toString(16)}`);
     this.step(instruction);

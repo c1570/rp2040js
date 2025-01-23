@@ -186,6 +186,11 @@ export class RP2040 {
     this.reset();
   }
 
+  disassembly = "";
+  loadDisassembly(dis: string) {
+    this.disassembly = dis;
+  }
+
   reset() {
     this.core0.reset();
     this.core1.reset();

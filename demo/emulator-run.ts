@@ -12,6 +12,9 @@ mcu.loadBootrom(bootrom_rp2350_A2);
 //loadHex(hex, mcu.flash, 0x20000000);
 loadHex(hex, mcu.sram, 0x20000000);
 
+const disassembly = fs.readFileSync('./demo/bootrom_rp2350.dis', 'utf-8') + fs.readFileSync('./demo/riscv_blink/blink_simple.dis');
+mcu.loadDisassembly(disassembly);
+
 //const gdbServer = new GDBTCPServer(mcu, 3333);
 //console.log(`RP2040 GDB Server ready! Listening on port ${gdbServer.port}`);
 
