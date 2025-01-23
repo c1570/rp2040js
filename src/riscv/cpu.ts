@@ -5,10 +5,10 @@ import { decompress_rv32c_inst } from "./rv32c";
 
 export class CPU {
 
+  public waiting = false;
   registerSet: RegisterSet = new RegisterSet(32);
   pc = 0;
   next_pc = 0;
-  waiting = false; //TODO
   stopped = false; //TODO
   cycles = 0; //TODO
   eventRegistered = false; //TODO
@@ -45,6 +45,10 @@ export class CPU {
   }
 
   executeInstruction() {
+    if (this.waiting) {
+      this.cycles++;
+      return;
+    }
     if (this.chip.disassembly) {
       const search = (this.pc.toString(16) + ":").replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
       const re = new RegExp(search + "(.*)");

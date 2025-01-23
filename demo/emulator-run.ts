@@ -23,8 +23,9 @@ mcu.uart[0].onByte = (value) => {
 };
 
 mcu.core0.pc = 0x20000220; //TODO why?
+//mcu.core0.pc = 0x7642; // Bootrom riscv_entry_point
 mcu.core1.pc = 0x20000000;
-//mcu.core1.waiting = true; //TODO
+mcu.core1.waiting = true;
 while(1) {
   mcu.step();
 }
