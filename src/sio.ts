@@ -73,8 +73,9 @@ export class RPSIO {
       }
       case FIFO_ST: {
         let thisCoreFifo = (core == Core.Core0) ? this.fifoCore0In : this.fifoCore1In;
+        let otherCoreFifo = (core == Core.Core0) ? this.fifoCore1In : this.fifoCore0In;
         // FIXME add WOF/ROE support
-        return (thisCoreFifo.length < 8 ? 2 : 0) | (thisCoreFifo.length > 0 ? 1 : 0);
+        return (otherCoreFifo.length < 8 ? 2 : 0) | (thisCoreFifo.length > 0 ? 1 : 0);
       }
       case GPIO_IN:
         return this.rp2040.gpioValues;
