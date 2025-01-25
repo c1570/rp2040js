@@ -50,8 +50,8 @@ export class RP2040 {
   readonly usbDPRAM = new Uint8Array(4 * KB);
   readonly usbDPRAMView = new DataView(this.usbDPRAM.buffer);
 
-  readonly core0 = new CPU(this, 'RISCVCore0');
-  readonly core1 = new CPU(this, 'RISCVCore1');
+  readonly core0 = new CPU(this, 'RISCVCore0', 0);
+  readonly core1 = new CPU(this, 'RISCVCore1', 1);
 
   /* Clocks */
   clkSys = 125 * MHz;

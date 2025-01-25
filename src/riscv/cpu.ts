@@ -14,7 +14,7 @@ export class CPU {
   eventRegistered = false; //TODO
   mtvec: number = 0;
 
-  constructor(readonly chip: RP2040, readonly coreLabel: string) {
+  constructor(readonly chip: RP2040, readonly coreLabel: string, readonly mhartid: number) {
   }
 
   reset() { } //TODO
@@ -756,9 +756,10 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
         // 20000e18:       0407da63                bgez    a5,20000e6c <best_effort_wfe_or_timeout+0x68>
         registerSet.setRegister(rd, 0x8000); // return "not in interrupt" flag
         console.log(`CSRR read 0xbe5, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-      } else {
+      } else if(immU == 0xf14) {
         // f1402573                csrr    a0,mhartid
-        registerSet.setRegister(rd, 0);
+        registerSet.setRegister(rd, cpu.mhartid);
+      } else {
         console.log(`CSRR not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
       }
     }
@@ -769,6 +770,13 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     // TODO: Implement CSRC
     // be253073                csrc    0xbe2,a0
     console.log(`CSRC not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+  }],
+  [0x5, (instruction: I_Type, cpu: CPU) => {
+    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
+    const { registerSet } = cpu;
+    // TODO: Implement CSRWI
+    // bf035073                csrwi   0xbf0,6
+    console.log(`CSRWI not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
   }],
   [0x6, (instruction: I_Type, cpu: CPU) => {
     const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
