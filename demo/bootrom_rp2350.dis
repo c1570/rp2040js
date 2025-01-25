@@ -1,0 +1,2415 @@
+
+mcb_build/build-riscv/bootrom.elf:     file format elf32-littleriscv
+
+Sections:
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .text         000012a6  00006a2c  00006a2c  00000a2c  2**2
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  1 .romtable     0000011a  00007cd4  00007cd4  00001cd4  2**0
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  2 .entry        00000010  00007df0  00007df0  00001df0  2**0
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  3 .allowed_bss  000000b0  400e0278  400e0278  00001e00  2**2
+                  CONTENTS
+  4 .debug_info   00004978  00000000  00000000  00001eb0  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  5 .debug_abbrev 00000f9d  00000000  00000000  00006828  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  6 .debug_loclists 000008fc  00000000  00000000  000077c5  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  7 .debug_aranges 000001f0  00000000  00000000  000080c8  2**3
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  8 .debug_rnglists 000001fd  00000000  00000000  000082b8  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  9 .debug_line   00003472  00000000  00000000  000084b5  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 10 .debug_str    00001e02  00000000  00000000  0000b927  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 11 .debug_line_str 00000874  00000000  00000000  0000d729  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 12 .comment      0000004d  00000000  00000000  0000df9d  2**0
+                  CONTENTS, READONLY
+ 13 .riscv.attributes 0000007d  00000000  00000000  0000dfea  2**0
+                  CONTENTS, READONLY
+ 14 .debug_frame  000001f0  00000000  00000000  0000e068  2**2
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+
+mcb_build/build-riscv/bootrom.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00006a2c <riscv_start>:
+    6a2c:	6af8                	.insn	2, 0x6af8
+    6a2e:	6af8                	.insn	2, 0x6af8
+    6a30:	6b1c                	.insn	2, 0x6b1c
+    6a32:	6b1c                	.insn	2, 0x6b1c
+    6a34:	6ade                	.insn	2, 0x6ade
+    6a36:	6ade                	.insn	2, 0x6ade
+    6a38:	6b44                	.insn	2, 0x6b44
+    6a3a:	6b84                	.insn	2, 0x6b84
+    6a3c:	6ba0                	.insn	2, 0x6ba0
+    6a3e:	6ba0                	.insn	2, 0x6ba0
+    6a40:	6ccc                	.insn	2, 0x6ccc
+    6a42:	6ccc                	.insn	2, 0x6ccc
+    6a44:	6bb0                	.insn	2, 0x6bb0
+    6a46:	6bb0                	.insn	2, 0x6bb0
+    6a48:	6bdc                	.insn	2, 0x6bdc
+    6a4a:	6bdc                	.insn	2, 0x6bdc
+    6a4c:	6c08                	.insn	2, 0x6c08
+    6a4e:	6d0c                	.insn	2, 0x6d0c
+    6a50:	6d90                	.insn	2, 0x6d90
+    6a52:	6d90                	.insn	2, 0x6d90
+    6a54:	6dcc                	.insn	2, 0x6dcc
+    6a56:	6de8                	.insn	2, 0x6de8
+    6a58:	6df8                	.insn	2, 0x6df8
+    6a5a:	6e10                	.insn	2, 0x6e10
+    6a5c:	6e24                	.insn	2, 0x6e24
+    6a5e:	6e24                	.insn	2, 0x6e24
+    6a60:	6e40                	.insn	2, 0x6e40
+    6a62:	6e40                	.insn	2, 0x6e40
+    6a64:	6e5c                	.insn	2, 0x6e5c
+    6a66:	6e5c                	.insn	2, 0x6e5c
+    6a68:	6e78                	.insn	2, 0x6e78
+    6a6a:	6e78                	.insn	2, 0x6e78
+    6a6c:	6e94                	.insn	2, 0x6e94
+    6a6e:	6e94                	.insn	2, 0x6e94
+    6a70:	6ea0                	.insn	2, 0x6ea0
+    6a72:	6ea0                	.insn	2, 0x6ea0
+    6a74:	6eac                	.insn	2, 0x6eac
+    6a76:	6eac                	.insn	2, 0x6eac
+    6a78:	6ec4                	.insn	2, 0x6ec4
+    6a7a:	6ec4                	.insn	2, 0x6ec4
+    6a7c:	6edc                	.insn	2, 0x6edc
+    6a7e:	6edc                	.insn	2, 0x6edc
+    6a80:	6e0a                	.insn	2, 0x6e0a
+    6a82:	6e0a                	.insn	2, 0x6e0a
+    6a84:	6efc                	.insn	2, 0x6efc
+    6a86:	6f58                	.insn	2, 0x6f58
+    6a88:	6f98                	.insn	2, 0x6f98
+    6a8a:	6ff8                	.insn	2, 0x6ff8
+    6a8c:	704c                	.insn	2, 0x704c
+    6a8e:	704c                	.insn	2, 0x704c
+    6a90:	7088                	.insn	2, 0x7088
+    6a92:	7088                	.insn	2, 0x7088
+    6a94:	70a4                	.insn	2, 0x70a4
+    6a96:	70a4                	.insn	2, 0x70a4
+    6a98:	70a4                	.insn	2, 0x70a4
+    6a9a:	70a4                	.insn	2, 0x70a4
+    6a9c:	70fa                	.insn	2, 0x70fa
+    6a9e:	70fa                	.insn	2, 0x70fa
+    6aa0:	71a8                	.insn	2, 0x71a8
+    6aa2:	71a8                	.insn	2, 0x71a8
+    6aa4:	7104                	.insn	2, 0x7104
+    6aa6:	7104                	.insn	2, 0x7104
+    6aa8:	71a8                	.insn	2, 0x71a8
+    6aaa:	71a8                	.insn	2, 0x71a8
+
+00006aac <varmulet_dp_decode_table>:
+    6aac:	6c34                	.insn	2, 0x6c34
+    6aae:	6c3c                	.insn	2, 0x6c3c
+    6ab0:	6c44                	.insn	2, 0x6c44
+    6ab2:	6c60                	.insn	2, 0x6c60
+    6ab4:	6c74                	.insn	2, 0x6c74
+    6ab6:	6c8c                	.insn	2, 0x6c8c
+    6ab8:	6c88                	.insn	2, 0x6c88
+    6aba:	6cb4                	.insn	2, 0x6cb4
+    6abc:	6bd6                	.insn	2, 0x6bd6
+    6abe:	6c26                	.insn	2, 0x6c26
+    6ac0:	6cdc                	.insn	2, 0x6cdc
+    6ac2:	6cc4                	.insn	2, 0x6cc4
+    6ac4:	6cfc                	.insn	2, 0x6cfc
+    6ac6:	6b7e                	.insn	2, 0x6b7e
+    6ac8:	6d04                	.insn	2, 0x6d04
+    6aca:	6cf6                	.insn	2, 0x6cf6
+
+00006acc <v_table_branch>:
+    6acc:	9406                	add	s0,s0,ra
+    6ace:	8000                	lbu	s0,0(s0)
+    6ad0:	4887de13          	bexti	t3,a5,0x8
+    6ad4:	90a2                	add	ra,ra,s0
+    6ad6:	8082                	ret
+
+00006ad8 <do_jmp_hook_exc_return_tmp0>:
+    6ad8:	8622                	mv	a2,s0
+
+00006ada <do_jmp_hook_exc_return>:
+    6ada:	45b9                	li	a1,14
+    6adc:	9f82                	jalr	t6
+
+00006ade <vexecute_asrsi>:
+    6ade:	24f1                	jal	6daa <v_ldr_str_r2i_setup>
+
+00006ae0 <v_asr_entry>:
+    6ae0:	fffe0493          	addi	s1,t3,-1
+    6ae4:	4896d8b3          	bext	a7,a3,s1
+    6ae8:	000e0663          	beqz	t3,6af4 <v_asr_entry+0x14>
+    6aec:	41c6d733          	sra	a4,a3,t3
+    6af0:	c218                	sw	a4,0(a2)
+    6af2:	8802                	jr	a6
+    6af4:	4e7d                	li	t3,31
+    6af6:	bfdd                	j	6aec <v_asr_entry+0xc>
+
+00006af8 <vexecute_lslsi>:
+    6af8:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6afc:	2076c6b3          	sh2add	a3,a3,t2
+    6b00:	20764633          	sh2add	a2,a2,t2
+    6b04:	4298                	lw	a4,0(a3)
+    6b06:	1067c40b          	h3.bextmi s0, a5, 6, 5
+
+00006b0a <v_lsl_entry>:
+    6b0a:	c419                	beqz	s0,6b18 <v_lsl_entry+0xe>
+    6b0c:	408004b3          	neg	s1,s0
+    6b10:	489758b3          	bext	a7,a4,s1
+    6b14:	00871733          	sll	a4,a4,s0
+    6b18:	c218                	sw	a4,0(a2)
+    6b1a:	8802                	jr	a6
+
+00006b1c <vexecute_lsrsi>:
+    6b1c:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6b20:	2076c6b3          	sh2add	a3,a3,t2
+    6b24:	20764633          	sh2add	a2,a2,t2
+    6b28:	4298                	lw	a4,0(a3)
+    6b2a:	1067c40b          	h3.bextmi s0, a5, 6, 5
+
+00006b2e <v_lsr_entry>:
+    6b2e:	fff40493          	addi	s1,s0,-1
+    6b32:	489758b3          	bext	a7,a4,s1
+    6b36:	c409                	beqz	s0,6b40 <v_lsr_entry+0x12>
+    6b38:	00875733          	srl	a4,a4,s0
+    6b3c:	c218                	sw	a4,0(a2)
+    6b3e:	8802                	jr	a6
+    6b40:	4701                	li	a4,0
+    6b42:	bfed                	j	6b3c <v_lsr_entry+0xe>
+
+00006b44 <vexecute_adds_subs>:
+    6b44:	0867ce0b          	h3.bextmi t3, a5, 6, 3
+    6b48:	207e4e33          	sh2add	t3,t3,t2
+    6b4c:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6b50:	2076c6b3          	sh2add	a3,a3,t2
+    6b54:	20764633          	sh2add	a2,a2,t2
+    6b58:	000e2403          	lw	s0,0(t3)
+    6b5c:	0006ae03          	lw	t3,0(a3)
+    6b60:	4897d493          	bexti	s1,a5,0x9
+    6b64:	e4c1                	bnez	s1,6bec <vexecute_subs_common>
+
+00006b66 <vexecute_adds_common>:
+    6b66:	008e0733          	add	a4,t3,s0
+    6b6a:	01c74eb3          	xor	t4,a4,t3
+    6b6e:	408e48b3          	xnor	a7,t3,s0
+    6b72:	011efeb3          	and	t4,t4,a7
+    6b76:	01c738b3          	sltu	a7,a4,t3
+    6b7a:	c218                	sw	a4,0(a2)
+    6b7c:	8802                	jr	a6
+
+00006b7e <vdp_muls>:
+    6b7e:	03c68733          	mul	a4,a3,t3
+    6b82:	aabd                	j	6d00 <vdp_shared_store_nz_at_work0_next_instruction>
+
+00006b84 <vexecute_addsi_subsi>:
+    6b84:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6b88:	2076c6b3          	sh2add	a3,a3,t2
+    6b8c:	20764633          	sh2add	a2,a2,t2
+    6b90:	0006ae03          	lw	t3,0(a3)
+    6b94:	0867c40b          	h3.bextmi s0, a5, 6, 3
+    6b98:	4897d493          	bexti	s1,a5,0x9
+    6b9c:	d4e9                	beqz	s1,6b66 <vexecute_adds_common>
+    6b9e:	a0b9                	j	6bec <vexecute_subs_common>
+
+00006ba0 <vexecute_movsi>:
+    6ba0:	0887c60b          	h3.bextmi a2, a5, 8, 3
+    6ba4:	20764633          	sh2add	a2,a2,t2
+    6ba8:	0ff7f713          	zext.b	a4,a5
+    6bac:	c218                	sw	a4,0(a2)
+    6bae:	8802                	jr	a6
+
+00006bb0 <vexecute_adds8i>:
+    6bb0:	0887c60b          	h3.bextmi a2, a5, 8, 3
+    6bb4:	20764633          	sh2add	a2,a2,t2
+    6bb8:	00062e03          	lw	t3,0(a2)
+    6bbc:	9fe1                	zext.b	a5,a5
+    6bbe:	00fe0733          	add	a4,t3,a5
+    6bc2:	01c74eb3          	xor	t4,a4,t3
+    6bc6:	40fe48b3          	xnor	a7,t3,a5
+    6bca:	011efeb3          	and	t4,t4,a7
+    6bce:	01c738b3          	sltu	a7,a4,t3
+    6bd2:	c218                	sw	a4,0(a2)
+    6bd4:	8802                	jr	a6
+
+00006bd6 <vdp_tsts>:
+    6bd6:	01c6f733          	and	a4,a3,t3
+    6bda:	8802                	jr	a6
+
+00006bdc <vexecute_subs8i>:
+    6bdc:	0887c60b          	h3.bextmi a2, a5, 8, 3
+    6be0:	20764633          	sh2add	a2,a2,t2
+    6be4:	00062e03          	lw	t3,0(a2)
+    6be8:	0ff7f413          	zext.b	s0,a5
+
+00006bec <vexecute_subs_common>:
+    6bec:	408e0733          	sub	a4,t3,s0
+    6bf0:	00ee4eb3          	xor	t4,t3,a4
+    6bf4:	408748b3          	xnor	a7,a4,s0
+    6bf8:	011efeb3          	and	t4,t4,a7
+    6bfc:	008e38b3          	sltu	a7,t3,s0
+    6c00:	0018c893          	xori	a7,a7,1
+    6c04:	c218                	sw	a4,0(a2)
+    6c06:	8802                	jr	a6
+
+00006c08 <vexecute_dp>:
+    6c08:	20764633          	sh2add	a2,a2,t2
+    6c0c:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6c10:	2076c6b3          	sh2add	a3,a3,t2
+    6c14:	0c67c40b          	h3.bextmi s0, a5, 6, 4
+    6c18:	21e42433          	sh1add	s0,s0,t5
+    6c1c:	8400                	lhu	s0,0(s0)
+    6c1e:	0006ae03          	lw	t3,0(a3)
+    6c22:	4214                	lw	a3,0(a2)
+    6c24:	8402                	jr	s0
+
+00006c26 <vdp_rsbs>:
+    6c26:	41c00733          	neg	a4,t3
+    6c2a:	00173893          	seqz	a7,a4
+    6c2e:	01c77eb3          	and	t4,a4,t3
+    6c32:	a0f9                	j	6d00 <vdp_shared_store_nz_at_work0_next_instruction>
+
+00006c34 <vdp_ands>:
+    6c34:	01c6f733          	and	a4,a3,t3
+    6c38:	c218                	sw	a4,0(a2)
+    6c3a:	8802                	jr	a6
+
+00006c3c <vdp_eors>:
+    6c3c:	01c6c733          	xor	a4,a3,t3
+    6c40:	c218                	sw	a4,0(a2)
+    6c42:	8802                	jr	a6
+
+00006c44 <vdp_lsls>:
+    6c44:	8736                	mv	a4,a3
+    6c46:	0ffe7413          	zext.b	s0,t3
+    6c4a:	02000493          	li	s1,32
+    6c4e:	ea944ee3          	blt	s0,s1,6b0a <v_lsl_entry>
+
+00006c52 <v_lsls_over_ret>:
+    6c52:	02142893          	slti	a7,s0,33
+    6c56:	00d8f8b3          	and	a7,a7,a3
+    6c5a:	00000713          	li	a4,0
+    6c5e:	a04d                	j	6d00 <vdp_shared_store_nz_at_work0_next_instruction>
+
+00006c60 <vdp_lsrs>:
+    6c60:	8736                	mv	a4,a3
+    6c62:	0ffe7413          	zext.b	s0,t3
+    6c66:	cc49                	beqz	s0,6d00 <vdp_shared_store_nz_at_work0_next_instruction>
+    6c68:	02000493          	li	s1,32
+    6c6c:	ec9441e3          	blt	s0,s1,6b2e <v_lsr_entry>
+    6c70:	82fd                	srli	a3,a3,0x1f
+    6c72:	b7c5                	j	6c52 <v_lsls_over_ret>
+
+00006c74 <vdp_asrs>:
+    6c74:	8736                	mv	a4,a3
+    6c76:	0ffe7e13          	zext.b	t3,t3
+    6c7a:	080e0363          	beqz	t3,6d00 <vdp_shared_store_nz_at_work0_next_instruction>
+    6c7e:	44fd                	li	s1,31
+    6c80:	01c4d363          	bge	s1,t3,6c86 <vdp_asrs+0x12>
+    6c84:	4e01                	li	t3,0
+    6c86:	bda9                	j	6ae0 <v_asr_entry>
+
+00006c88 <vdp_sbcs>:
+    6c88:	fffe4e13          	not	t3,t3
+
+00006c8c <vdp_adcs>:
+    6c8c:	011e0433          	add	s0,t3,a7
+    6c90:	00868733          	add	a4,a3,s0
+    6c94:	00143493          	seqz	s1,s0
+    6c98:	0114f4b3          	and	s1,s1,a7
+    6c9c:	00d73433          	sltu	s0,a4,a3
+    6ca0:	009468b3          	or	a7,s0,s1
+    6ca4:	01c74433          	xor	s0,a4,t3
+    6ca8:	40de44b3          	xnor	s1,t3,a3
+    6cac:	00947eb3          	and	t4,s0,s1
+    6cb0:	c218                	sw	a4,0(a2)
+    6cb2:	8802                	jr	a6
+
+00006cb4 <vdp_rors>:
+    6cb4:	0ffe7413          	zext.b	s0,t3
+    6cb8:	6086d733          	ror	a4,a3,s0
+    6cbc:	c019                	beqz	s0,6cc2 <vdp_rors+0xe>
+    6cbe:	01f75893          	srli	a7,a4,0x1f
+    6cc2:	a83d                	j	6d00 <vdp_shared_store_nz_at_work0_next_instruction>
+
+00006cc4 <vdp_cmn>:
+    6cc4:	04038613          	addi	a2,t2,64
+    6cc8:	8436                	mv	s0,a3
+    6cca:	bd71                	j	6b66 <vexecute_adds_common>
+
+00006ccc <vexecute_cmpi>:
+    6ccc:	0887c60b          	h3.bextmi a2, a5, 8, 3
+    6cd0:	20764633          	sh2add	a2,a2,t2
+    6cd4:	00062683          	lw	a3,0(a2)
+    6cd8:	0ff7fe13          	zext.b	t3,a5
+
+00006cdc <vdp_cmp>:
+    6cdc:	41c68733          	sub	a4,a3,t3
+    6ce0:	00e6ceb3          	xor	t4,a3,a4
+    6ce4:	41c748b3          	xnor	a7,a4,t3
+    6ce8:	011efeb3          	and	t4,t4,a7
+    6cec:	01c6b8b3          	sltu	a7,a3,t3
+    6cf0:	0018c893          	xori	a7,a7,1
+    6cf4:	8802                	jr	a6
+
+00006cf6 <vdp_mvns>:
+    6cf6:	fffe4713          	not	a4,t3
+    6cfa:	a019                	j	6d00 <vdp_shared_store_nz_at_work0_next_instruction>
+
+00006cfc <vdp_orrs>:
+    6cfc:	01c6e733          	or	a4,a3,t3
+
+00006d00 <vdp_shared_store_nz_at_work0_next_instruction>:
+    6d00:	c218                	sw	a4,0(a2)
+    6d02:	8802                	jr	a6
+
+00006d04 <vdp_bics>:
+    6d04:	41c6f733          	andn	a4,a3,t3
+    6d08:	c218                	sw	a4,0(a2)
+    6d0a:	8802                	jr	a6
+
+00006d0c <vexecute_010001>:
+    6d0c:	0487c40b          	h3.bextmi s0, a5, 8, 2
+    6d10:	1475                	addi	s0,s0,-3
+    6d12:	cc29                	beqz	s0,6d6c <vexecute_010001_11>
+
+00006d14 <vexecute_add_cmp_mov_hi>:
+    6d14:	4877d413          	bexti	s0,a5,0x7
+    6d18:	0077f493          	andi	s1,a5,7
+    6d1c:	20946633          	sh3add	a2,s0,s1
+    6d20:	0c37c68b          	h3.bextmi a3, a5, 3, 4
+    6d24:	2076c433          	sh2add	s0,a3,t2
+    6d28:	ff168493          	addi	s1,a3,-15
+    6d2c:	00042e03          	lw	t3,0(s0)
+    6d30:	e099                	bnez	s1,6d36 <vexecute_add_cmp_mov_hi+0x22>
+    6d32:	00250e13          	addi	t3,a0,2
+    6d36:	4897d413          	bexti	s0,a5,0x9
+    6d3a:	ec09                	bnez	s0,6d54 <vexecute_mov_hi>
+    6d3c:	20764433          	sh2add	s0,a2,t2
+    6d40:	ff160493          	addi	s1,a2,-15
+    6d44:	4014                	lw	a3,0(s0)
+    6d46:	e099                	bnez	s1,6d4c <vexecute_add_cmp_mov_hi+0x38>
+    6d48:	00250693          	addi	a3,a0,2
+    6d4c:	4887d413          	bexti	s0,a5,0x8
+    6d50:	f451                	bnez	s0,6cdc <vdp_cmp>
+
+00006d52 <vexecute_add_hi>:
+    6d52:	9e36                	add	t3,t3,a3
+
+00006d54 <vexecute_mov_hi>:
+    6d54:	20764433          	sh2add	s0,a2,t2
+    6d58:	ff360493          	addi	s1,a2,-13
+    6d5c:	1c048163          	beqz	s1,6f1e <v_write_sp>
+    6d60:	14f9                	addi	s1,s1,-2
+    6d62:	8672                	mv	a2,t3
+    6d64:	c09d                	beqz	s1,6d8a <v_write_pc_work0>
+    6d66:	01c42023          	sw	t3,0(s0)
+    6d6a:	8802                	jr	a6
+
+00006d6c <vexecute_010001_11>:
+    6d6c:	0c37c40b          	h3.bextmi s0, a5, 3, 4
+    6d70:	20744433          	sh2add	s0,s0,t2
+    6d74:	4010                	lw	a2,0(s0)
+    6d76:	4877d413          	bexti	s0,a5,0x7
+    6d7a:	e401                	bnez	s0,6d82 <vexecute_blx>
+
+00006d7c <vexecute_bx>:
+    6d7c:	d5267fe3          	bgeu	a2,s2,6ada <do_jmp_hook_exc_return>
+    6d80:	a029                	j	6d8a <v_write_pc_work0>
+
+00006d82 <vexecute_blx>:
+    6d82:	00150493          	addi	s1,a0,1
+    6d86:	0293ac23          	sw	s1,56(t2)
+
+00006d8a <v_write_pc_work0>:
+    6d8a:	ffe67513          	andi	a0,a2,-2
+    6d8e:	8802                	jr	a6
+
+00006d90 <vexecute_ldr_lit>:
+    6d90:	0887c58b          	h3.bextmi a1, a5, 8, 3
+    6d94:	2075c5b3          	sh2add	a1,a1,t2
+    6d98:	9fe1                	zext.b	a5,a5
+    6d9a:	00250493          	addi	s1,a0,2
+    6d9e:	98f1                	andi	s1,s1,-4
+    6da0:	2097c7b3          	sh2add	a5,a5,s1
+    6da4:	4384                	lw	s1,0(a5)
+    6da6:	c184                	sw	s1,0(a1)
+    6da8:	8802                	jr	a6
+
+00006daa <v_ldr_str_r2i_setup>:
+    6daa:	1067ce0b          	h3.bextmi t3, a5, 6, 5
+    6dae:	a039                	j	6dbc <v_ldr_str_r3_setup+0xc>
+
+00006db0 <v_ldr_str_r3_setup>:
+    6db0:	0867ce0b          	h3.bextmi t3, a5, 6, 3
+    6db4:	207e4e33          	sh2add	t3,t3,t2
+    6db8:	000e2e03          	lw	t3,0(t3)
+    6dbc:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6dc0:	2076c6b3          	sh2add	a3,a3,t2
+    6dc4:	4294                	lw	a3,0(a3)
+    6dc6:	20764633          	sh2add	a2,a2,t2
+    6dca:	8082                	ret
+
+00006dcc <vexecute_010100>:
+    6dcc:	37d5                	jal	6db0 <v_ldr_str_r3_setup>
+    6dce:	96f2                	add	a3,a3,t3
+    6dd0:	4897d413          	bexti	s0,a5,0x9
+    6dd4:	e401                	bnez	s0,6ddc <vexecute_strh>
+
+00006dd6 <vexecute_str>:
+    6dd6:	4200                	lw	s0,0(a2)
+    6dd8:	c280                	sw	s0,0(a3)
+    6dda:	8802                	jr	a6
+
+00006ddc <vexecute_strh>:
+    6ddc:	4200                	lw	s0,0(a2)
+    6dde:	8e80                	sh	s0,0(a3)
+    6de0:	8802                	jr	a6
+
+00006de2 <vexecute_ldrsb>:
+    6de2:	00068403          	lb	s0,0(a3)
+    6de6:	a81d                	j	6e1c <ld3_shared_write_tmp0_to_work0_next_instruction>
+
+00006de8 <vexecute_010101>:
+    6de8:	37e1                	jal	6db0 <v_ldr_str_r3_setup>
+    6dea:	96f2                	add	a3,a3,t3
+    6dec:	4897d413          	bexti	s0,a5,0x9
+    6df0:	f86d                	bnez	s0,6de2 <vexecute_ldrsb>
+
+00006df2 <vexecute_strb>:
+    6df2:	4200                	lw	s0,0(a2)
+    6df4:	8a80                	sb	s0,0(a3)
+    6df6:	8802                	jr	a6
+
+00006df8 <vexecute_010110>:
+    6df8:	3f65                	jal	6db0 <v_ldr_str_r3_setup>
+    6dfa:	96f2                	add	a3,a3,t3
+    6dfc:	4897d413          	bexti	s0,a5,0x9
+    6e00:	0e041b63          	bnez	s0,6ef6 <vexecute_ldrh>
+
+00006e04 <vexecute_ldr>:
+    6e04:	4280                	lw	s0,0(a3)
+    6e06:	c200                	sw	s0,0(a2)
+    6e08:	8802                	jr	a6
+
+00006e0a <vexecute_add_sp>:
+    6e0a:	0343a483          	lw	s1,52(t2)
+    6e0e:	a8d1                	j	6ee2 <vexecute_address_gen>
+
+00006e10 <vexecute_010111>:
+    6e10:	3745                	jal	6db0 <v_ldr_str_r3_setup>
+    6e12:	96f2                	add	a3,a3,t3
+    6e14:	4897d413          	bexti	s0,a5,0x9
+    6e18:	e401                	bnez	s0,6e20 <vexecute_ldrsh>
+
+00006e1a <vexecute_ldrb>:
+    6e1a:	8280                	lbu	s0,0(a3)
+
+00006e1c <ld3_shared_write_tmp0_to_work0_next_instruction>:
+    6e1c:	c200                	sw	s0,0(a2)
+    6e1e:	8802                	jr	a6
+
+00006e20 <vexecute_ldrsh>:
+    6e20:	86c0                	lh	s0,0(a3)
+    6e22:	bfed                	j	6e1c <ld3_shared_write_tmp0_to_work0_next_instruction>
+
+00006e24 <vexecute_stri>:
+    6e24:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6e28:	2076c6b3          	sh2add	a3,a3,t2
+    6e2c:	20764633          	sh2add	a2,a2,t2
+    6e30:	4280                	lw	s0,0(a3)
+    6e32:	1067c48b          	h3.bextmi s1, a5, 6, 5
+    6e36:	2084c6b3          	sh2add	a3,s1,s0
+    6e3a:	4200                	lw	s0,0(a2)
+    6e3c:	c280                	sw	s0,0(a3)
+    6e3e:	8802                	jr	a6
+
+00006e40 <vexecute_ldri>:
+    6e40:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6e44:	2076c6b3          	sh2add	a3,a3,t2
+    6e48:	20764633          	sh2add	a2,a2,t2
+    6e4c:	4284                	lw	s1,0(a3)
+    6e4e:	1067c40b          	h3.bextmi s0, a5, 6, 5
+    6e52:	209446b3          	sh2add	a3,s0,s1
+    6e56:	4280                	lw	s0,0(a3)
+    6e58:	c200                	sw	s0,0(a2)
+    6e5a:	8802                	jr	a6
+
+00006e5c <vexecute_strbi>:
+    6e5c:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6e60:	2076c6b3          	sh2add	a3,a3,t2
+    6e64:	20764633          	sh2add	a2,a2,t2
+    6e68:	4280                	lw	s0,0(a3)
+    6e6a:	1067c48b          	h3.bextmi s1, a5, 6, 5
+    6e6e:	008486b3          	add	a3,s1,s0
+    6e72:	4200                	lw	s0,0(a2)
+    6e74:	8a80                	sb	s0,0(a3)
+    6e76:	8802                	jr	a6
+
+00006e78 <vexecute_ldrbi>:
+    6e78:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6e7c:	2076c6b3          	sh2add	a3,a3,t2
+    6e80:	20764633          	sh2add	a2,a2,t2
+    6e84:	4284                	lw	s1,0(a3)
+    6e86:	1067c40b          	h3.bextmi s0, a5, 6, 5
+    6e8a:	009406b3          	add	a3,s0,s1
+    6e8e:	8280                	lbu	s0,0(a3)
+    6e90:	c200                	sw	s0,0(a2)
+    6e92:	8802                	jr	a6
+
+00006e94 <vexecute_strhi>:
+    6e94:	3f19                	jal	6daa <v_ldr_str_r2i_setup>
+    6e96:	20de26b3          	sh1add	a3,t3,a3
+    6e9a:	4200                	lw	s0,0(a2)
+    6e9c:	8e80                	sh	s0,0(a3)
+    6e9e:	8802                	jr	a6
+
+00006ea0 <vexecute_ldrhi>:
+    6ea0:	3729                	jal	6daa <v_ldr_str_r2i_setup>
+    6ea2:	20de26b3          	sh1add	a3,t3,a3
+    6ea6:	8680                	lhu	s0,0(a3)
+    6ea8:	c200                	sw	s0,0(a2)
+    6eaa:	8802                	jr	a6
+
+00006eac <vexecute_strspi>:
+    6eac:	0343a483          	lw	s1,52(t2)
+    6eb0:	0887c58b          	h3.bextmi a1, a5, 8, 3
+    6eb4:	2075c5b3          	sh2add	a1,a1,t2
+    6eb8:	9fe1                	zext.b	a5,a5
+    6eba:	2097c6b3          	sh2add	a3,a5,s1
+    6ebe:	4180                	lw	s0,0(a1)
+    6ec0:	c280                	sw	s0,0(a3)
+    6ec2:	8802                	jr	a6
+
+00006ec4 <vexecute_ldrspi>:
+    6ec4:	0343a483          	lw	s1,52(t2)
+    6ec8:	0887c58b          	h3.bextmi a1, a5, 8, 3
+    6ecc:	2075c5b3          	sh2add	a1,a1,t2
+    6ed0:	9fe1                	zext.b	a5,a5
+    6ed2:	2097c6b3          	sh2add	a3,a5,s1
+    6ed6:	4280                	lw	s0,0(a3)
+    6ed8:	c180                	sw	s0,0(a1)
+    6eda:	8802                	jr	a6
+
+00006edc <vexecute_adr>:
+    6edc:	00250493          	addi	s1,a0,2
+    6ee0:	98f1                	andi	s1,s1,-4
+
+00006ee2 <vexecute_address_gen>:
+    6ee2:	0887c60b          	h3.bextmi a2, a5, 8, 3
+    6ee6:	20764633          	sh2add	a2,a2,t2
+    6eea:	0ff7f413          	zext.b	s0,a5
+    6eee:	209444b3          	sh2add	s1,s0,s1
+    6ef2:	c204                	sw	s1,0(a2)
+    6ef4:	8802                	jr	a6
+
+00006ef6 <vexecute_ldrh>:
+    6ef6:	8680                	lhu	s0,0(a3)
+    6ef8:	c200                	sw	s0,0(a2)
+    6efa:	8802                	jr	a6
+
+00006efc <vexecute_101100>:
+    6efc:	4887d413          	bexti	s0,a5,0x8
+    6f00:	ec59                	bnez	s0,6f9e <vexecute_cbz_cbnz>
+    6f02:	4897d413          	bexti	s0,a5,0x9
+    6f06:	e40d                	bnez	s0,6f30 <vexecute_extend>
+
+00006f08 <vexecute_add_sub_sp>:
+    6f08:	07f7f413          	andi	s0,a5,127
+    6f0c:	0343ae03          	lw	t3,52(t2)
+    6f10:	4877d493          	bexti	s1,a5,0x7
+    6f14:	c099                	beqz	s1,6f1a <vexecute_add_sub_sp+0x12>
+    6f16:	40800433          	neg	s0,s0
+    6f1a:	21c44e33          	sh2add	t3,s0,t3
+
+00006f1e <v_write_sp>:
+    6f1e:	ffce7e13          	andi	t3,t3,-4
+    6f22:	03c3aa23          	sw	t3,52(t2)
+    6f26:	0483a403          	lw	s0,72(t2)
+    6f2a:	108e6c63          	bltu	t3,s0,7042 <vexecute_dummy_bkpt>
+    6f2e:	8802                	jr	a6
+
+00006f30 <vexecute_extend>:
+    6f30:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6f34:	2076c6b3          	sh2add	a3,a3,t2
+    6f38:	20764633          	sh2add	a2,a2,t2
+    6f3c:	4294                	lw	a3,0(a3)
+    6f3e:	0467c40b          	h3.bextmi s0, a5, 6, 2
+    6f42:	3669                	jal	6acc <v_table_branch>
+
+00006f44 <extend_table_base>:
+    6f44:	0a0e0406          	.word	0x0a0e0406
+
+00006f48 <vexecute_extend_sxtb>:
+    6f48:	9ee5                	sext.b	a3,a3
+
+00006f4a <vexecute_extend_sxth>:
+    6f4a:	9eed                	sext.h	a3,a3
+    6f4c:	a021                	j	6f54 <vexecute_extend_done>
+
+00006f4e <vexecute_extend_uxtb>:
+    6f4e:	9ee1                	zext.b	a3,a3
+    6f50:	a011                	j	6f54 <vexecute_extend_done>
+
+00006f52 <vexecute_extend_uxth>:
+    6f52:	9ee9                	zext.h	a3,a3
+
+00006f54 <vexecute_extend_done>:
+    6f54:	c214                	sw	a3,0(a2)
+
+00006f56 <v_next_instruction_0>:
+    6f56:	8802                	jr	a6
+
+00006f58 <vexecute_101101>:
+    6f58:	4897d413          	bexti	s0,a5,0x9
+    6f5c:	10041f63          	bnez	s0,707a <vexecute_101101_1>
+
+00006f60 <vexecute_push>:
+    6f60:	0343a683          	lw	a3,52(t2)
+    6f64:	1ff7f493          	andi	s1,a5,511
+    6f68:	60249413          	cpop	s0,s1
+    6f6c:	040a                	slli	s0,s0,0x2
+    6f6e:	40868633          	sub	a2,a3,s0
+    6f72:	02c3aa23          	sw	a2,52(t2)
+    6f76:	0483a403          	lw	s0,72(t2)
+    6f7a:	0c866463          	bltu	a2,s0,7042 <vexecute_dummy_bkpt>
+    6f7e:	0ff7f593          	zext.b	a1,a5
+    6f82:	00b48663          	beq	s1,a1,6f8e <vexecute_push+0x2e>
+    6f86:	0383a403          	lw	s0,56(t2)
+    6f8a:	16f1                	addi	a3,a3,-4
+    6f8c:	c280                	sw	s0,0(a3)
+    6f8e:	86b2                	mv	a3,a2
+    6f90:	d1f9                	beqz	a1,6f56 <v_next_instruction_0>
+    6f92:	4e01                	li	t3,0
+    6f94:	a0e1                	j	705c <v_stmia_entry>
+    6f96:	0001                	nop
+
+00006f98 <vexecute_101110>:
+    6f98:	4887d413          	bexti	s0,a5,0x8
+    6f9c:	c405                	beqz	s0,6fc4 <vexecute_rev16_rev_revsh>
+
+00006f9e <vexecute_cbz_cbnz>:
+    6f9e:	20764633          	sh2add	a2,a2,t2
+    6fa2:	4210                	lw	a2,0(a2)
+    6fa4:	48b7d693          	bexti	a3,a5,0xb
+    6fa8:	00163613          	seqz	a2,a2
+    6fac:	00d60b63          	beq	a2,a3,6fc2 <vexecute_cbz_cbnz+0x24>
+    6fb0:	1037c40b          	h3.bextmi s0, a5, 3, 5
+    6fb4:	4897d493          	bexti	s1,a5,0x9
+    6fb8:	049a                	slli	s1,s1,0x6
+    6fba:	20a42533          	sh1add	a0,s0,a0
+    6fbe:	9526                	add	a0,a0,s1
+    6fc0:	0509                	addi	a0,a0,2
+    6fc2:	8802                	jr	a6
+
+00006fc4 <vexecute_rev16_rev_revsh>:
+    6fc4:	0837c68b          	h3.bextmi a3, a5, 3, 3
+    6fc8:	2076c6b3          	sh2add	a3,a3,t2
+    6fcc:	20764633          	sh2add	a2,a2,t2
+    6fd0:	4284                	lw	s1,0(a3)
+    6fd2:	0c67c40b          	h3.bextmi s0, a5, 6, 4
+    6fd6:	1461                	addi	s0,s0,-8
+    6fd8:	cc01                	beqz	s0,6ff0 <vexecute_rev>
+    6fda:	147d                	addi	s0,s0,-1
+    6fdc:	c801                	beqz	s0,6fec <vexecute_rev16>
+    6fde:	1479                	addi	s0,s0,-2
+    6fe0:	1c041263          	bnez	s0,71a4 <vexecute_undefined>
+
+00006fe4 <vexecute_revsh>:
+    6fe4:	6984d493          	rev8	s1,s1
+    6fe8:	84c1                	srai	s1,s1,0x10
+    6fea:	a029                	j	6ff4 <vexecute_rev+0x4>
+
+00006fec <vexecute_rev16>:
+    6fec:	6104d493          	rori	s1,s1,0x10
+
+00006ff0 <vexecute_rev>:
+    6ff0:	6984d493          	rev8	s1,s1
+    6ff4:	c204                	sw	s1,0(a2)
+    6ff6:	8802                	jr	a6
+
+00006ff8 <vexecute_101111>:
+    6ff8:	4897d413          	bexti	s0,a5,0x9
+    6ffc:	e421                	bnez	s0,7044 <vexecute_101111_1>
+
+00006ffe <vexecute_pop>:
+    6ffe:	03438e13          	addi	t3,t2,52
+    7002:	000e2683          	lw	a3,0(t3)
+    7006:	0ff7f593          	zext.b	a1,a5
+    700a:	c999                	beqz	a1,7020 <v_pop_entry+0x14>
+
+0000700c <v_pop_entry>:
+    700c:	60159493          	ctz	s1,a1
+    7010:	489595b3          	bclr	a1,a1,s1
+    7014:	4280                	lw	s0,0(a3)
+    7016:	2074c633          	sh2add	a2,s1,t2
+    701a:	c200                	sw	s0,0(a2)
+    701c:	0691                	addi	a3,a3,4
+    701e:	f5fd                	bnez	a1,700c <v_pop_entry>
+    7020:	4887d413          	bexti	s0,a5,0x8
+    7024:	c811                	beqz	s0,7038 <pop_no_pc>
+    7026:	4280                	lw	s0,0(a3)
+    7028:	0691                	addi	a3,a3,4
+    702a:	00de2023          	sw	a3,0(t3)
+    702e:	ab2475e3          	bgeu	s0,s2,6ad8 <do_jmp_hook_exc_return_tmp0>
+    7032:	ffe47513          	andi	a0,s0,-2
+    7036:	8802                	jr	a6
+
+00007038 <pop_no_pc>:
+    7038:	000e0463          	beqz	t3,7040 <pop_no_pc+0x8>
+    703c:	00de2023          	sw	a3,0(t3)
+    7040:	8802                	jr	a6
+
+00007042 <vexecute_dummy_bkpt>:
+    7042:	67ad                	lui	a5,0xb
+
+00007044 <vexecute_101111_1>:
+    7044:	4887d593          	bexti	a1,a5,0x8
+    7048:	0599                	addi	a1,a1,6
+    704a:	8f82                	jr	t6
+
+0000704c <vexecute_stm>:
+    704c:	0887ce0b          	h3.bextmi t3, a5, 8, 3
+    7050:	207e4e33          	sh2add	t3,t3,t2
+    7054:	000e2683          	lw	a3,0(t3)
+    7058:	0ff7f593          	zext.b	a1,a5
+
+0000705c <v_stmia_entry>:
+    705c:	60159493          	ctz	s1,a1
+    7060:	489595b3          	bclr	a1,a1,s1
+    7064:	2074c633          	sh2add	a2,s1,t2
+    7068:	4200                	lw	s0,0(a2)
+    706a:	c280                	sw	s0,0(a3)
+    706c:	0691                	addi	a3,a3,4
+    706e:	f5fd                	bnez	a1,705c <v_stmia_entry>
+    7070:	000e0463          	beqz	t3,7078 <v_stmia_entry+0x1c>
+    7074:	00de2023          	sw	a3,0(t3)
+    7078:	8802                	jr	a6
+
+0000707a <vexecute_101101_1>:
+    707a:	440d                	li	s0,3
+    707c:	0c57c48b          	h3.bextmi s1, a5, 5, 4
+    7080:	12941263          	bne	s0,s1,71a4 <vexecute_undefined>
+
+00007084 <vexecute_cps>:
+    7084:	45a5                	li	a1,9
+    7086:	8f82                	jr	t6
+
+00007088 <vexecute_ldm>:
+    7088:	0887c60b          	h3.bextmi a2, a5, 8, 3
+    708c:	20764e33          	sh2add	t3,a2,t2
+    7090:	000e2683          	lw	a3,0(t3)
+    7094:	9fe1                	zext.b	a5,a5
+    7096:	85be                	mv	a1,a5
+    7098:	48c7d433          	bext	s0,a5,a2
+    709c:	c011                	beqz	s0,70a0 <vexecute_ldm+0x18>
+    709e:	4e01                	li	t3,0
+    70a0:	b7b5                	j	700c <v_pop_entry>
+    70a2:	0001                	nop
+
+000070a4 <vexecute_1101xx>:
+    70a4:	0897c40b          	h3.bextmi s0, a5, 9, 3
+    70a8:	c411                	beqz	s0,70b4 <vcb_eq_ne>
+    70aa:	340d                	jal	6acc <v_table_branch>
+
+000070ac <bxx_table_base>:
+    70ac:	26342008          	.word	0x26342008
+    70b0:	463a3c2c          	.word	0x463a3c2c
+
+000070b4 <vcb_eq_ne>:
+    70b4:	4887de13          	bexti	t3,a5,0x8
+    70b8:	e311                	bnez	a4,70bc <vcb_bxx_no>
+
+000070ba <vcb_bxx_yes>:
+    70ba:	1e7d                	addi	t3,t3,-1
+
+000070bc <vcb_bxx_no>:
+    70bc:	000e0663          	beqz	t3,70c8 <vcb_bxx_no+0xc>
+    70c0:	9fe5                	sext.b	a5,a5
+    70c2:	20a7a533          	sh1add	a0,a5,a0
+    70c6:	0509                	addi	a0,a0,2
+    70c8:	8802                	jr	a6
+    70ca:	0001                	nop
+
+000070cc <vcb_cs_cc>:
+    70cc:	fe0888e3          	beqz	a7,70bc <vcb_bxx_no>
+    70d0:	b7ed                	j	70ba <vcb_bxx_yes>
+
+000070d2 <vcb_vs_vc>:
+    70d2:	fe0ec4e3          	bltz	t4,70ba <vcb_bxx_yes>
+    70d6:	b7dd                	j	70bc <vcb_bxx_no>
+
+000070d8 <vcb_hi_ls>:
+    70d8:	fe0882e3          	beqz	a7,70bc <vcb_bxx_no>
+    70dc:	d365                	beqz	a4,70bc <vcb_bxx_no>
+    70de:	bff1                	j	70ba <vcb_bxx_yes>
+
+000070e0 <vcb_mi_pl>:
+    70e0:	fc074de3          	bltz	a4,70ba <vcb_bxx_yes>
+    70e4:	bfe1                	j	70bc <vcb_bxx_no>
+
+000070e6 <vcb_gt_le>:
+    70e6:	db79                	beqz	a4,70bc <vcb_bxx_no>
+
+000070e8 <vcb_ge_lt>:
+    70e8:	01d74633          	xor	a2,a4,t4
+    70ec:	fc0648e3          	bltz	a2,70bc <vcb_bxx_no>
+    70f0:	b7e9                	j	70ba <vcb_bxx_yes>
+
+000070f2 <vcb_svc_udf>:
+    70f2:	0a0e0963          	beqz	t3,71a4 <vexecute_undefined>
+
+000070f6 <vcb_svc>:
+    70f6:	45a1                	li	a1,8
+    70f8:	8f82                	jr	t6
+
+000070fa <vexecute_branch>:
+    70fa:	07d6                	slli	a5,a5,0x15
+    70fc:	87d1                	srai	a5,a5,0x14
+    70fe:	953e                	add	a0,a0,a5
+    7100:	0509                	addi	a0,a0,2
+    7102:	8802                	jr	a6
+
+00007104 <vexecute32_11110>:
+    7104:	00055e03          	lhu	t3,0(a0)
+    7108:	0509                	addi	a0,a0,2
+    710a:	48fe5413          	bexti	s0,t3,0xf
+    710e:	cc0d                	beqz	s0,7148 <vexecute32_dp>
+    7110:	48ee5413          	bexti	s0,t3,0xe
+    7114:	c035                	beqz	s0,7178 <vexecute32_misc>
+
+00007116 <vexecute32_11110x_and_11>:
+    7116:	48ce5413          	bexti	s0,t3,0xc
+    711a:	c851                	beqz	s0,71ae <vexecute32_undefined>
+
+0000711c <vexecute32_bl>:
+    711c:	00150493          	addi	s1,a0,1
+    7120:	0293ac23          	sw	s1,56(t2)
+
+00007124 <vexecute32_bw>:
+    7124:	c0078593          	addi	a1,a5,-1024 # ac00 <__armexport_sg_api_get_b_partition+0x2db3>
+    7128:	005e1413          	slli	s0,t3,0x5
+    712c:	08b445b3          	pack	a1,s0,a1
+    7130:	058e                	slli	a1,a1,0x3
+    7132:	859d                	srai	a1,a1,0x7
+    7134:	48de5413          	bexti	s0,t3,0xd
+    7138:	48be5493          	bexti	s1,t3,0xb
+    713c:	20942433          	sh1add	s0,s0,s1
+    7140:	045a                	slli	s0,s0,0x16
+    7142:	8c2d                	xor	s0,s0,a1
+    7144:	9522                	add	a0,a0,s0
+    7146:	8802                	jr	a6
+
+00007148 <vexecute32_dp>:
+    7148:	08fe44b3          	pack	s1,t3,a5
+    714c:	80b1                	srli	s1,s1,0xc
+    714e:	089e74b3          	packh	s1,t3,s1
+    7152:	4007f593          	andi	a1,a5,1024
+    7156:	2095a4b3          	sh1add	s1,a1,s1
+    715a:	0c8e440b          	h3.bextmi s0, t3, 8, 4
+    715e:	20744433          	sh2add	s0,s0,t2
+    7162:	1447c58b          	h3.bextmi a1, a5, 4, 6
+    7166:	fdc58593          	addi	a1,a1,-36
+    716a:	e199                	bnez	a1,7170 <vexecute32_movw+0x4>
+
+0000716c <vexecute32_movw>:
+    716c:	c004                	sw	s1,0(s0)
+    716e:	8802                	jr	a6
+    7170:	15e1                	addi	a1,a1,-8
+    7172:	ed95                	bnez	a1,71ae <vexecute32_undefined>
+
+00007174 <vexecute32_movt>:
+    7174:	8c24                	sh	s1,2(s0)
+    7176:	8802                	jr	a6
+
+00007178 <vexecute32_misc>:
+    7178:	48ce5413          	bexti	s0,t3,0xc
+    717c:	f445                	bnez	s0,7124 <vexecute32_bw>
+    717e:	48a7d413          	bexti	s0,a5,0xa
+    7182:	e415                	bnez	s0,71ae <vexecute32_undefined>
+    7184:	880d                	andi	s0,s0,3
+    7186:	e405                	bnez	s0,71ae <vexecute32_undefined>
+    7188:	1857c40b          	h3.bextmi s0, a5, 5, 7
+    718c:	1411                	addi	s0,s0,-28
+    718e:	c419                	beqz	s0,719c <vexecute32_msr>
+    7190:	147d                	addi	s0,s0,-1
+    7192:	c419                	beqz	s0,71a0 <vexecute32_misc_control>
+    7194:	1479                	addi	s0,s0,-2
+    7196:	ec01                	bnez	s0,71ae <vexecute32_undefined>
+
+00007198 <vexecute32_mrs>:
+    7198:	45a9                	li	a1,10
+    719a:	8f82                	jr	t6
+
+0000719c <vexecute32_msr>:
+    719c:	45ad                	li	a1,11
+    719e:	8f82                	jr	t6
+
+000071a0 <vexecute32_misc_control>:
+    71a0:	45b1                	li	a1,12
+
+000071a2 <shared_enter_asm_hook>:
+    71a2:	8f82                	jr	t6
+
+000071a4 <vexecute_undefined>:
+    71a4:	4591                	li	a1,4
+    71a6:	9f82                	jalr	t6
+
+000071a8 <vexecute32_prefix_undefined>:
+    71a8:	00055e03          	lhu	t3,0(a0)
+    71ac:	0509                	addi	a0,a0,2
+
+000071ae <vexecute32_undefined>:
+    71ae:	4595                	li	a1,5
+    71b0:	9f82                	jalr	t6
+
+000071b2 <varmulet_run_adapter>:
+    71b2:	c56c                	sw	a1,76(a0)
+    71b4:	659d                	lui	a1,0x7
+    71b6:	4d658593          	addi	a1,a1,1238 # 74d6 <varmulet_asm_hooks_fn>
+
+000071ba <varmulet_run>:
+    71ba:	83aa                	mv	t2,a0
+    71bc:	1171                	addi	sp,sp,-4
+    71be:	c006                	sw	ra,0(sp)
+    71c0:	83aa                	mv	t2,a0
+    71c2:	8fae                	mv	t6,a1
+    71c4:	4581                	li	a1,0
+    71c6:	9f82                	jalr	t6
+    71c8:	1171                	addi	sp,sp,-4
+    71ca:	641d                	lui	s0,0x7
+    71cc:	1d440413          	addi	s0,s0,468 # 71d4 <varmulet_run_return>
+    71d0:	c022                	sw	s0,0(sp)
+    71d2:	8802                	jr	a6
+
+000071d4 <varmulet_run_return>:
+    71d4:	4585                	li	a1,1
+    71d6:	9f82                	jalr	t6
+    71d8:	0003a503          	lw	a0,0(t2)
+    71dc:	4082                	lw	ra,0(sp)
+    71de:	0111                	addi	sp,sp,4
+    71e0:	8082                	ret
+
+000071e2 <first_hook_addr>:
+    71e2:	b872                	cm.push	{ra,s0-s2},-16
+    71e4:	f0000937          	lui	s2,0xf0000
+    71e8:	631d                	lui	t1,0x7
+    71ea:	a2c30313          	addi	t1,t1,-1492 # 6a2c <riscv_start>
+    71ee:	6f1d                	lui	t5,0x7
+    71f0:	aacf0f13          	addi	t5,t5,-1364 # 6aac <varmulet_dp_decode_table>
+    71f4:	681d                	lui	a6,0x7
+    71f6:	73c80813          	addi	a6,a6,1852 # 773c <varmulet_hook_default_execute_instruction>
+    71fa:	04538883          	lb	a7,69(t2)
+    71fe:	03c3a503          	lw	a0,60(t2)
+    7202:	04438e83          	lb	t4,68(t2)
+    7206:	0efe                	slli	t4,t4,0x1f
+    7208:	0403a703          	lw	a4,64(t2)
+    720c:	8082                	ret
+
+0000720e <varmulet_hook_default_exit_fn>:
+    720e:	02a3ae23          	sw	a0,60(t2)
+    7212:	051382a3          	sb	a7,69(t2)
+    7216:	04e3a023          	sw	a4,64(t2)
+    721a:	01fed413          	srli	s0,t4,0x1f
+    721e:	04838223          	sb	s0,68(t2)
+    7222:	c006                	sw	ra,0(sp)
+    7224:	ba72                	cm.pop	{ra,s0-s2},16
+    7226:	8082                	ret
+
+00007228 <varmulet_hook_default_save_regs_fn>:
+    7228:	fc810113          	addi	sp,sp,-56
+    722c:	c02a                	sw	a0,0(sp)
+    722e:	c22e                	sw	a1,4(sp)
+    7230:	c432                	sw	a2,8(sp)
+    7232:	c636                	sw	a3,12(sp)
+    7234:	c83a                	sw	a4,16(sp)
+    7236:	ca3e                	sw	a5,20(sp)
+    7238:	cc42                	sw	a6,24(sp)
+    723a:	ce46                	sw	a7,28(sp)
+    723c:	d016                	sw	t0,32(sp)
+    723e:	d21a                	sw	t1,36(sp)
+    7240:	d41e                	sw	t2,40(sp)
+    7242:	d672                	sw	t3,44(sp)
+    7244:	d876                	sw	t4,48(sp)
+    7246:	da7a                	sw	t5,52(sp)
+    7248:	8082                	ret
+
+0000724a <varmulet_hook_default_restore_regs_fn>:
+    724a:	4502                	lw	a0,0(sp)
+    724c:	4592                	lw	a1,4(sp)
+    724e:	4622                	lw	a2,8(sp)
+    7250:	46b2                	lw	a3,12(sp)
+    7252:	4742                	lw	a4,16(sp)
+    7254:	47d2                	lw	a5,20(sp)
+    7256:	4862                	lw	a6,24(sp)
+    7258:	48f2                	lw	a7,28(sp)
+    725a:	5282                	lw	t0,32(sp)
+    725c:	5312                	lw	t1,36(sp)
+    725e:	53a2                	lw	t2,40(sp)
+    7260:	5e32                	lw	t3,44(sp)
+    7262:	5ec2                	lw	t4,48(sp)
+    7264:	5f52                	lw	t5,52(sp)
+    7266:	03810113          	addi	sp,sp,56
+    726a:	8082                	ret
+
+0000726c <varmulet_halt>:
+    726c:	9002                	ebreak
+    726e:	bffd                	j	726c <varmulet_halt>
+
+00007270 <varmulet_hook_default_bkpt_instr>:
+    7270:	9002                	ebreak
+
+00007272 <varmulet_hook_default_hint_instr>:
+    7272:	8802                	jr	a6
+
+00007274 <varmulet_hook_default_cps_instr>:
+    7274:	00f7f413          	andi	s0,a5,15
+    7278:	4489                	li	s1,2
+    727a:	00940363          	beq	s0,s1,7280 <varmulet_hook_default_cps_instr+0xc>
+    727e:	b71d                	.short	0xb71d
+    7280:	4847d613          	bexti	a2,a5,0x4
+    7284:	45b5                	li	a1,13
+    7286:	9f82                	jalr	t6
+    7288:	8802                	jr	a6
+
+0000728a <varmulet_hook_default_mrs_instr>:
+    728a:	0c8e440b          	h3.bextmi s0, t3, 8, 4
+    728e:	20744633          	sh2add	a2,s0,t2
+    7292:	0ffe7693          	zext.b	a3,t3
+    7296:	16e1                	addi	a3,a3,-8
+    7298:	0206c663          	bltz	a3,72c4 <vexecute_mrs_psr>
+    729c:	ca91                	beqz	a3,72b0 <vexecute_mrs_msp>
+    729e:	16f9                	addi	a3,a3,-2
+    72a0:	ca99                	beqz	a3,72b6 <v_execute_mrs_msplim>
+    72a2:	16e9                	addi	a3,a3,-6
+    72a4:	ce81                	beqz	a3,72bc <vexecute_mrs_primask>
+    72a6:	16f1                	addi	a3,a3,-4
+    72a8:	c291                	beqz	a3,72ac <varmulet_hook_default_mrs_instr+0x22>
+    72aa:	b711                	.short	0xb711
+    72ac:	c214                	sw	a3,0(a2)
+    72ae:	8802                	jr	a6
+
+000072b0 <vexecute_mrs_msp>:
+    72b0:	0343a403          	lw	s0,52(t2)
+    72b4:	a031                	j	72c0 <mrs_finish>
+
+000072b6 <v_execute_mrs_msplim>:
+    72b6:	0483a403          	lw	s0,72(t2)
+    72ba:	a019                	j	72c0 <mrs_finish>
+
+000072bc <vexecute_mrs_primask>:
+    72bc:	04638403          	lb	s0,70(t2)
+
+000072c0 <mrs_finish>:
+    72c0:	c200                	sw	s0,0(a2)
+    72c2:	8802                	jr	a6
+
+000072c4 <vexecute_mrs_psr>:
+    72c4:	4401                	li	s0,0
+    72c6:	0016f493          	andi	s1,a3,1
+    72ca:	c099                	beqz	s1,72d0 <vexecute_mrs_psr+0xc>
+    72cc:	04738403          	lb	s0,71(t2)
+    72d0:	0046f493          	andi	s1,a3,4
+    72d4:	f4f5                	bnez	s1,72c0 <mrs_finish>
+    72d6:	000724b3          	sltz	s1,a4
+    72da:	00173593          	seqz	a1,a4
+    72de:	20b4a6b3          	sh1add	a3,s1,a1
+    72e2:	01fed593          	srli	a1,t4,0x1f
+    72e6:	20b8a4b3          	sh1add	s1,a7,a1
+    72ea:	2096c6b3          	sh2add	a3,a3,s1
+    72ee:	06f2                	slli	a3,a3,0x1c
+    72f0:	8c55                	or	s0,s0,a3
+    72f2:	b7f9                	j	72c0 <mrs_finish>
+
+000072f4 <varmulet_hook_default_msr_instr>:
+    72f4:	00f7f413          	andi	s0,a5,15
+    72f8:	20744433          	sh2add	s0,s0,t2
+    72fc:	4000                	lw	s0,0(s0)
+    72fe:	0ffe7693          	zext.b	a3,t3
+    7302:	16e1                	addi	a3,a3,-8
+    7304:	0206c663          	bltz	a3,7330 <vexecute_msr_psr>
+    7308:	ca81                	beqz	a3,7318 <vexecute_msr_msp>
+    730a:	16f9                	addi	a3,a3,-2
+    730c:	ca91                	beqz	a3,7320 <vexecute_msr_msplim>
+    730e:	16e9                	addi	a3,a3,-6
+    7310:	ca99                	beqz	a3,7326 <vexecute_msr_primask>
+    7312:	16f1                	addi	a3,a3,-4
+    7314:	c689                	beqz	a3,731e <vexecute_msr_msp+0x6>
+    7316:	bd61                	.short	0xbd61
+
+00007318 <vexecute_msr_msp>:
+    7318:	9871                	andi	s0,s0,-4
+    731a:	0283aa23          	sw	s0,52(t2)
+    731e:	8802                	jr	a6
+
+00007320 <vexecute_msr_msplim>:
+    7320:	0483a423          	sw	s0,72(t2)
+    7324:	8802                	jr	a6
+
+00007326 <vexecute_msr_primask>:
+    7326:	00147613          	andi	a2,s0,1
+    732a:	45b5                	li	a1,13
+    732c:	9f82                	jalr	t6
+    732e:	8802                	jr	a6
+
+00007330 <vexecute_msr_psr>:
+    7330:	0046f493          	andi	s1,a3,4
+    7334:	f4ed                	bnez	s1,731e <vexecute_msr_msp+0x6>
+    7336:	01e45713          	srli	a4,s0,0x1e
+    733a:	4585                	li	a1,1
+    733c:	40e58733          	sub	a4,a1,a4
+    7340:	00341e93          	slli	t4,s0,0x3
+    7344:	49d45893          	bexti	a7,s0,0x1d
+    7348:	8802                	jr	a6
+
+0000734a <varmulet_hook_default_misc_control_instr>:
+    734a:	0c4e440b          	h3.bextmi s0, t3, 4, 4
+    734e:	1471                	addi	s0,s0,-4
+    7350:	448d                	li	s1,3
+    7352:	00946363          	bltu	s0,s1,7358 <varmulet_hook_default_misc_control_instr+0xe>
+    7356:	bda1                	.short	0xbda1
+    7358:	8802                	jr	a6
+
+0000735a <varmulet_hook_default_exc_return>:
+    735a:	ffa00437          	lui	s0,0xffa00
+    735e:	00c40463          	beq	s0,a2,7366 <varmulet_do_call_return>
+    7362:	9002                	ebreak
+    7364:	8802                	jr	a6
+
+00007366 <varmulet_do_call_return>:
+    7366:	45bd                	li	a1,15
+    7368:	9f82                	jalr	t6
+
+0000736a <varmulet_hook_default_call_return>:
+    736a:	4402                	lw	s0,0(sp)
+    736c:	0111                	addi	sp,sp,4
+    736e:	8402                	jr	s0
+
+00007370 <bootrom_undefined32_sg_and_rcp_check>:
+    7370:	08fe4433          	pack	s0,t3,a5
+    7374:	e97ff4b7          	lui	s1,0xe97ff
+    7378:	97f48493          	addi	s1,s1,-1665 # e97fe97f <otp_data_raw_guarded+0xa96c297f>
+    737c:	00941563          	bne	s0,s1,7386 <bootrom_undefined32_rcp_check>
+
+00007380 <bootrom_sg_instr>:
+    7380:	32800513          	li	a0,808
+    7384:	8802                	jr	a6
+
+00007386 <bootrom_undefined32_rcp_check>:
+    7386:	08fe4433          	pack	s0,t3,a5
+    738a:	01845493          	srli	s1,s0,0x18
+    738e:	0ec4f493          	andi	s1,s1,236
+    7392:	0ec4c493          	xori	s1,s1,236
+    7396:	e881                	bnez	s1,73a6 <rcp_const_check>
+    7398:	1144448b          	.insn	4, 0x1144448b
+    739c:	14f5                	addi	s1,s1,-3
+    739e:	e099                	bnez	s1,73a4 <bootrom_undefined32_rcp_check+0x1e>
+    73a0:	577d                	li	a4,-1
+    73a2:	8eba                	mv	t4,a4
+    73a4:	8802                	jr	a6
+
+000073a6 <rcp_const_check>:
+    73a6:	f04f05b7          	lui	a1,0xf04f0
+    73aa:	8c0d                	sub	s0,s0,a1
+    73ac:	8041                	srli	s0,s0,0x10
+    73ae:	e011                	bnez	s0,73b2 <hang>
+    73b0:	a895                	j	7424 <rcp_const_impl>
+
+000073b2 <hang>:
+    73b2:	bd6d                	j	726c <varmulet_halt>
+
+000073b4 <bootrom_update_primask_fn>:
+    73b4:	04c38323          	sb	a2,70(t2)
+    73b8:	30047073          	csrci	mstatus,8
+    73bc:	e219                	bnez	a2,73c2 <shared_enable_irqs_and_return+0x4>
+
+000073be <shared_enable_irqs_and_return>:
+    73be:	30046073          	csrsi	mstatus,8
+    73c2:	8082                	ret
+
+000073c4 <bootrom_hint_instr>:
+    73c4:	2805                	jal	73f4 <bootrom_hint_instr_impl>
+
+000073c6 <hint_table>:
+    73c6:	74d474d4          	.word	0x74d474d4
+    73ca:	7418740a          	.word	0x7418740a
+    73ce:	7446741e          	.word	0x7446741e
+    73d2:	745e7410          	.word	0x745e7410
+    73d6:	747c7462          	.word	0x747c7462
+    73da:	770478d0          	.word	0x770478d0
+    73de:	7c9e7616          	.word	0x7c9e7616
+    73e2:	7c6e7c38          	.word	0x7c6e7c38
+
+000073e6 <multiplex_table>:
+    73e6:	74ea7c30          	.word	0x74ea7c30
+    73ea:	7ca47968          	.word	0x7ca47968
+    73ee:	748476ec          	.word	0x748476ec
+
+000073f2 <multiplex_table_end>:
+    73f2:	0001                	nop
+
+000073f4 <bootrom_hint_instr_impl>:
+    73f4:	0c47c40b          	h3.bextmi s0, a5, 4, 4
+    73f8:	8bbd                	andi	a5,a5,15
+    73fa:	ffc5                	bnez	a5,73b2 <hang>
+
+000073fc <_shared_hint_lookup_tail>:
+    73fc:	201424b3          	sh1add	s1,s0,ra
+    7400:	849c                	lhu	a5,0(s1)
+    7402:	1459                	addi	s0,s0,-10 # ff9ffff6 <otp_data_raw_guarded+0xbf8c3ff6>
+    7404:	08045963          	bgez	s0,7496 <bootrom_call_native_and_bx_lr>
+    7408:	8782                	jr	a5
+
+0000740a <bootrom_wfe>:
+    740a:	00002033          	sltz	zero,zero
+    740e:	8802                	jr	a6
+
+00007410 <hint_multiplex>:
+    7410:	00c3a403          	lw	s0,12(t2)
+    7414:	0441                	addi	s0,s0,16
+    7416:	b7dd                	j	73fc <_shared_hint_lookup_tail>
+
+00007418 <bootrom_wfi>:
+    7418:	10500073          	wfi
+    741c:	8802                	jr	a6
+
+0000741e <bootrom_sev>:
+    741e:	00102033          	sgtz	zero,ra
+    7422:	8802                	jr	a6
+
+00007424 <rcp_const_impl>:
+    7424:	0c8e458b          	h3.bextmi a1, t3, 8, 4
+    7428:	2075c5b3          	sh2add	a1,a1,t2
+    742c:	0ffe7413          	zext.b	s0,t3
+    7430:	08844433          	pack	s0,s0,s0
+    7434:	48ce5493          	bexti	s1,t3,0xc
+    7438:	48de5e13          	bexti	t3,t3,0xd
+    743c:	09c4f4b3          	packh	s1,s1,t3
+    7440:	9c45                	mul	s0,s0,s1
+    7442:	c180                	sw	s0,0(a1)
+    7444:	8802                	jr	a6
+
+00007446 <s_native_relocate_varm_registers>:
+    7446:	0003a403          	lw	s0,0(t2)
+    744a:	849e                	mv	s1,t2
+    744c:	83a2                	mv	t2,s0
+    744e:	45d1                	li	a1,20
+    7450:	4090                	lw	a2,0(s1)
+    7452:	c010                	sw	a2,0(s0)
+    7454:	0491                	addi	s1,s1,4
+    7456:	0411                	addi	s0,s0,4
+    7458:	15fd                	addi	a1,a1,-1 # f04effff <otp_data_raw_guarded+0xb03b3fff>
+    745a:	f9fd                	bnez	a1,7450 <s_native_relocate_varm_registers+0xa>
+    745c:	8802                	jr	a6
+
+0000745e <hint_invalidate_native_sp>:
+    745e:	814a                	mv	sp,s2
+    7460:	a095                	j	74c4 <do_bx_lr>
+
+00007462 <hint_trng_shovelling>:
+    7462:	0531                	addi	a0,a0,12
+    7464:	0003a403          	lw	s0,0(t2)
+    7468:	400f84b7          	lui	s1,0x400f8
+    746c:	02040593          	addi	a1,s0,32
+    7470:	4010                	lw	a2,0(s0)
+    7472:	c0d0                	sw	a2,4(s1)
+    7474:	0411                	addi	s0,s0,4
+    7476:	feb46de3          	bltu	s0,a1,7470 <hint_trng_shovelling+0xe>
+    747a:	8802                	jr	a6
+
+0000747c <hint_hx_get_boot_flag_impl>:
+    747c:	6511                	lui	a0,0x4
+    747e:	6a050513          	addi	a0,a0,1696 # 46a0 <__armexport_s_varm_riscv_hx_get_boot_flag_impl>
+    7482:	8802                	jr	a6
+
+00007484 <stack_reset_then_s_native_launch_nsboot>:
+    7484:	400e0137          	lui	sp,0x400e0
+    7488:	20810113          	addi	sp,sp,520 # 400e0208 <_stacktop+0x2005e308>
+    748c:	400e01b7          	lui	gp,0x400e0
+    7490:	27818193          	addi	gp,gp,632 # 400e0278 <cpu>
+    7494:	aee5                	j	788c <s_native_launch_nsboot>
+
+00007496 <bootrom_call_native_and_bx_lr>:
+    7496:	84fe                	mv	s1,t6
+    7498:	00291563          	bne	s2,sp,74a2 <bootrom_call_native_and_bx_lr+0xc>
+    749c:	4901                	li	s2,0
+    749e:	0343a103          	lw	sp,52(t2)
+    74a2:	4589                	li	a1,2
+    74a4:	9f82                	jalr	t6
+    74a6:	841e                	mv	s0,t2
+    74a8:	4008                	lw	a0,0(s0)
+    74aa:	404c                	lw	a1,4(s0)
+    74ac:	4410                	lw	a2,8(s0)
+    74ae:	4454                	lw	a3,12(s0)
+    74b0:	9782                	jalr	a5
+    74b2:	c008                	sw	a0,0(s0)
+    74b4:	8fa6                	mv	t6,s1
+    74b6:	458d                	li	a1,3
+    74b8:	9f82                	jalr	t6
+    74ba:	00091563          	bnez	s2,74c4 <do_bx_lr>
+    74be:	f0000937          	lui	s2,0xf0000
+    74c2:	814a                	mv	sp,s2
+
+000074c4 <do_bx_lr>:
+    74c4:	0383a403          	lw	s0,56(t2)
+    74c8:	01246463          	bltu	s0,s2,74d0 <do_bx_lr+0xc>
+    74cc:	e0cff06f          	j	6ad8 <do_jmp_hook_exc_return_tmp0>
+    74d0:	ffe47513          	andi	a0,s0,-2
+
+000074d4 <next_instruction_label>:
+    74d4:	8802                	jr	a6
+
+000074d6 <varmulet_asm_hooks_fn>:
+    74d6:	04c3a683          	lw	a3,76(t2)
+    74da:	95b6                	add	a1,a1,a3
+    74dc:	669d                	lui	a3,0x7
+    74de:	1e268693          	addi	a3,a3,482 # 71e2 <first_hook_addr>
+    74e2:	818c                	lbu	a1,0(a1)
+    74e4:	20d5a5b3          	sh1add	a1,a1,a3
+    74e8:	8582                	jr	a1
+
+000074ea <native_usb_irq_enable>:
+    74ea:	40000537          	lui	a0,0x40000
+    74ee:	be051073          	csrw	0xbe0,a0
+    74f2:	814d                	srli	a0,a0,0x13
+    74f4:	30451073          	csrw	mie,a0
+    74f8:	b5d9                	j	73be <shared_enable_irqs_and_return>
+
+000074fa <load_a4_goto_varm_wrapper>:
+    74fa:	8718                	lhu	a4,0(a4)
+
+000074fc <varm_wrapper>:
+    74fc:	832a                	mv	t1,a0
+    74fe:	f14028f3          	csrr	a7,mhartid
+    7502:	400e0837          	lui	a6,0x400e0
+    7506:	00089663          	bnez	a7,7512 <varm_wrapper+0x16>
+    750a:	33e84783          	lbu	a5,830(a6) # 400e033e <armv6m_pointers+0x22>
+    750e:	5551                	li	a0,-12
+    7510:	c7d1                	beqz	a5,759c <varm_wrapper+0xa0>
+    7512:	11400793          	li	a5,276
+    7516:	02f887b3          	mul	a5,a7,a5
+    751a:	b87e                	cm.push	{ra,s0-s2},-64
+    751c:	7179                	addi	sp,sp,-48
+    751e:	983e                	add	a6,a6,a5
+    7520:	21082483          	lw	s1,528(a6)
+    7524:	c8a9                	beqz	s1,7576 <varm_wrapper+0x7a>
+    7526:	58dc                	lw	a5,52(s1)
+    7528:	c2be                	sw	a5,68(sp)
+    752a:	ffa007b7          	lui	a5,0xffa00
+    752e:	c4be                	sw	a5,72(sp)
+    7530:	11400793          	li	a5,276
+    7534:	02f888b3          	mul	a7,a7,a5
+    7538:	9b79                	andi	a4,a4,-2
+    753a:	400e0437          	lui	s0,0x400e0
+    753e:	c81a                	sw	t1,16(sp)
+    7540:	ca2e                	sw	a1,20(sp)
+    7542:	cc32                	sw	a2,24(sp)
+    7544:	ce36                	sw	a3,28(sp)
+    7546:	c6ba                	sw	a4,76(sp)
+    7548:	01010913          	addi	s2,sp,16
+    754c:	65a1                	lui	a1,0x8
+    754e:	9446                	add	s0,s0,a7
+    7550:	4641                	li	a2,16
+    7552:	cc258593          	addi	a1,a1,-830 # 7cc2 <varmulet_preboot_asm_hooks>
+    7556:	850a                	mv	a0,sp
+    7558:	21242823          	sw	s2,528(s0) # 400e0210 <_stacktop+0x2005e310>
+    755c:	2df1                	jal	7c38 <__memcpy_44>
+    755e:	67a1                	lui	a5,0x8
+    7560:	cc07d783          	lhu	a5,-832(a5) # 7cc0 <varmulet_hooks_default_exc_and_call_return>
+    7564:	858a                	mv	a1,sp
+    7566:	854a                	mv	a0,s2
+    7568:	00f11723          	sh	a5,14(sp)
+    756c:	3199                	jal	71b2 <varmulet_run_adapter>
+    756e:	20942823          	sw	s1,528(s0)
+    7572:	6145                	addi	sp,sp,48
+    7574:	be7e                	cm.popret	{ra,s0-s2},64
+    7576:	20882503          	lw	a0,520(a6)
+    757a:	c511                	beqz	a0,7586 <varm_wrapper+0x8a>
+    757c:	ccaa                	sw	a0,88(sp)
+    757e:	20c82783          	lw	a5,524(a6)
+    7582:	97aa                	add	a5,a5,a0
+    7584:	b755                	j	7528 <varm_wrapper+0x2c>
+    7586:	400e0837          	lui	a6,0x400e0
+    758a:	10080813          	addi	a6,a6,256 # 400e0100 <_stacktop+0x2005e200>
+    758e:	983e                	add	a6,a6,a5
+    7590:	400e0537          	lui	a0,0x400e0
+    7594:	ccc2                	sw	a6,88(sp)
+    7596:	20850513          	addi	a0,a0,520 # 400e0208 <_stacktop+0x2005e308>
+    759a:	b7e5                	j	7582 <varm_wrapper+0x86>
+    759c:	8082                	ret
+    759e:	9002                	ebreak
+
+000075a0 <__mtvec>:
+    75a0:	34009073          	csrw	mscratch,ra
+    75a4:	342020f3          	csrr	ra,mcause
+    75a8:	0800da63          	bgez	ra,763c <native_dead>
+    75ac:	1161                	addi	sp,sp,-8
+    75ae:	c27e                	sw	t6,4(sp)
+    75b0:	39a5                	jal	7228 <varmulet_hook_default_save_regs_fn>
+    75b2:	2d29                	jal	7bcc <riscv_usb_irq_handler>
+    75b4:	3959                	jal	724a <varmulet_hook_default_restore_regs_fn>
+    75b6:	4f92                	lw	t6,4(sp)
+    75b8:	0121                	addi	sp,sp,8
+    75ba:	340020f3          	csrr	ra,mscratch
+    75be:	30200073          	mret
+
+000075c2 <riscv_table_lookup_entry>:
+    75c2:	000086b7          	lui	a3,0x8
+    75c6:	cd468693          	addi	a3,a3,-812 # 7cd4 <_rom_table_start>
+    75ca:	87aa                	mv	a5,a0
+    75cc:	a029                	j	75d6 <_lookup_next_symbol>
+
+000075ce <_lookup_skip_to_next>:
+    75ce:	60261613          	cpop	a2,a2
+    75d2:	20d626b3          	sh1add	a3,a2,a3
+
+000075d6 <_lookup_next_symbol>:
+    75d6:	8688                	lhu	a0,0(a3)
+    75d8:	c115                	beqz	a0,75fc <_lookup_return_ptr_a0>
+    75da:	86b0                	lhu	a2,2(a3)
+    75dc:	0691                	addi	a3,a3,4
+    75de:	fea798e3          	bne	a5,a0,75ce <_lookup_skip_to_next>
+    75e2:	00c5f733          	and	a4,a1,a2
+    75e6:	d765                	beqz	a4,75ce <_lookup_skip_to_next>
+
+000075e8 <_lookup_seek_result>:
+    75e8:	60171713          	ctz	a4,a4
+    75ec:	9f75                	not	a4,a4
+    75ee:	00e61633          	sll	a2,a2,a4
+    75f2:	0606                	slli	a2,a2,0x1
+    75f4:	60261613          	cpop	a2,a2
+    75f8:	20d62533          	sh1add	a0,a2,a3
+
+000075fc <_lookup_return_ptr_a0>:
+    75fc:	8082                	ret
+
+000075fe <riscv_table_lookup_val>:
+    75fe:	8286                	mv	t0,ra
+    7600:	37c9                	jal	75c2 <riscv_table_lookup_entry>
+    7602:	8508                	lhu	a0,0(a0)
+    7604:	8282                	jr	t0
+
+00007606 <s_native_default_xip_setup>:
+    7606:	00000617          	auipc	a2,0x0
+    760a:	4a08                	lw	a0,16(a2)
+    760c:	4a4c                	lw	a1,20(a2)
+    760e:	4650                	lw	a2,12(a2)
+    7610:	8602                	jr	a2
+    7612:	00007d7e          	.word	0x00007d7e
+
+00007616 <s_native_crit_init_default_xip_setup_and_enter_image_thunk>:
+    7616:	ac26                	cm.mvsa01	s0,s1
+    7618:	8932                	mv	s2,a2
+    761a:	8136                	mv	sp,a3
+    761c:	400e0537          	lui	a0,0x400e0
+    7620:	32800593          	li	a1,808
+    7624:	2599                	jal	7c6a <native_memset0>
+    7626:	659d                	lui	a1,0x7
+    7628:	60658593          	addi	a1,a1,1542 # 7606 <s_native_default_xip_setup>
+    762c:	4641                	li	a2,16
+    762e:	2529                	jal	7c38 <__memcpy_44>
+    7630:	c900                	sw	s0,16(a0)
+    7632:	c944                	sw	s1,20(a0)
+    7634:	9902                	jalr	s2
+    7636:	a019                	j	763c <native_dead>
+
+00007638 <riscv_nsboot_launch_thunk>:
+    7638:	8132                	mv	sp,a2
+    763a:	3ea5                	jal	71b2 <varmulet_run_adapter>
+
+0000763c <native_dead>:
+    763c:	10500073          	wfi
+    7640:	bff5                	j	763c <native_dead>
+
+00007642 <riscv_entry_point>:
+    7642:	5185                	li	gp,-31
+    7644:	5105                	li	sp,-31
+    7646:	651d                	lui	a0,0x7
+    7648:	5a050513          	addi	a0,a0,1440 # 75a0 <__mtvec>
+    764c:	30551073          	csrw	mtvec,a0
+    7650:	4505                	li	a0,1
+    7652:	2875                	jal	770e <s_native_api_bootrom_state_reset>
+
+00007654 <check_core>:
+    7654:	f1402573          	csrr	a0,mhartid
+    7658:	e129                	bnez	a0,769a <wait_for_vector>
+
+0000765a <clear_varmulet_state>:
+    765a:	400e0537          	lui	a0,0x400e0
+    765e:	20c50113          	addi	sp,a0,524 # 400e020c <_stacktop+0x2005e30c>
+    7662:	05400593          	li	a1,84
+    7666:	2511                	jal	7c6a <native_memset0>
+    7668:	02252a23          	sw	sp,52(a0)
+    766c:	658d                	lui	a1,0x3
+    766e:	76158593          	addi	a1,a1,1889 # 3761 <__armexport_s_varm_api_crit_flash_flush_cache_impl+0x50>
+    7672:	dd0c                	sw	a1,56(a0)
+    7674:	661d                	lui	a2,0x7
+    7676:	68460613          	addi	a2,a2,1668 # 7684 <hint0xf_instruction>
+    767a:	dd50                	sw	a2,60(a0)
+    767c:	65a1                	lui	a1,0x8
+    767e:	cc258593          	addi	a1,a1,-830 # 7cc2 <varmulet_preboot_asm_hooks>
+    7682:	be05                	j	71b2 <varmulet_run_adapter>
+
+00007684 <hint0xf_instruction>:
+    7684:	bf70                	.short	0xbf70
+
+00007686 <send_and_then_again>:
+    7686:	00002033          	sltz	zero,zero
+
+0000768a <send_and_then>:
+    768a:	4b2c                	lw	a1,80(a4)
+    768c:	05fa                	slli	a1,a1,0x1e
+    768e:	fe05dce3          	bgez	a1,7686 <send_and_then_again>
+    7692:	cb68                	sw	a0,84(a4)
+    7694:	00102033          	sgtz	zero,ra
+    7698:	8782                	jr	a5
+
+0000769a <wait_for_vector>:
+    769a:	d0000737          	lui	a4,0xd0000
+    769e:	bf035073          	csrwi	0xbf0,6
+    76a2:	4f2c                	lw	a1,88(a4)
+
+000076a4 <core_0_handshake_loop>:
+    76a4:	4b2c                	lw	a1,80(a4)
+    76a6:	05fe                	slli	a1,a1,0x1f
+    76a8:	fe05cde3          	bltz	a1,76a2 <wait_for_vector+0x8>
+    76ac:	679d                	lui	a5,0x7
+    76ae:	6da78793          	addi	a5,a5,1754 # 76da <receive_and_check_zero>
+    76b2:	4501                	li	a0,0
+    76b4:	3fd9                	jal	768a <send_and_then>
+    76b6:	fff50593          	addi	a1,a0,-1
+    76ba:	f5ed                	bnez	a1,76a4 <core_0_handshake_loop>
+    76bc:	37f9                	jal	768a <send_and_then>
+    76be:	30551073          	csrw	mtvec,a0
+    76c2:	37e1                	jal	768a <send_and_then>
+    76c4:	812a                	mv	sp,a0
+    76c6:	37d1                	jal	768a <send_and_then>
+    76c8:	679d                	lui	a5,0x7
+    76ca:	6d078793          	addi	a5,a5,1744 # 76d0 <core1_launch>
+    76ce:	3f75                	jal	768a <send_and_then>
+
+000076d0 <core1_launch>:
+    76d0:	842a                	mv	s0,a0
+    76d2:	bf005073          	csrwi	0xbf0,0
+    76d6:	9402                	jalr	s0
+    76d8:	b795                	j	763c <native_dead>
+
+000076da <receive_and_check_zero>:
+    76da:	00002033          	sltz	zero,zero
+    76de:	4b28                	lw	a0,80(a4)
+    76e0:	057e                	slli	a0,a0,0x1f
+    76e2:	fe055ce3          	bgez	a0,76da <receive_and_check_zero>
+    76e6:	4f28                	lw	a0,88(a4)
+    76e8:	dd55                	beqz	a0,76a4 <core_0_handshake_loop>
+
+000076ea <native_noop>:
+    76ea:	8082                	ret
+
+000076ec <s_native_secure_call_pc_sp>:
+    76ec:	b852                	cm.push	{ra,s0},-16
+    76ee:	840a                	mv	s0,sp
+    76f0:	c191                	beqz	a1,76f4 <s_native_secure_call_pc_sp+0x8>
+    76f2:	812e                	mv	sp,a1
+    76f4:	00157613          	andi	a2,a0,1
+    76f8:	f231                	bnez	a2,763c <native_dead>
+    76fa:	000500e7          	jalr	a0
+    76fe:	8122                	mv	sp,s0
+    7700:	be52                	cm.popret	{ra,s0},16
+    7702:	0001                	nop
+
+00007704 <s_native_busy_wait_at_least_cycles>:
+    7704:	ffe50513          	addi	a0,a0,-2
+    7708:	fe055ee3          	bgez	a0,7704 <s_native_busy_wait_at_least_cycles>
+    770c:	8082                	ret
+
+0000770e <s_native_api_bootrom_state_reset>:
+    770e:	4785                	li	a5,1
+    7710:	00f57733          	and	a4,a0,a5
+    7714:	c305                	beqz	a4,7734 <s_native_api_bootrom_state_reset+0x26>
+    7716:	400e06b7          	lui	a3,0x400e0
+    771a:	20c68693          	addi	a3,a3,524 # 400e020c <_stacktop+0x2005e30c>
+    771e:	f1402773          	csrr	a4,mhartid
+    7722:	c319                	beqz	a4,7728 <s_native_api_bootrom_state_reset+0x1a>
+    7724:	11468693          	addi	a3,a3,276
+    7728:	4701                	li	a4,0
+    772a:	c298                	sw	a4,0(a3)
+    772c:	c2d8                	sw	a4,4(a3)
+    772e:	00f51363          	bne	a0,a5,7734 <s_native_api_bootrom_state_reset+0x26>
+    7732:	8082                	ret
+    7734:	dc7ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7738:	18c1                	.short	0x18c1
+
+0000773a <_>:
+	...
+
+0000773c <varmulet_hook_default_execute_instruction>:
+    773c:	851c                	lhu	a5,0(a0)
+    773e:	0509                	addi	a0,a0,2
+    7740:	00a7d413          	srli	s0,a5,0xa
+    7744:	206424b3          	sh1add	s1,s0,t1
+    7748:	8484                	lhu	s1,0(s1)
+    774a:	0077f613          	andi	a2,a5,7
+    774e:	8482                	jr	s1
+	...
+
+00007752 <_usb_buf_ctrl_wide.isra.0>:
+    7752:	501007b7          	lui	a5,0x50100
+    7756:	050e                	slli	a0,a0,0x3
+    7758:	08078793          	addi	a5,a5,128 # 50100080 <otp_data_raw_guarded+0xffc4080>
+    775c:	c199                	beqz	a1,7762 <_usb_buf_ctrl_wide.isra.0+0x10>
+    775e:	953e                	add	a0,a0,a5
+    7760:	8082                	ret
+    7762:	0511                	addi	a0,a0,4
+    7764:	bfed                	j	775e <_usb_buf_ctrl_wide.isra.0+0xc>
+
+00007766 <usb_current_packet_buffer>:
+    7766:	b872                	cm.push	{ra,s0-s2},-16
+    7768:	02954783          	lbu	a5,41(a0)
+    776c:	02450913          	addi	s2,a0,36
+    7770:	ef8d                	bnez	a5,77aa <usb_current_packet_buffer+0x44>
+    7772:	8138                	lbu	a4,2(a0)
+    7774:	00e507b3          	add	a5,a0,a4
+    7778:	0067c483          	lbu	s1,6(a5)
+    777c:	842a                	mv	s0,a0
+    777e:	4781                	li	a5,0
+    7780:	eb01                	bnez	a4,7790 <usb_current_packet_buffer+0x2a>
+    7782:	4581                	li	a1,0
+    7784:	8108                	lbu	a0,0(a0)
+    7786:	37f1                	jal	7752 <_usb_buf_ctrl_wide.isra.0>
+    7788:	20a4a533          	sh1add	a0,s1,a0
+    778c:	851c                	lhu	a5,0(a0)
+    778e:	9fe1                	zext.b	a5,a5
+    7790:	02f40423          	sb	a5,40(s0)
+    7794:	02045783          	lhu	a5,32(s0)
+    7798:	50100737          	lui	a4,0x50100
+    779c:	049a                	slli	s1,s1,0x6
+    779e:	97ba                	add	a5,a5,a4
+    77a0:	97a6                	add	a5,a5,s1
+    77a2:	d05c                	sw	a5,36(s0)
+    77a4:	4785                	li	a5,1
+    77a6:	02f404a3          	sb	a5,41(s0)
+    77aa:	854a                	mv	a0,s2
+    77ac:	be72                	cm.popret	{ra,s0-s2},16
+
+000077ae <_usb_give_buffer>:
+    77ae:	b872                	cm.push	{ra,s0-s2},-16
+    77b0:	00050423          	sb	zero,8(a0)
+    77b4:	00954783          	lbu	a5,9(a0)
+    77b8:	842a                	mv	s0,a0
+    77ba:	ebb9                	bnez	a5,7810 <_usb_give_buffer+0x62>
+    77bc:	4005e793          	ori	a5,a1,1024
+    77c0:	00444703          	lbu	a4,4(s0)
+    77c4:	802c                	lbu	a1,2(s0)
+    77c6:	00e034b3          	snez	s1,a4
+    77ca:	00f59693          	slli	a3,a1,0xf
+    77ce:	00174713          	xori	a4,a4,1
+    77d2:	04b6                	slli	s1,s1,0xd
+    77d4:	8008                	lbu	a0,0(s0)
+    77d6:	8cd5                	or	s1,s1,a3
+    77d8:	00e40223          	sb	a4,4(s0)
+    77dc:	8cdd                	or	s1,s1,a5
+    77de:	00744903          	lbu	s2,7(s0)
+    77e2:	3f85                	jal	7752 <_usb_buf_ctrl_wide.isra.0>
+    77e4:	20a92533          	sh1add	a0,s2,a0
+    77e8:	9ce9                	zext.h	s1,s1
+    77ea:	8d04                	sh	s1,0(a0)
+    77ec:	00544783          	lbu	a5,5(s0)
+    77f0:	17fd                	addi	a5,a5,-1
+    77f2:	00f402a3          	sb	a5,5(s0)
+    77f6:	4858                	lw	a4,20(s0)
+    77f8:	475c                	lw	a5,12(a4)
+    77fa:	17fd                	addi	a5,a5,-1
+    77fc:	020404a3          	sb	zero,41(s0)
+    7800:	c75c                	sw	a5,12(a4)
+    7802:	805c                	lbu	a5,1(s0)
+    7804:	c789                	beqz	a5,780e <_usb_give_buffer+0x60>
+    7806:	00194913          	xori	s2,s2,1
+    780a:	012403a3          	sb	s2,7(s0)
+    780e:	be72                	cm.popret	{ra,s0-s2},16
+    7810:	4005e793          	ori	a5,a1,1024
+    7814:	28c79793          	bseti	a5,a5,0xc
+    7818:	000504a3          	sb	zero,9(a0)
+    781c:	b755                	j	77c0 <_usb_give_buffer+0x12>
+
+0000781e <usb_call_on_packet>:
+    781e:	495c                	lw	a5,20(a0)
+    7820:	4705                	li	a4,1
+    7822:	8b98                	sb	a4,0(a5)
+    7824:	6719                	lui	a4,0x6
+    7826:	43dc                	lw	a5,4(a5)
+    7828:	73470713          	addi	a4,a4,1844 # 6734 <usb_transfer_types>
+    782c:	20e7a7b3          	sh1add	a5,a5,a4
+    7830:	85aa                	mv	a1,a0
+    7832:	8788                	lhu	a0,0(a5)
+    7834:	ac7d                	j	7af2 <call_armv6m_2>
+
+00007836 <s_native_set_varmulet_user_stack>:
+    7836:	872a                	mv	a4,a0
+    7838:	300475f3          	csrrci	a1,mstatus,8
+    783c:	f1402673          	csrr	a2,mhartid
+    7840:	11400793          	li	a5,276
+    7844:	02f607b3          	mul	a5,a2,a5
+    7848:	400e06b7          	lui	a3,0x400e0
+    784c:	5551                	li	a0,-12
+    784e:	96be                	add	a3,a3,a5
+    7850:	2106a683          	lw	a3,528(a3) # 400e0210 <_stacktop+0x2005e310>
+    7854:	e29d                	bnez	a3,787a <s_native_set_varmulet_user_stack+0x44>
+    7856:	400e06b7          	lui	a3,0x400e0
+    785a:	20868693          	addi	a3,a3,520 # 400e0208 <_stacktop+0x2005e308>
+    785e:	97b6                	add	a5,a5,a3
+    7860:	00072803          	lw	a6,0(a4)
+    7864:	00472883          	lw	a7,4(a4)
+    7868:	4388                	lw	a0,0(a5)
+    786a:	43d4                	lw	a3,4(a5)
+    786c:	0107a023          	sw	a6,0(a5)
+    7870:	0117a223          	sw	a7,4(a5)
+    7874:	c308                	sw	a0,0(a4)
+    7876:	c354                	sw	a3,4(a4)
+    7878:	4501                	li	a0,0
+    787a:	e611                	bnez	a2,7886 <s_native_set_varmulet_user_stack+0x50>
+    787c:	400e07b7          	lui	a5,0x400e0
+    7880:	4705                	li	a4,1
+    7882:	32e78f23          	sb	a4,830(a5) # 400e033e <armv6m_pointers+0x22>
+    7886:	30059073          	csrw	mstatus,a1
+    788a:	8082                	ret
+
+0000788c <s_native_launch_nsboot>:
+    788c:	000825b7          	lui	a1,0x82
+    7890:	20000537          	lui	a0,0x20000
+    7894:	b842                	cm.push	{ra},-16
+    7896:	2ed1                	jal	7c6a <native_memset0>
+    7898:	400e0537          	lui	a0,0x400e0
+    789c:	0b000593          	li	a1,176
+    78a0:	27850513          	addi	a0,a0,632 # 400e0278 <cpu>
+    78a4:	26d9                	jal	7c6a <native_memset0>
+    78a6:	862a                	mv	a2,a0
+    78a8:	6715                	lui	a4,0x5
+    78aa:	00018793          	mv	a5,gp
+    78ae:	94070713          	addi	a4,a4,-1728 # 4940 <__armexport_xip_setup_func_ptr+0x27c>
+    78b2:	dfd8                	sw	a4,60(a5)
+    78b4:	65a1                	lui	a1,0x8
+    78b6:	50101737          	lui	a4,0x50101
+    78ba:	dbd8                	sw	a4,52(a5)
+    78bc:	cb258593          	addi	a1,a1,-846 # 7cb2 <varmulet_nsboot_asm_hooks>
+    78c0:	c5070713          	addi	a4,a4,-944 # 50100c50 <otp_data_raw_guarded+0xffc4c50>
+    78c4:	00018513          	mv	a0,gp
+    78c8:	08e7ac23          	sw	a4,152(a5)
+    78cc:	c7b8                	sw	a4,72(a5)
+    78ce:	33ad                	jal	7638 <riscv_nsboot_launch_thunk>
+
+000078d0 <s_native_crit_flash_put_get>:
+    78d0:	00251793          	slli	a5,a0,0x2
+    78d4:	400d1737          	lui	a4,0x400d1
+    78d8:	0795                	addi	a5,a5,5
+    78da:	c31c                	sw	a5,0(a4)
+    78dc:	400d0837          	lui	a6,0x400d0
+    78e0:	8736                	mv	a4,a3
+    78e2:	ea99                	bnez	a3,78f8 <s_native_crit_flash_put_get+0x28>
+    78e4:	e315                	bnez	a4,7908 <s_native_crit_flash_put_get+0x38>
+    78e6:	400d06b7          	lui	a3,0x400d0
+    78ea:	4298                	lw	a4,0(a3)
+    78ec:	8b09                	andi	a4,a4,2
+    78ee:	ff75                	bnez	a4,78ea <s_native_crit_flash_put_get+0x1a>
+    78f0:	400d1737          	lui	a4,0x400d1
+    78f4:	c31c                	sw	a5,0(a4)
+    78f6:	8082                	ret
+    78f8:	00082883          	lw	a7,0(a6) # 400d0000 <_stacktop+0x2004e100>
+    78fc:	4008f313          	andi	t1,a7,1024
+    7900:	02030263          	beqz	t1,7924 <s_native_crit_flash_put_get+0x54>
+    7904:	df79                	beqz	a4,78e2 <s_native_crit_flash_put_get+0x12>
+    7906:	a019                	j	790c <s_native_crit_flash_put_get+0x3c>
+    7908:	00082883          	lw	a7,0(a6)
+    790c:	00f89313          	slli	t1,a7,0xf
+    7910:	fc0349e3          	bltz	t1,78e2 <s_native_crit_flash_put_get+0x12>
+    7914:	00882883          	lw	a7,8(a6)
+    7918:	c601                	beqz	a2,7920 <s_native_crit_flash_put_get+0x50>
+    791a:	01160023          	sb	a7,0(a2)
+    791e:	0605                	addi	a2,a2,1
+    7920:	177d                	addi	a4,a4,-1 # 400d0fff <_stacktop+0x2004f0ff>
+    7922:	b7c1                	j	78e2 <s_native_crit_flash_put_get+0x12>
+    7924:	c581                	beqz	a1,792c <s_native_crit_flash_put_get+0x5c>
+    7926:	0005c303          	lbu	t1,0(a1)
+    792a:	0585                	addi	a1,a1,1
+    792c:	00682223          	sw	t1,4(a6)
+    7930:	16fd                	addi	a3,a3,-1 # 400cffff <_stacktop+0x2004e0ff>
+    7932:	bfc9                	j	7904 <s_native_crit_flash_put_get+0x34>
+
+00007934 <_usb_give_as_many_buffers_as_possible>:
+    7934:	b862                	cm.push	{ra,s0-s1},-16
+    7936:	842a                	mv	s0,a0
+    7938:	485c                	lw	a5,20(s0)
+    793a:	c38d                	beqz	a5,795c <_usb_give_as_many_buffers_as_possible+0x28>
+    793c:	47dc                	lw	a5,12(a5)
+    793e:	cf99                	beqz	a5,795c <_usb_give_as_many_buffers_as_possible+0x28>
+    7940:	00544483          	lbu	s1,5(s0)
+    7944:	cc81                	beqz	s1,795c <_usb_give_as_many_buffers_as_possible+0x28>
+    7946:	00844783          	lbu	a5,8(s0)
+    794a:	eb89                	bnez	a5,795c <_usb_give_as_many_buffers_as_possible+0x28>
+    794c:	803c                	lbu	a5,2(s0)
+    794e:	cb81                	beqz	a5,795e <_usb_give_as_many_buffers_as_possible+0x2a>
+    7950:	8522                	mv	a0,s0
+    7952:	35f1                	jal	781e <usb_call_on_packet>
+    7954:	00544783          	lbu	a5,5(s0)
+    7958:	fe9790e3          	bne	a5,s1,7938 <_usb_give_as_many_buffers_as_possible+0x4>
+    795c:	be62                	cm.popret	{ra,s0-s1},16
+    795e:	04000593          	li	a1,64
+    7962:	8522                	mv	a0,s0
+    7964:	35a9                	jal	77ae <_usb_give_buffer>
+    7966:	bfc9                	j	7938 <_usb_give_as_many_buffers_as_possible+0x4>
+
+00007968 <native_usb_packet_done>:
+    7968:	b872                	cm.push	{ra,s0-s2},-16
+    796a:	4944                	lw	s1,20(a0)
+    796c:	c4a9                	beqz	s1,79b6 <native_usb_packet_done+0x4e>
+    796e:	00048023          	sb	zero,0(s1) # 400f8000 <armv6m_pointers+0x17ce4>
+    7972:	842a                	mv	s0,a0
+    7974:	2a51                	jal	7b08 <_usb_check_for_transfer_completion>
+    7976:	80fc                	lbu	a5,3(s1)
+    7978:	ef9d                	bnez	a5,79b6 <native_usb_packet_done+0x4e>
+    797a:	00244903          	lbu	s2,2(s0)
+    797e:	00090663          	beqz	s2,798a <native_usb_packet_done+0x22>
+    7982:	02844583          	lbu	a1,40(s0)
+    7986:	8522                	mv	a0,s0
+    7988:	351d                	jal	77ae <_usb_give_buffer>
+    798a:	020404a3          	sb	zero,41(s0)
+    798e:	80dc                	lbu	a5,1(s1)
+    7990:	c385                	beqz	a5,79b0 <native_usb_packet_done+0x48>
+    7992:	000480a3          	sb	zero,1(s1)
+    7996:	00544783          	lbu	a5,5(s0)
+    799a:	00644603          	lbu	a2,6(s0)
+    799e:	17fd                	addi	a5,a5,-1
+    79a0:	00f402a3          	sb	a5,5(s0)
+    79a4:	8008                	lbu	a0,0(s0)
+    79a6:	85ca                	mv	a1,s2
+    79a8:	00164613          	xori	a2,a2,1
+    79ac:	ba72                	cm.pop	{ra,s0-s2},16
+    79ae:	aa51                	j	7b42 <_usb_handle_transfer>
+    79b0:	8522                	mv	a0,s0
+    79b2:	ba72                	cm.pop	{ra,s0-s2},16
+    79b4:	b741                	j	7934 <_usb_give_as_many_buffers_as_possible>
+    79b6:	be72                	cm.popret	{ra,s0-s2},16
+
+000079b8 <call_armv6m>:
+    79b8:	0a418793          	addi	a5,gp,164 # 400e031c <armv6m_pointers>
+    79bc:	b896                	cm.push	{ra,s0-s4},-48
+    79be:	479c                	lw	a5,8(a5)
+    79c0:	842a                	mv	s0,a0
+    79c2:	10b79763          	bne	a5,a1,7ad0 <call_armv6m+0x118>
+    79c6:	501007b7          	lui	a5,0x50100
+    79ca:	48078783          	lb	a5,1152(a5) # 50100480 <otp_data_raw_guarded+0xffc4480>
+    79ce:	4108                	lw	a0,0(a0)
+    79d0:	0007ca63          	bltz	a5,79e4 <call_armv6m+0x2c>
+    79d4:	467d                	li	a2,31
+    79d6:	28f016b3          	bset	a3,zero,a5
+    79da:	d0000737          	lui	a4,0xd0000
+    79de:	02f66863          	bltu	a2,a5,7a0e <call_armv6m+0x56>
+    79e2:	cf14                	sw	a3,24(a4)
+    79e4:	4940                	lw	s0,20(a0)
+    79e6:	4c4c                	lw	a1,28(s0)
+    79e8:	01442903          	lw	s2,20(s0)
+    79ec:	fff58493          	addi	s1,a1,-1
+    79f0:	813c                	lbu	a5,2(a0)
+    79f2:	009979b3          	and	s3,s2,s1
+    79f6:	cf85                	beqz	a5,7a2e <call_armv6m+0x76>
+    79f8:	00098d63          	beqz	s3,7a12 <call_armv6m+0x5a>
+    79fc:	02442903          	lw	s2,36(s0)
+    7a00:	00294783          	lbu	a5,2(s2) # f0000002 <otp_data_raw_guarded+0xafec4002>
+    7a04:	e7ad                	bnez	a5,7a6e <call_armv6m+0xb6>
+    7a06:	854a                	mv	a0,s2
+    7a08:	3bb9                	jal	7766 <usb_current_packet_buffer>
+    7a0a:	84aa                	mv	s1,a0
+    7a0c:	a079                	j	7a9a <call_armv6m+0xe2>
+    7a0e:	cf54                	sw	a3,28(a4)
+    7a10:	bfd1                	j	79e4 <call_armv6m+0x2c>
+    7a12:	4c1c                	lw	a5,24(s0)
+    7a14:	00b90733          	add	a4,s2,a1
+    7a18:	00e7f463          	bgeu	a5,a4,7a20 <call_armv6m+0x68>
+    7a1c:	412785b3          	sub	a1,a5,s2
+    7a20:	ddf1                	beqz	a1,79fc <call_armv6m+0x44>
+    7a22:	541c                	lw	a5,40(s0)
+    7a24:	87a8                	lhu	a0,2(a5)
+    7a26:	20f1                	jal	7af2 <call_armv6m_2>
+    7a28:	d971                	beqz	a0,79fc <call_armv6m+0x44>
+    7a2a:	4501                	li	a0,0
+    7a2c:	be96                	cm.popret	{ra,s0-s4},48
+    7a2e:	c62e                	sw	a1,12(sp)
+    7a30:	3b1d                	jal	7766 <usb_current_packet_buffer>
+    7a32:	4c1c                	lw	a5,24(s0)
+    7a34:	04090913          	addi	s2,s2,64
+    7a38:	8a2a                	mv	s4,a0
+    7a3a:	45b2                	lw	a1,12(sp)
+    7a3c:	02f96263          	bltu	s2,a5,7a60 <call_armv6m+0xa8>
+    7a40:	8cfd                	and	s1,s1,a5
+    7a42:	e091                	bnez	s1,7a46 <call_armv6m+0x8e>
+    7a44:	84ae                	mv	s1,a1
+    7a46:	00099463          	bnez	s3,7a4e <call_armv6m+0x96>
+    7a4a:	5008                	lw	a0,32(s0)
+    7a4c:	2c39                	jal	7c6a <native_memset0>
+    7a4e:	5008                	lw	a0,32(s0)
+    7a50:	000a2583          	lw	a1,0(s4)
+    7a54:	004a4603          	lbu	a2,4(s4)
+    7a58:	954e                	add	a0,a0,s3
+    7a5a:	2af9                	jal	7c38 <__memcpy_44>
+    7a5c:	85a6                	mv	a1,s1
+    7a5e:	b7c9                	j	7a20 <call_armv6m+0x68>
+    7a60:	04098493          	addi	s1,s3,64
+    7a64:	00b4b4b3          	sltu	s1,s1,a1
+    7a68:	14fd                	addi	s1,s1,-1
+    7a6a:	8ced                	and	s1,s1,a1
+    7a6c:	bfe9                	j	7a46 <call_armv6m+0x8e>
+    7a6e:	854a                	mv	a0,s2
+    7a70:	39dd                	jal	7766 <usb_current_packet_buffer>
+    7a72:	4858                	lw	a4,20(s0)
+    7a74:	4c5c                	lw	a5,28(s0)
+    7a76:	17fd                	addi	a5,a5,-1
+    7a78:	4c14                	lw	a3,24(s0)
+    7a7a:	04070593          	addi	a1,a4,64 # d0000040 <otp_data_raw_guarded+0x8fec4040>
+    7a7e:	84aa                	mv	s1,a0
+    7a80:	8ff9                	and	a5,a5,a4
+    7a82:	04000613          	li	a2,64
+    7a86:	00b6f463          	bgeu	a3,a1,7a8e <call_armv6m+0xd6>
+    7a8a:	40e68633          	sub	a2,a3,a4
+    7a8e:	00c48223          	sb	a2,4(s1)
+    7a92:	500c                	lw	a1,32(s0)
+    7a94:	95be                	add	a1,a1,a5
+    7a96:	4088                	lw	a0,0(s1)
+    7a98:	2245                	jal	7c38 <__memcpy_44>
+    7a9a:	0044c703          	lbu	a4,4(s1)
+    7a9e:	485c                	lw	a5,20(s0)
+    7aa0:	97ba                	add	a5,a5,a4
+    7aa2:	c85c                	sw	a5,20(s0)
+    7aa4:	541c                	lw	a5,40(s0)
+    7aa6:	8788                	lhu	a0,0(a5)
+    7aa8:	20a9                	jal	7af2 <call_armv6m_2>
+    7aaa:	501007b7          	lui	a5,0x50100
+    7aae:	48078783          	lb	a5,1152(a5) # 50100480 <otp_data_raw_guarded+0xffc4480>
+    7ab2:	0007ca63          	bltz	a5,7ac6 <call_armv6m+0x10e>
+    7ab6:	467d                	li	a2,31
+    7ab8:	28f016b3          	bset	a3,zero,a5
+    7abc:	d0000737          	lui	a4,0xd0000
+    7ac0:	00f66663          	bltu	a2,a5,7acc <call_armv6m+0x114>
+    7ac4:	d314                	sw	a3,32(a4)
+    7ac6:	854a                	mv	a0,s2
+    7ac8:	3545                	jal	7968 <native_usb_packet_done>
+    7aca:	b785                	j	7a2a <call_armv6m+0x72>
+    7acc:	d354                	sw	a3,36(a4)
+    7ace:	bfe5                	j	7ac6 <call_armv6m+0x10e>
+    7ad0:	99f9                	andi	a1,a1,-2
+    7ad2:	03c52903          	lw	s2,60(a0)
+    7ad6:	ffa007b7          	lui	a5,0xffa00
+    7ada:	dd4c                	sw	a1,60(a0)
+    7adc:	65a1                	lui	a1,0x8
+    7ade:	5d04                	lw	s1,56(a0)
+    7ae0:	cb258593          	addi	a1,a1,-846 # 7cb2 <varmulet_nsboot_asm_hooks>
+    7ae4:	dd1c                	sw	a5,56(a0)
+    7ae6:	eccff0ef          	jal	71b2 <varmulet_run_adapter>
+    7aea:	03242e23          	sw	s2,60(s0)
+    7aee:	dc04                	sw	s1,56(s0)
+    7af0:	bf35                	j	7a2c <call_armv6m+0x74>
+
+00007af2 <call_armv6m_2>:
+    7af2:	0a01c683          	lbu	a3,160(gp) # 400e0318 <current_cpu_offset>
+    7af6:	00018793          	mv	a5,gp
+    7afa:	872a                	mv	a4,a0
+    7afc:	00d78533          	add	a0,a5,a3
+    7b00:	c10c                	sw	a1,0(a0)
+    7b02:	c150                	sw	a2,4(a0)
+    7b04:	85ba                	mv	a1,a4
+    7b06:	bd4d                	j	79b8 <call_armv6m>
+
+00007b08 <_usb_check_for_transfer_completion>:
+    7b08:	00854683          	lbu	a3,8(a0)
+    7b0c:	85aa                	mv	a1,a0
+    7b0e:	4950                	lw	a2,20(a0)
+    7b10:	e689                	bnez	a3,7b1a <_usb_check_for_transfer_completion+0x12>
+    7b12:	4a1c                	lw	a5,16(a2)
+    7b14:	e795                	bnez	a5,7b40 <_usb_check_for_transfer_completion+0x38>
+    7b16:	821c                	lbu	a5,0(a2)
+    7b18:	e785                	bnez	a5,7b40 <_usb_check_for_transfer_completion+0x38>
+    7b1a:	4705                	li	a4,1
+    7b1c:	8a78                	sb	a4,3(a2)
+    7b1e:	4781                	li	a5,0
+    7b20:	c9dc                	sw	a5,20(a1)
+    7b22:	c681                	beqz	a3,7b2a <_usb_check_for_transfer_completion+0x22>
+    7b24:	ca1c                	sw	a5,16(a2)
+    7b26:	c65c                	sw	a5,12(a2)
+    7b28:	8082                	ret
+    7b2a:	4608                	lw	a0,8(a2)
+    7b2c:	c111                	beqz	a0,7b30 <_usb_check_for_transfer_completion+0x28>
+    7b2e:	b7d1                	j	7af2 <call_armv6m_2>
+    7b30:	4d9c                	lw	a5,24(a1)
+    7b32:	c799                	beqz	a5,7b40 <_usb_check_for_transfer_completion+0x38>
+    7b34:	c9dc                	sw	a5,20(a1)
+    7b36:	0005ac23          	sw	zero,24(a1)
+    7b3a:	8bb8                	sb	a4,2(a5)
+    7b3c:	852e                	mv	a0,a1
+    7b3e:	bbdd                	j	7934 <_usb_give_as_many_buffers_as_possible>
+    7b40:	8082                	ret
+
+00007b42 <_usb_handle_transfer>:
+    7b42:	b862                	cm.push	{ra,s0-s1},-16
+    7b44:	0a418793          	addi	a5,gp,164 # 400e031c <armv6m_pointers>
+    7b48:	c521                	beqz	a0,7b90 <_usb_handle_transfer+0x4e>
+    7b4a:	439c                	lw	a5,0(a5)
+    7b4c:	20f54533          	sh2add	a0,a0,a5
+    7b50:	4100                	lw	s0,0(a0)
+    7b52:	00544783          	lbu	a5,5(s0)
+    7b56:	0785                	addi	a5,a5,1 # ffa00001 <otp_data_raw_guarded+0xbf8c4001>
+    7b58:	00f402a3          	sb	a5,5(s0)
+    7b5c:	4844                	lw	s1,20(s0)
+    7b5e:	e0b1                	bnez	s1,7ba2 <_usb_handle_transfer+0x60>
+    7b60:	00844783          	lbu	a5,8(s0)
+    7b64:	eb85                	bnez	a5,7b94 <_usb_handle_transfer+0x52>
+    7b66:	8008                	lbu	a0,0(s0)
+    7b68:	802c                	lbu	a1,2(s0)
+    7b6a:	e511                	bnez	a0,7b76 <_usb_handle_transfer+0x34>
+    7b6c:	4789                	li	a5,2
+    7b6e:	8f8d                	sub	a5,a5,a1
+    7b70:	50112737          	lui	a4,0x50112
+    7b74:	d73c                	sw	a5,104(a4)
+    7b76:	3ef1                	jal	7752 <_usb_buf_ctrl_wide.isra.0>
+    7b78:	411c                	lw	a5,0(a0)
+    7b7a:	28b79793          	bseti	a5,a5,0xb
+    7b7e:	c11c                	sw	a5,0(a0)
+    7b80:	4789                	li	a5,2
+    7b82:	00f40423          	sb	a5,8(s0)
+    7b86:	4c5c                	lw	a5,28(s0)
+    7b88:	cf81                	beqz	a5,7ba0 <_usb_handle_transfer+0x5e>
+    7b8a:	8522                	mv	a0,s0
+    7b8c:	ba62                	cm.pop	{ra,s0-s1},16
+    7b8e:	8782                	jr	a5
+    7b90:	43c0                	lw	s0,4(a5)
+    7b92:	b7c1                	j	7b52 <_usb_handle_transfer+0x10>
+    7b94:	4705                	li	a4,1
+    7b96:	00e79563          	bne	a5,a4,7ba0 <_usb_handle_transfer+0x5e>
+    7b9a:	4789                	li	a5,2
+    7b9c:	00f40423          	sb	a5,8(s0)
+    7ba0:	be62                	cm.popret	{ra,s0-s1},16
+    7ba2:	809c                	lbu	a5,0(s1)
+    7ba4:	c781                	beqz	a5,7bac <_usb_handle_transfer+0x6a>
+    7ba6:	4785                	li	a5,1
+    7ba8:	88dc                	sb	a5,1(s1)
+    7baa:	bfdd                	j	7ba0 <_usb_handle_transfer+0x5e>
+    7bac:	00c40323          	sb	a2,6(s0)
+    7bb0:	803c                	lbu	a5,2(s0)
+    7bb2:	c399                	beqz	a5,7bb8 <_usb_handle_transfer+0x76>
+    7bb4:	44dc                	lw	a5,12(s1)
+    7bb6:	c399                	beqz	a5,7bbc <_usb_handle_transfer+0x7a>
+    7bb8:	8522                	mv	a0,s0
+    7bba:	3195                	jal	781e <usb_call_on_packet>
+    7bbc:	80fc                	lbu	a5,3(s1)
+    7bbe:	f3ed                	bnez	a5,7ba0 <_usb_handle_transfer+0x5e>
+    7bc0:	489c                	lw	a5,16(s1)
+    7bc2:	17fd                	addi	a5,a5,-1
+    7bc4:	c89c                	sw	a5,16(s1)
+    7bc6:	8522                	mv	a0,s0
+    7bc8:	ba62                	cm.pop	{ra,s0-s1},16
+    7bca:	bf3d                	j	7b08 <_usb_check_for_transfer_completion>
+
+00007bcc <riscv_usb_irq_handler>:
+    7bcc:	b892                	cm.push	{ra,s0-s4},-32
+    7bce:	05000793          	li	a5,80
+    7bd2:	501104b7          	lui	s1,0x50110
+    7bd6:	0984a703          	lw	a4,152(s1) # 50110098 <otp_data_raw_guarded+0xffd4098>
+    7bda:	0af18023          	sb	a5,160(gp) # 400e0318 <current_cpu_offset>
+    7bde:	00018793          	mv	a5,gp
+    7be2:	5bd4                	lw	a3,52(a5)
+    7be4:	08d7a223          	sw	a3,132(a5)
+    7be8:	47c1                	li	a5,16
+    7bea:	02f71c63          	bne	a4,a5,7c22 <riscv_usb_irq_handler+0x56>
+    7bee:	4ca0                	lw	s0,88(s1)
+    7bf0:	50113a37          	lui	s4,0x50113
+    7bf4:	e401                	bnez	s0,7bfc <riscv_usb_irq_handler+0x30>
+    7bf6:	0a018023          	sb	zero,160(gp) # 400e0318 <current_cpu_offset>
+    7bfa:	be92                	cm.popret	{ra,s0-s4},32
+    7bfc:	60141513          	ctz	a0,s0
+    7c00:	28a01933          	bset	s2,zero,a0
+    7c04:	4cf0                	lw	a2,92(s1)
+    7c06:	fff54593          	not	a1,a0
+    7c0a:	00c97633          	and	a2,s2,a2
+    7c0e:	052a2c23          	sw	s2,88(s4) # 50113058 <otp_data_raw_guarded+0xffd7058>
+    7c12:	00c03633          	snez	a2,a2
+    7c16:	8985                	andi	a1,a1,1
+    7c18:	8105                	srli	a0,a0,0x1
+    7c1a:	3725                	jal	7b42 <_usb_handle_transfer>
+    7c1c:	41247433          	andn	s0,s0,s2
+    7c20:	bfd1                	j	7bf4 <riscv_usb_irq_handler+0x28>
+    7c22:	6795                	lui	a5,0x5
+    7c24:	9787a583          	lw	a1,-1672(a5) # 4978 <__armexport_xip_setup_func_ptr+0x2b4>
+    7c28:	05018513          	addi	a0,gp,80 # 400e02c8 <cpu+0x50>
+    7c2c:	3371                	jal	79b8 <call_armv6m>
+    7c2e:	b7e1                	j	7bf6 <riscv_usb_irq_handler+0x2a>
+
+00007c30 <native_nsboot_init>:
+    7c30:	85aa                	mv	a1,a0
+    7c32:	0a418513          	addi	a0,gp,164 # 400e031c <armv6m_pointers>
+    7c36:	4631                	li	a2,12
+
+00007c38 <__memcpy_44>:
+    7c38:	86aa                	mv	a3,a0
+    7c3a:	9636                	add	a2,a2,a3
+    7c3c:	00d5e733          	or	a4,a1,a3
+    7c40:	8b0d                	andi	a4,a4,3
+    7c42:	e30d                	bnez	a4,7c64 <__memcpy_44+0x2c>
+    7c44:	1675                	addi	a2,a2,-3
+    7c46:	00c6f863          	bgeu	a3,a2,7c56 <__memcpy_44+0x1e>
+    7c4a:	4198                	lw	a4,0(a1)
+    7c4c:	c298                	sw	a4,0(a3)
+    7c4e:	0591                	addi	a1,a1,4
+    7c50:	0691                	addi	a3,a3,4
+    7c52:	fec6ece3          	bltu	a3,a2,7c4a <__memcpy_44+0x12>
+    7c56:	060d                	addi	a2,a2,3
+    7c58:	00c6f863          	bgeu	a3,a2,7c68 <__memcpy_44+0x30>
+    7c5c:	8198                	lbu	a4,0(a1)
+    7c5e:	8a98                	sb	a4,0(a3)
+    7c60:	0585                	addi	a1,a1,1
+    7c62:	0685                	addi	a3,a3,1
+    7c64:	fec6ece3          	bltu	a3,a2,7c5c <__memcpy_44+0x24>
+    7c68:	8082                	ret
+
+00007c6a <native_memset0>:
+    7c6a:	862e                	mv	a2,a1
+    7c6c:	4581                	li	a1,0
+
+00007c6e <__memset_4>:
+    7c6e:	86aa                	mv	a3,a0
+    7c70:	9636                	add	a2,a2,a3
+    7c72:	0036f713          	andi	a4,a3,3
+    7c76:	e30d                	bnez	a4,7c98 <__memset_4+0x2a>
+    7c78:	1675                	addi	a2,a2,-3
+    7c7a:	00c6fa63          	bgeu	a3,a2,7c8e <__memset_4+0x20>
+    7c7e:	08b5f5b3          	packh	a1,a1,a1
+    7c82:	08b5c5b3          	pack	a1,a1,a1
+    7c86:	c28c                	sw	a1,0(a3)
+    7c88:	0691                	addi	a3,a3,4
+    7c8a:	fec6eee3          	bltu	a3,a2,7c86 <__memset_4+0x18>
+    7c8e:	060d                	addi	a2,a2,3
+    7c90:	00c6f663          	bgeu	a3,a2,7c9c <__memset_4+0x2e>
+    7c94:	8a8c                	sb	a1,0(a3)
+    7c96:	0685                	addi	a3,a3,1
+    7c98:	fec6eee3          	bltu	a3,a2,7c94 <__memset_4+0x26>
+    7c9c:	8082                	ret
+
+00007c9e <s_native_api_validate_ns_buffer>:
+    7c9e:	577d                	li	a4,-1
+    7ca0:	c298                	sw	a4,0(a3)
+    7ca2:	8082                	ret
+
+00007ca4 <s_native_crit_xip_cache_maintenance>:
+    7ca4:	1c0005b7          	lui	a1,0x1c000
+    7ca8:	8908                	sb	a0,0(a0)
+    7caa:	0521                	addi	a0,a0,8
+    7cac:	feb56ee3          	bltu	a0,a1,7ca8 <s_native_crit_xip_cache_maintenance+0x4>
+    7cb0:	8082                	ret
+
+00007cb2 <varmulet_nsboot_asm_hooks>:
+    7cb2:	1600                	addi	s0,sp,800
+    7cb4:	c7453423          	.insn	4, 0xc7453423
+    7cb8:	4945f147          	.insn	4, 0x4945f147
+    7cbc:	8954                	sb	a3,1(a0)
+    7cbe:	e9b4                	.insn	2, 0xe9b4
+
+00007cc0 <varmulet_hooks_default_exc_and_call_return>:
+    7cc0:	c4bc                	sw	a5,72(s1)
+
+00007cc2 <varmulet_preboot_asm_hooks>:
+    7cc2:	1600                	addi	s0,sp,800
+    7cc4:	d2453423          	.insn	4, 0xd2453423
+    7cc8:	4545f147          	.insn	4, 0x4545f147
+    7ccc:	4545                	li	a0,17
+    7cce:	45b4                	lw	a3,72(a1)
+    7cd0:	4545                	li	a0,17
+
+Disassembly of section .romtable:
+
+00007cd4 <_rom_table_start>:
+    7cd4:	00055253          	.word	0x00055253
+    7cd8:	bc1d                	j	770e <s_native_api_bootrom_state_reset>
+    7cda:	Address 0x7cda is out of bounds.
+
+
+00007cdc <_rt_entry_s_varm_api_get_sys_info>:
+    7cdc:	00175347          	.word	0x00175347
+    7ce0:	81bff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7ce4:	7e1509c1          	.word	0x7e1509c1
+
+00007ce8 <_rt_entry_sg_api_secure_call>:
+    7ce8:	00104353          	.word	0x00104353
+    7cec:	Address 0x7cec is out of bounds.
+
+
+00007cee <_rt_entry_s_varm_api_load_partition_table>:
+    7cee:	0007504c          	.word	0x0007504c
+    7cf2:	809ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7cf6:	Address 0x7cf6 is out of bounds.
+
+
+00007cf8 <_rt_entry_s_varm_api_get_partition_table_info>:
+    7cf8:	00175047          	.word	0x00175047
+    7cfc:	ffeff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d00:	7e2d0acd          	.word	0x7e2d0acd
+
+00007d04 <_rt_entry_s_varm_api_crit_get_b_partition>:
+    7d04:	00174247          	.word	0x00174247
+    7d08:	ff2ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d0c:	7e4d0b85          	.word	0x7e4d0b85
+
+00007d10 <_rt_entry_s_varm_api_flash_runtime_to_storage_addr>:
+    7d10:	00174146          	.word	0x00174146
+    7d14:	fe6ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d18:	7e250bc5          	.word	0x7e250bc5
+
+00007d1c <_rt_entry_s_varm_api_reboot>:
+    7d1c:	00174252          	.word	0x00174252
+    7d20:	fdaff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d24:	7e450571          	.word	0x7e450571
+
+00007d28 <_rt_entry_s_varm_api_otp_access>:
+    7d28:	0017414f          	.word	0x0017414f
+    7d2c:	fceff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d30:	7e3d09b9          	.word	0x7e3d09b9
+
+00007d34 <_rt_entry_s_varm_api_crit_connect_internal_flash>:
+    7d34:	00074649          	.word	0x00074649
+    7d38:	fc2ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d3c:	Address 0x7d3c is out of bounds.
+
+
+00007d3e <_rt_entry_s_varm_api_crit_flash_reset_address_trans>:
+    7d3e:	00074152          	.word	0x00074152
+    7d42:	fb8ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d46:	Address 0x7d46 is out of bounds.
+
+
+00007d48 <_rt_entry_s_varm_api_crit_flash_exit_xip>:
+    7d48:	00075845          	.word	0x00075845
+    7d4c:	faeff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d50:	Address 0x7d50 is out of bounds.
+
+
+00007d52 <_rt_entry_s_varm_api_flash_range_erase>:
+    7d52:	00074552          	.word	0x00074552
+    7d56:	fa4ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d5a:	Address 0x7d5a is out of bounds.
+
+
+00007d5c <_rt_entry_s_varm_api_flash_range_program>:
+    7d5c:	00075052          	.word	0x00075052
+    7d60:	f9aff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d64:	Address 0x7d64 is out of bounds.
+
+
+00007d66 <_rt_entry_s_varm_api_crit_flash_flush_cache_impl>:
+    7d66:	00074346          	.word	0x00074346
+    7d6a:	f90ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d6e:	Address 0x7d6e is out of bounds.
+
+
+00007d70 <_rt_entry_s_varm_api_flash_enter_cmd_xip>:
+    7d70:	00075843          	.word	0x00075843
+    7d74:	f86ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d78:	Address 0x7d78 is out of bounds.
+
+
+00007d7a <_rt_entry_s_varm_api_crit_flash_select_xip_read_mode>:
+    7d7a:	00074d58          	.word	0x00074d58
+    7d7e:	f7cff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d82:	Address 0x7d82 is out of bounds.
+
+
+00007d84 <_rt_entry_s_varm_api_checked_flash_op>:
+    7d84:	00174f46          	.word	0x00174f46
+    7d88:	f72ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d8c:	7e1d06e3          	.word	0x7e1d06e3
+
+00007d90 <_rt_entry_s_varm_api_set_rom_callback>:
+    7d90:	00074352          	.word	0x00074352
+    7d94:	f66ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7d98:	Address 0x7d98 is out of bounds.
+
+
+00007d9a <_rt_entry_s_native_api_validate_ns_buffer>:
+    7d9a:	00044256          	.word	0x00044256
+    7d9e:	Address 0x7d9e is out of bounds.
+
+
+00007da0 <_rt_entry_s_varm_api_set_ns_api_permission>:
+    7da0:	00045053          	.word	0x00045053
+    7da4:	Address 0x7da4 is out of bounds.
+
+
+00007da6 <_rt_entry_s_varm_api_pick_ab_partition>:
+    7da6:	00074241          	.word	0x00074241
+    7daa:	f50ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7dae:	Address 0x7dae is out of bounds.
+
+
+00007db0 <_rt_entry_s_varm_api_explicit_buy>:
+    7db0:	00074245          	.word	0x00074245
+    7db4:	f46ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7db8:	Address 0x7db8 is out of bounds.
+
+
+00007dba <_rt_entry_s_varm_api_chain_image>:
+    7dba:	00074943          	.word	0x00074943
+    7dbe:	f3cff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7dc2:	Address 0x7dc2 is out of bounds.
+
+
+00007dc4 <_rt_entry_s_varm_api_get_uf2_target_partition>:
+    7dc4:	00075547          	.word	0x00075547
+    7dc8:	f32ff76f          	jal	a4,74fa <load_a4_goto_varm_wrapper>
+    7dcc:	Address 0x7dcc is out of bounds.
+
+
+00007dce <_rt_entry_s_native_set_varmulet_user_stack>:
+    7dce:	00015353          	.word	0x00015353
+    7dd2:	b495                	j	7836 <s_native_set_varmulet_user_stack>
+
+00007dd4 <_rt_entry_data_60>:
+    7dd4:	00405247          	.word	0x00405247
+    7dd8:	Address 0x7dd8 is out of bounds.
+
+
+00007dda <_rt_entry_data_62>:
+    7dda:	00405450          	.word	0x00405450
+    7dde:	Address 0x7dde is out of bounds.
+
+
+00007de0 <_rt_entry_data_64>:
+    7de0:	00404658          	.word	0x00404658
+    7de4:	Address 0x7de4 is out of bounds.
+
+
+00007de6 <_rt_entry_data_66>:
+    7de6:	00404446          	.word	0x00404446
+    7dea:	Address 0x7dea is out of bounds.
+
+
+00007dec <_rom_table_end>:
+	...
+
+Disassembly of section .entry:
+
+00007df0 <actual_software_git_revision>:
+    7df0:	312e22fa          	.word	0x312e22fa
+    7df4:	Address 0x7df4 is out of bounds.
+
+
+00007df6 <_riscv_well_known_rom_table_base>:
+    7df6:	Address 0x7df6 is out of bounds.
+
+
+00007df8 <_riscv_well_known_func_table_lookup_val>:
+    7df8:	Address 0x7df8 is out of bounds.
+
+
+00007dfa <_riscv_well_known_func_table_lookup_entry>:
+    7dfa:	75c2                	.short	0x75c2
+
+00007dfc <__reset_vector>:
+    7dfc:	847ff06f          	j	7642 <riscv_entry_point>
