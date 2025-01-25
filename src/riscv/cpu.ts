@@ -574,6 +574,9 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if (func7 === 0x20) {
       const result = rs1Value >> rs2Value;
       registerSet.setRegister(rd, result);
+    } else if (func7 === 0x24) { // bext (Zbs)
+      const result = rs1Value >>> (rs2Value & 31);
+      registerSet.setRegister(rd, result);
     } else if (func7 === 0x01) { // divu (rv32m)
       const result = (rs1Value / rs2Value) >>> 0;
       registerSet.setRegister(rd, result);

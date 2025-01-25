@@ -58,7 +58,6 @@ amoswap.w
 amoxor.w
 bclr
 bclri
-bext
 bexti
 binv
 binvi
@@ -133,6 +132,7 @@ auipc
 amoor.w
 beq
 beqz
+bext
 bge
 bgeu
 bgez
