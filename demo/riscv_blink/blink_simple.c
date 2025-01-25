@@ -5,33 +5,35 @@
  */
 
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 
-#define LED_DELAY_MS 1
+#define LED_DELAY_US 1000
+#define SECOND_LED_DELAY_US 400
+#define SECOND_LED_PIN 2
 
 // Initialize the GPIO for the LED
 void pico_led_init(void) {
-#ifdef PICO_DEFAULT_LED_PIN
-    // A device like Pico that uses a GPIO for the LED will define PICO_DEFAULT_LED_PIN
-    // so we can use normal GPIO functionality to turn the led on and off
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-#endif
+    gpio_init(SECOND_LED_PIN);
+    gpio_set_dir(SECOND_LED_PIN, GPIO_OUT);
 }
 
-// Turn the LED on or off
-void pico_set_led(bool led_on) {
-#if defined(PICO_DEFAULT_LED_PIN)
-    // Just set the GPIO on or off
-    gpio_put(PICO_DEFAULT_LED_PIN, led_on);
-#endif
+void blink_led(uint gpio, uint delay) {
+    while (true) {
+        gpio_put(gpio, true);
+        busy_wait_us(delay);
+        gpio_put(gpio, false);
+        busy_wait_us(delay);
+    }
+}
+
+void core1_loop() {
+    blink_led(SECOND_LED_PIN, SECOND_LED_DELAY_US);
 }
 
 int main() {
     pico_led_init();
-    while (true) {
-        pico_set_led(true);
-        busy_wait_us(LED_DELAY_MS * 1000);
-        pico_set_led(false);
-        busy_wait_us(LED_DELAY_MS * 1000);
-    }
+    multicore_launch_core1(core1_loop);
+    blink_led(PICO_DEFAULT_LED_PIN, LED_DELAY_US);
 }
