@@ -34,7 +34,7 @@
     "lint": "eslint . --ext .ts",
     "start:demo": "ts-node demo/emulator-run.ts",
     "start": "ts-node demo/ntc-run.ts",
-    "start:debug": "node --inspect-brk -r ts-node/register demo/ntc-run.ts",
+    "start:debug": "node --inspect-brk -r ts-node/register demo/emulator-run.ts",
     "start:micropython": "ts-node demo/micropython-run.ts",
     "start:gdbdiff": "ts-node debug/gdbdiff.ts",
     "test": "jest"
