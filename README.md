@@ -44,7 +44,6 @@ GLITCH_DETECTOR_BASE
 Machine/User mode
 Xh3irq
 Xh3pmpm (Physical Memory Protection PMP)
-Xh3power (slt x0, x0, x0 and slt x0, x0, x1)
 Xh3bextm
 correct instruction cycle counts
 RV32Zcb (lh, mul, sb, sext.b, sext.h, sh, zext.b, zext.h)
@@ -123,6 +122,7 @@ zip
 BOOTRAM_BASE
 RV32C
 RV32Zcb (lbu, lhu, not)
+Xh3power (h3.block and h3.unblock)
 add
 addi
 and

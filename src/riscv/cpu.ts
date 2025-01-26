@@ -5,13 +5,15 @@ import { decompress_rv32c_inst } from "./rv32c";
 
 export class CPU {
 
+  public onSEV?: () => void;
   public waiting = false;
+  public eventRegistered = false;
+
   registerSet: RegisterSet = new RegisterSet(32);
   pc = 0;
   next_pc = 0;
   stopped = false; //TODO
   cycles = 0;
-  eventRegistered = false; //TODO
   mtvec: number = 0;
 
   constructor(readonly chip: RP2040, readonly coreLabel: string, readonly mhartid: number) {
@@ -347,7 +349,7 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
 
     const rs1Value = registerSet.getRegister(rs1);
 
-    if ( func7 === 0) { // slt
+    if ( func7 === 0) { // slti
       const result = rs1Value < imm ? 1 : 0;
       registerSet.setRegister(rd, result);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
@@ -359,7 +361,7 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
 
     const rs1Value = registerSet.getRegisterU(rs1);
 
-    if ( func7 === 0) { // sltu
+    if ( func7 === 0) { // sltiu
       const result = rs1Value < immU ? 1 : 0;
       registerSet.setRegister(rd, result);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
@@ -499,7 +501,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegisterU(rs2);
 
-    if(func7 === 0) {
+    if(func7 === 0) { // sll
       const result = rs1Value << rs2Value;
       registerSet.setRegister(rd, result);
     } else if(func7 === 0x14) { // bset (Zbs)
@@ -516,7 +518,21 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
-    if(func7 === 0) {
+    if(func7 === 0) { // slt
+      if(rd === 0 && rs1 === 0) {
+        if(rs2 === 0) { // h3.block (Xh3power) - slt x0, x0, x0
+          if(!cpu.eventRegistered) {
+            cpu.waiting = true;
+            return;
+          } else {
+            cpu.eventRegistered = false;
+            return;
+          }
+        } else if(rs2 === 1) { // h3.unblock (Xh3power) - slt x0, x0, x1
+          if(cpu.onSEV) cpu.onSEV();
+          return;
+        }
+      }
       const result = rs1Value < rs2Value ? 1 : 0;
       registerSet.setRegister(rd, result);
     } else if(func7 === 0x10) { // sh1add (Zbb)
