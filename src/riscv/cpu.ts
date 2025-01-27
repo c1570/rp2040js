@@ -325,6 +325,9 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     } else if (func7 === 0x14) { // bseti (Zbb)
       const result = rs1Value | ( 1 << shamt);
       registerSet.setRegister(rd, result);
+    } else if (func7 === 0x24) { // bclri (Zbs)
+      const result = rs1Value & ~(1 << shamt);
+      registerSet.setRegister(rd, result);
     } else if (immU === 0b011000000001) { // ctz (Zbb)
       let tmp = rs1Value >>> 0;
       if (tmp === 0) {
@@ -390,6 +393,10 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
 
     } else if (func7 === 0x20) { // srai
       const result = rs1Value >> shamt;
+      registerSet.setRegister(rd, result);
+
+    } else if (func7 === 0x24) { // bexti (Zbs)
+      const result = (rs1Value >>> shamt) & 1;
       registerSet.setRegister(rd, result);
 
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
@@ -507,6 +514,10 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 0x14) { // bset (Zbs)
       const index = rs2Value & 31;
       const result = rs1Value | (1 << index);
+      registerSet.setRegister(rd, result);
+    } else if(func7 === 0x24) { // bclr (Zbs)
+      const index = rs2Value & 31;
+      const result = rs1Value & ~(1 << index);
       registerSet.setRegister(rd, result);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],

@@ -57,9 +57,6 @@ amomin.w
 amominu.w
 amoswap.w
 amoxor.w
-bclr
-bclri
-bexti
 binv
 binvi
 brev8
@@ -134,7 +131,10 @@ auipc
 amoor.w
 beq
 beqz
+bclr
+bclri
 bext
+bexti
 bge
 bgeu
 bgez
