@@ -1,7 +1,7 @@
 ## WIP! rp2040js / rp2350js (RISC-V only)
 https://github.com/c1570/rp2040js
 
-For generic rp2040js docs, [see below](#rp2040js).
+For generic/original rp2040js docs, [see below](#rp2040js).
 
 ### Status
 runs blink_simple.c (RISC-V, multicore, busy_wait_us instead of sleep_ms, no_flash/RAM binary)

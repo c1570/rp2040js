@@ -1,17 +1,18 @@
 {
-  "name": "rp2040js",
+  "name": "rp2040js/rp2350js",
   "version": "0.17.8",
-  "description": "Raspberry Pi Pico (RP2040) Emulator",
-  "repository": "https://github.com/wokwi/rp2040js",
+  "description": "Raspberry Pi Pico (RP2040/RP2350) Emulator",
+  "repository": "https://github.com/c1570/rp2040js",
   "keywords": [
     "rp2040",
+    "rp2350",
     "raspberry pi pico",
     "emulator"
   ],
   "files": [
     "dist"
   ],
-  "author": "Uri Shaked <uri@wokwi.com>",
+  "author": "Uri Shaked <uri@wokwi.com>, rp2350js fork and other changes by github.com/c1570",
   "license": "MIT",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
