@@ -1,4 +1,5 @@
 import { IRPChip } from './rpchip';
+import { RP2040 } from './rp2040';
 import { Core } from './core';
 import { Interpolator } from './interpolator';
 import { FIFO } from './utils/fifo';
@@ -384,14 +385,13 @@ export class RPSIOCore {
       }
     }
     this.divCSR = 0b11;
-    /* TODO re-enable cycle handling on RP2040
     switch (this.core) {
       case Core.Core0:
-        this.rp2040.core0.cycles += 8;
+        (this.rp2040 as RP2040).core0.cycles += 8;
         break;
       case Core.Core1:
-        this.rp2040.core1.cycles += 8;
+        (this.rp2040 as RP2040).core1.cycles += 8;
         break;
-    } */
+    }
   }
 }

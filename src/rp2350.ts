@@ -1,10 +1,11 @@
 import { IRPChip } from './rpchip';
 import { IClock } from './clock/clock';
 import { RealtimeClock } from './clock/realtime-clock';
-import { CortexM0Core } from './cortex-m0-core';
+import { CPU } from './riscv/cpu';
 import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } from './gpio-pin';
 import { IRQ } from './irq';
 import { RPADC } from './peripherals/adc';
+import { RPBootRAM } from './peripherals/bootram';
 import { RPClocks } from './peripherals/clocks';
 import { RPDMA } from './peripherals/dma';
 import { RPI2C } from './peripherals/i2c';
@@ -12,18 +13,18 @@ import { RPIO } from './peripherals/io';
 import { RPPADS } from './peripherals/pads';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
 import { RPPIO, WaitType } from './peripherals/pio';
-import { RPPPB } from './peripherals/ppb';
+//TODO import { RPPPB } from './peripherals/ppb';
 import { RPPWM } from './peripherals/pwm';
 import { RPReset } from './peripherals/reset';
 import { RP2040RTC } from './peripherals/rtc';
 import { RPSPI } from './peripherals/spi';
 import { RPSSI } from './peripherals/ssi';
-import { RP2040SysCfg } from './peripherals/syscfg';
+//TODO import { RP2040SysCfg } from './peripherals/syscfg';
 import { RP2040SysInfo } from './peripherals/sysinfo';
 import { RPTimer } from './peripherals/timer';
 import { RPUART } from './peripherals/uart';
 import { RPUSBController } from './peripherals/usb';
-import { RPSIO } from './sio';
+import { RPSIO } from './sio_rp2350';
 import { Core } from './core';
 import { ConsoleLogger, Logger, LogLevel } from './utils/logging';
 import { RPTBMAN } from './peripherals/tbman';
@@ -34,15 +35,15 @@ export const APB_START_ADDRESS = 0x40000000;
 export const DPRAM_START_ADDRESS = 0x50100000;
 export const SIO_START_ADDRESS = 0xd0000000;
 
-const LOG_NAME = 'RP2040';
+const LOG_NAME = 'RP2350';
 
 const KB = 1024;
 const MB = 1024 * KB;
 const MHz = 1_000_000;
 
-export class RP2040 implements IRPChip {
-  readonly bootrom = new Uint32Array(4 * KB);
-  readonly sram = new Uint8Array(264 * KB);
+export class RP2350 implements IRPChip {
+  readonly bootrom = new Uint32Array((32 >>> 2) * KB);
+  readonly sram = new Uint8Array((256 * 2 + 8) * KB);
   readonly sramView = new DataView(this.sram.buffer);
   readonly flash = new Uint8Array(16 * MB);
   readonly flash16 = new Uint16Array(this.flash.buffer);
@@ -50,14 +51,14 @@ export class RP2040 implements IRPChip {
   readonly usbDPRAM = new Uint8Array(4 * KB);
   readonly usbDPRAMView = new DataView(this.usbDPRAM.buffer);
 
-  readonly core0 = new CortexM0Core(this, 'CortexM0Core0');
-  readonly core1 = new CortexM0Core(this, 'CortexM0Core1');
+  readonly core0 = new CPU(this, 'RISCVCore0', 0);
+  readonly core1 = new CPU(this, 'RISCVCore1', 1);
 
   /* Clocks */
   clkSys = 125 * MHz;
   clkPeri = 125 * MHz;
 
-  readonly ppb = new RPPPB(this, 'PPB');
+  //TODO readonly ppb = new RPPPB(this, 'PPB');
   readonly sio = new RPSIO(this);
 
   readonly uart = [new RPUART(this, 'UART0', IRQ.UART0), new RPUART(this, 'UART1', IRQ.UART1)];
@@ -122,36 +123,44 @@ export class RP2040 implements IRPChip {
   readonly peripherals: { [index: number]: Peripheral } = {
     0x18000: new RPSSI(this, 'SSI'),
     0x40000: new RP2040SysInfo(this, 'SYSINFO_BASE'),
-    0x40004: new RP2040SysCfg(this, 'SYSCFG'),
-    0x40008: new RPClocks(this, 'CLOCKS_BASE'),
-    0x4000c: new RPReset(this, 'RESETS_BASE'),
-    0x40010: new UnimplementedPeripheral(this, 'PSM_BASE'),
-    0x40014: new RPIO(this, 'IO_BANK0_BASE'),
-    0x40018: new UnimplementedPeripheral(this, 'IO_QSPI_BASE'),
-    0x4001c: new RPPADS(this, 'PADS_BANK0_BASE', 'bank0'),
-    0x40020: new RPPADS(this, 'PADS_QSPI_BASE', 'qspi'),
-    0x40024: new UnimplementedPeripheral(this, 'XOSC_BASE'),
-    0x40028: new UnimplementedPeripheral(this, 'PLL_SYS_BASE'),
-    0x4002c: new UnimplementedPeripheral(this, 'PLL_USB_BASE'),
-    0x40030: new UnimplementedPeripheral(this, 'BUSCTRL_BASE'),
-    0x40034: this.uart[0],
-    0x40038: this.uart[1],
-    0x4003c: this.spi[0],
-    0x40040: this.spi[1],
-    0x40044: this.i2c[0],
-    0x40048: this.i2c[1],
-    0x4004c: this.adc,
-    0x40050: this.pwm,
-    0x40054: new RPTimer(this, 'TIMER_BASE'),
-    0x40058: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
-    0x4005c: new RP2040RTC(this, 'RTC_BASE'),
-    0x40060: new UnimplementedPeripheral(this, 'ROSC_BASE'),
-    0x40064: new UnimplementedPeripheral(this, 'VREG_AND_CHIP_RESET_BASE'),
-    0x4006c: new RPTBMAN(this, 'TBMAN_BASE'),
+    //TODO 0x40008: new RP2040SysCfg(this, 'SYSCFG'),
+    0x40010: new RPClocks(this, 'CLOCKS_BASE'),
+    0x40018: new UnimplementedPeripheral(this, 'PSM_BASE'),
+    0x40020: new RPReset(this, 'RESETS_BASE'),
+    0x40028: new RPIO(this, 'IO_BANK0_BASE'),
+    0x40030: new UnimplementedPeripheral(this, 'IO_QSPI_BASE'),
+    0x40038: new RPPADS(this, 'PADS_BANK0_BASE', 'bank0'),
+    0x40040: new RPPADS(this, 'PADS_QSPI_BASE', 'qspi'),
+    0x40048: new UnimplementedPeripheral(this, 'XOSC_BASE'),
+    0x40050: new UnimplementedPeripheral(this, 'PLL_SYS_BASE'),
+    0x40058: new UnimplementedPeripheral(this, 'PLL_USB_BASE'),
+    0x40060: new UnimplementedPeripheral(this, 'ACCESSCTRL_BASE'),
+    0x40068: new UnimplementedPeripheral(this, 'BUSCTRL_BASE'),
+    0x40070: this.uart[0],
+    0x40078: this.uart[1],
+    0x40080: this.spi[0],
+    0x40088: this.spi[1],
+    0x40090: this.i2c[0],
+    0x40098: this.i2c[1],
+    0x400a0: this.adc,
+    0x400a8: this.pwm,
+    0x400b0: new RPTimer(this, 'TIMER0_BASE'),
+    0x400b8: new UnimplementedPeripheral(this, 'TIMER1_BASE'),
+    0x400c0: new UnimplementedPeripheral(this, 'HSTX_CTRL_BASE'),
+
+    0x400d8: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
+    //0x400xx: new RP2040RTC(this, 'RTC_BASE'),
+    0x400e0: new RPBootRAM(this, 'BOOTRAM_BASE'),
+    0x400e8: new UnimplementedPeripheral(this, 'ROSC_BASE'),
+    0x40100: new UnimplementedPeripheral(this, 'POWMAN_BASE'),
+    0x40108: new UnimplementedPeripheral(this, 'TICKS_BASE'),
+    0x40160: new RPTBMAN(this, 'TBMAN_BASE'),
+
     0x50000: this.dma,
     0x50110: this.usbCtrl,
     0x50200: this.pio[0],
     0x50300: this.pio[1],
+    //0x50400: this.pio[2],
   };
 
   constructor(readonly debug: boolean = false, readonly clock: IClock = new RealtimeClock()) {
@@ -216,7 +225,7 @@ export class RP2040 implements IRPChip {
     ) {
       return this.usbDPRAMView.getUint32(address - DPRAM_START_ADDRESS, true);
     } else if (address >>> 12 === 0xe000e) {
-      return this.ppb.readUint32ViaCore(address & 0xfff, core);
+      //TODO return this.ppb.readUint32ViaCore(address & 0xfff, core);
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       return this.sio.readUint32(address - SIO_START_ADDRESS, core);
     }
@@ -285,7 +294,7 @@ export class RP2040 implements IRPChip {
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       this.sio.writeUint32(address - SIO_START_ADDRESS, value, core);
     } else if (address >>> 12 === 0xe000e) {
-      this.ppb.writeUint32ViaCore(address & 0xfff, value, core);
+      //TODO this.ppb.writeUint32ViaCore(address & 0xfff, value, core);
     } else {
       this.logger.warn(LOG_NAME, `Write to undefined address: ${address.toString(16)}`);
     }
