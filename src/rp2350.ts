@@ -6,6 +6,7 @@ import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } fro
 import { IRQ } from './irq';
 import { RPADC } from './peripherals/adc';
 import { RPBootRAM } from './peripherals/bootram';
+import { RPPOWMAN } from './peripherals/powman';
 import { RPClocks } from './peripherals/clocks';
 import { RPDMA } from './peripherals/dma';
 import { RPI2C } from './peripherals/i2c';
@@ -152,7 +153,7 @@ export class RP2350 implements IRPChip {
     //0x400xx: new RP2040RTC(this, 'RTC_BASE'),
     0x400e0: new RPBootRAM(this, 'BOOTRAM_BASE'),
     0x400e8: new UnimplementedPeripheral(this, 'ROSC_BASE'),
-    0x40100: new UnimplementedPeripheral(this, 'POWMAN_BASE'),
+    0x40100: new RPPOWMAN(this, 'POWMAN_BASE'),
     0x40108: new UnimplementedPeripheral(this, 'TICKS_BASE'),
     0x40160: new RPTBMAN(this, 'TBMAN_BASE'),
 
