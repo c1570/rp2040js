@@ -206,7 +206,6 @@ Features:
 - somewhat accurate PIO timings (also, MUCH slower emulation)
 - built-in cycle profiler using markers in the code
 - Dual Core support (by mingpepe)
-- Inter-core FIFO support (incomplete)
 - a WIP demo wiring up several RP2040s using an 8 bit bus and gathering debug info, simulating GPIO latency
   - this is the runner used for developing the [Connomore64](https://github.com/c1570/Connomore64)
 - a lot of dirty hacks and tests not suitable for pushing upstream
