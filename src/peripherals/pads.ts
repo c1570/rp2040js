@@ -1,4 +1,4 @@
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const VOLTAGE_SELECT = 0;
@@ -16,7 +16,7 @@ export class RPPADS extends BasePeripheral implements Peripheral {
   private readonly firstPadRegister = this.bank === 'qspi' ? QSPI_FIRST : GPIO_FIRST;
   private readonly lastPadRegister = this.bank === 'qspi' ? QSPI_LAST : GPIO_LAST;
 
-  constructor(rp2040: RP2040, name: string, readonly bank: IIOBank) {
+  constructor(rp2040: IRPChip, name: string, readonly bank: IIOBank) {
     super(rp2040, name);
   }
 

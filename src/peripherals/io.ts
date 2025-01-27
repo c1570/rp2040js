@@ -1,4 +1,4 @@
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const GPIO_CTRL_LAST = 0x0ec;
@@ -9,7 +9,7 @@ const PROC0_INTS0 = 0x120;
 const PROC0_INTS3 = 0x12c;
 
 export class RPIO extends BasePeripheral implements Peripheral {
-  constructor(rp2040: RP2040, name: string) {
+  constructor(rp2040: IRPChip, name: string) {
     super(rp2040, name);
   }
 

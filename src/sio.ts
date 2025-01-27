@@ -1,4 +1,4 @@
-import { RP2040 } from './rp2040';
+import { IRPChip } from './rpchip';
 import { Core } from './core';
 import { RPSIOCore } from './sio-core';
 
@@ -48,7 +48,7 @@ export class RPSIO {
   readonly core0;
   readonly core1;
 
-  constructor(private readonly rp2040: RP2040) {
+  constructor(private readonly rp2040: IRPChip) {
     const cores = RPSIOCore.create2Cores(rp2040);
     this.core0 = cores[0];
     this.core1 = cores[1];

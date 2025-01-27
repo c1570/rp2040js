@@ -1,4 +1,4 @@
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const CLK_REF_CTRL = 0x30;
@@ -9,7 +9,7 @@ const CLK_SYS_SELECTED = 0x44;
 export class RPClocks extends BasePeripheral implements Peripheral {
   refCtrl = 0;
   sysCtrl = 0;
-  constructor(rp2040: RP2040, name: string) {
+  constructor(rp2040: IRPChip, name: string) {
     super(rp2040, name);
   }
 

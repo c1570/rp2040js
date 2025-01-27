@@ -355,7 +355,7 @@ export class RPPWM extends BasePeripheral implements Peripheral {
     this.checkInterrupts();
 
     // We also set the DMA Request (DREQ) for the channel
-    this.rp2040.dma.setDREQ(DREQChannel.DREQ_PWM_WRAP0 + index);
+    this.rp2040.dma_setDREQ(DREQChannel.DREQ_PWM_WRAP0 + index);
   }
 
   checkInterrupts() {

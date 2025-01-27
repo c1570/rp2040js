@@ -1,6 +1,6 @@
 import { B_Type, I_Type, Instruction, InstructionType, J_Type, R_Type, S_Type, U_Type } from "./Assembler/instruction";
 import { getRange } from "./binaryFunctions";
-import { RP2040 } from "../rp2040";
+import { IRPChip } from "../rpchip";
 import { decompress_rv32c_inst } from "./rv32c";
 
 export class CPU {
@@ -16,7 +16,7 @@ export class CPU {
   cycles = 0;
   mtvec: number = 0;
 
-  constructor(readonly chip: RP2040, readonly coreLabel: string, readonly mhartid: number) {
+  constructor(readonly chip: IRPChip, readonly coreLabel: string, readonly mhartid: number) {
   }
 
   reset() { } //TODO

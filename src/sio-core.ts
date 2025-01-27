@@ -1,4 +1,4 @@
-import { RP2040 } from './rp2040';
+import { IRPChip } from './rpchip';
 import { Core } from './core';
 import { Interpolator } from './interpolator';
 import { FIFO } from './utils/fifo';
@@ -70,7 +70,7 @@ export class RPSIOCore {
   ROE = false;
   WOF = false;
 
-  static create2Cores(rp2040: RP2040) {
+  static create2Cores(rp2040: IRPChip) {
     const rxFIFO = new FIFO(8);
     const txFIFO = new FIFO(8);
     const core0 = new RPSIOCore(rp2040, rxFIFO, txFIFO, Core.Core0);
@@ -79,7 +79,7 @@ export class RPSIOCore {
   }
 
   private constructor(
-    private readonly rp2040: RP2040,
+    private readonly rp2040: IRPChip,
     private readonly rxFIFO: FIFO,
     private readonly txFIFO: FIFO,
     private readonly core: Core
@@ -384,6 +384,7 @@ export class RPSIOCore {
       }
     }
     this.divCSR = 0b11;
+    /* TODO re-enable cycle handling on RP2040
     switch (this.core) {
       case Core.Core0:
         this.rp2040.core0.cycles += 8;
@@ -391,6 +392,6 @@ export class RPSIOCore {
       case Core.Core1:
         this.rp2040.core1.cycles += 8;
         break;
-    }
+    } */
   }
 }

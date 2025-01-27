@@ -1,4 +1,4 @@
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 import { FIFO } from '../utils/fifo';
 import { DREQChannel } from './dma';
 import { BasePeripheral, Peripheral } from './peripheral';
@@ -159,24 +159,24 @@ export class StateMachine {
   readonly dreqRx = this.pio.dreqRx[this.index];
   readonly dreqTx = this.pio.dreqTx[this.index];
 
-  constructor(readonly rp2040: RP2040, readonly pio: RPPIO, readonly index: number) {
+  constructor(readonly rp2040: IRPChip, readonly pio: RPPIO, readonly index: number) {
     this.updateDMARx();
     this.updateDMATx();
   }
 
   private updateDMATx() {
     if (this.txFIFO.full) {
-      this.rp2040.dma.clearDREQ(this.dreqTx);
+      this.rp2040.dma_clearDREQ(this.dreqTx);
     } else {
-      this.rp2040.dma.setDREQ(this.dreqTx);
+      this.rp2040.dma_setDREQ(this.dreqTx);
     }
   }
 
   private updateDMARx() {
     if (this.rxFIFO.empty) {
-      this.rp2040.dma.clearDREQ(this.dreqRx);
+      this.rp2040.dma_clearDREQ(this.dreqRx);
     } else {
-      this.rp2040.dma.setDREQ(this.dreqRx);
+      this.rp2040.dma_setDREQ(this.dreqRx);
     }
   }
 
@@ -955,7 +955,7 @@ export class RPPIO extends BasePeripheral implements Peripheral {
   irq1IntEnable = 0;
   irq1IntForce = 0;
 
-  constructor(rp2040: RP2040, name: string, readonly firstIrq: number, readonly index: number) {
+  constructor(rp2040: IRPChip, name: string, readonly firstIrq: number, readonly index: number) {
     super(rp2040, name);
   }
 

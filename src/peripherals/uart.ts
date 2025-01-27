@@ -1,4 +1,4 @@
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 import { FIFO } from '../utils/fifo';
 import { BasePeripheral, Peripheral } from './peripheral';
 
@@ -36,7 +36,7 @@ export class RPUART extends BasePeripheral implements Peripheral {
 
   public onByte?: (value: number) => void;
 
-  constructor(rp2040: RP2040, name: string, readonly irq: number) {
+  constructor(rp2040: IRPChip, name: string, readonly irq: number) {
     super(rp2040, name);
   }
 

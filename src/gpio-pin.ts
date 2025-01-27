@@ -1,5 +1,5 @@
 import { WaitType } from './peripherals/pio';
-import { RP2040 } from './rp2040';
+import { IRPChip } from './rpchip';
 
 export enum GPIOPinState {
   Low,
@@ -48,7 +48,7 @@ export class GPIOPin {
 
   private readonly listeners = new Set<GPIOPinListener>();
 
-  constructor(readonly rp2040: RP2040, readonly index: number, readonly name = index.toString()) {}
+  constructor(readonly rp2040: IRPChip, readonly index: number, readonly name = index.toString()) {}
 
   get rawInterrupt() {
     return !!((this.irqStatus & this.irqEnableMask) | this.irqForceMask);
@@ -105,43 +105,13 @@ export class GPIOPin {
   get rawOutputEnable() {
     const { index, rp2040, functionSelect } = this;
     const bitmask = 1 << index;
-    switch (functionSelect) {
-      case FUNCTION_PWM:
-        return !!(rp2040.pwm.gpioDirection & bitmask);
-
-      case FUNCTION_SIO:
-        return !!(rp2040.sio.gpioOutputEnable & bitmask);
-
-      case FUNCTION_PIO0:
-        return !!(rp2040.pio[0].pinDirections & bitmask);
-
-      case FUNCTION_PIO1:
-        return !!(rp2040.pio[1].pinDirections & bitmask);
-
-      default:
-        return false;
-    }
+    return !!(rp2040.gpioRawOutputEnable(functionSelect) & bitmask);
   }
 
   get rawOutputValue() {
     const { index, rp2040, functionSelect } = this;
     const bitmask = 1 << index;
-    switch (functionSelect) {
-      case FUNCTION_PWM:
-        return !!(rp2040.pwm.gpioValue & bitmask);
-
-      case FUNCTION_SIO:
-        return !!(rp2040.sio.gpioValue & bitmask);
-
-      case FUNCTION_PIO0:
-        return !!(rp2040.pio[0].pinValues & bitmask);
-
-      case FUNCTION_PIO1:
-        return !!(rp2040.pio[1].pinValues & bitmask);
-
-      default:
-        return false;
-    }
+    return !!(rp2040.gpioRawOutputValue(functionSelect) & bitmask);
   }
 
   get inputValue() {
@@ -205,21 +175,7 @@ export class GPIOPin {
     if (this.irqValue !== prevIrqValue) {
       this.rp2040.updateIOInterrupt();
     }
-    if (this.functionSelect === FUNCTION_PWM) {
-      this.rp2040.pwm.gpioOnInput(this.index);
-    }
-    for (const pio of this.rp2040.pio) {
-      for (const machine of pio.machines) {
-        if (
-          machine.enabled &&
-          machine.waiting &&
-          machine.waitType === WaitType.Pin &&
-          machine.waitIndex === this.index
-        ) {
-          machine.checkWait();
-        }
-      }
-    }
+    this.rp2040.gpioInputValueHasBeenSet(this.index);
   }
 
   checkForUpdates() {

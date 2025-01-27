@@ -1,6 +1,6 @@
 import { IClockTimer } from '../clock/clock';
 import { IRQ } from '../irq';
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 export enum DREQChannel {
@@ -134,7 +134,7 @@ export class RPDMAChannel {
   private transferFn: () => void = () => 0;
   private transferTimer: IClockTimer | null = null;
 
-  constructor(readonly dma: RPDMA, readonly rp2040: RP2040, readonly index: number) {
+  constructor(readonly dma: RPDMA, readonly rp2040: IRPChip, readonly index: number) {
     this.reset();
   }
 

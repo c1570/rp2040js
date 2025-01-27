@@ -1,5 +1,5 @@
 import { IRQ } from '../irq';
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 import { FIFO } from '../utils/fifo';
 import { DREQChannel } from './dma';
 import { BasePeripheral, Peripheral } from './peripheral';
@@ -145,7 +145,7 @@ export class RPADC extends BasePeripheral implements Peripheral {
     this.cs |= (channel & CS_AINSEL_SHIFT) << CS_AINSEL_SHIFT;
   }
 
-  constructor(rp2040: RP2040, name: string) {
+  constructor(rp2040: IRPChip, name: string) {
     super(rp2040, name);
   }
 
@@ -162,9 +162,9 @@ export class RPADC extends BasePeripheral implements Peripheral {
     if (this.fcs & FCS_DREQ_EN) {
       const thres = (this.fcs >> FCS_THRESH_SHIFT) & FCS_THRES_MASK;
       if (this.fifo.itemCount >= thres) {
-        this.rp2040.dma.setDREQ(this.dreq);
+        this.rp2040.dma_setDREQ(this.dreq);
       } else {
-        this.rp2040.dma.clearDREQ(this.dreq);
+        this.rp2040.dma_clearDREQ(this.dreq);
       }
     }
   }

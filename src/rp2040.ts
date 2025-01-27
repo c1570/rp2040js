@@ -1,7 +1,8 @@
+import { IRPChip } from './rpchip';
 import { IClock } from './clock/clock';
 import { RealtimeClock } from './clock/realtime-clock';
 import { CPU } from './riscv/cpu';
-import { GPIOPin } from './gpio-pin';
+import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } from './gpio-pin';
 import { IRQ } from './irq';
 import { RPADC } from './peripherals/adc';
 import { RPBootRAM } from './peripherals/bootram';
@@ -11,7 +12,7 @@ import { RPI2C } from './peripherals/i2c';
 import { RPIO } from './peripherals/io';
 import { RPPADS } from './peripherals/pads';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
-import { RPPIO } from './peripherals/pio';
+import { RPPIO, WaitType } from './peripherals/pio';
 //TODO import { RPPPB } from './peripherals/ppb';
 import { RPPWM } from './peripherals/pwm';
 import { RPReset } from './peripherals/reset';
@@ -34,13 +35,13 @@ export const APB_START_ADDRESS = 0x40000000;
 export const DPRAM_START_ADDRESS = 0x50100000;
 export const SIO_START_ADDRESS = 0xd0000000;
 
-const LOG_NAME = 'RP2040';
+const LOG_NAME = 'RP2350';
 
 const KB = 1024;
 const MB = 1024 * KB;
 const MHz = 1_000_000;
 
-export class RP2040 {
+export class RP2040 implements IRPChip {
   readonly bootrom = new Uint32Array((32 >>> 2) * KB);
   readonly sram = new Uint8Array((256 * 2 + 8) * KB);
   readonly sramView = new DataView(this.sram.buffer);
@@ -66,7 +67,7 @@ export class RP2040 {
   readonly pwm = new RPPWM(this, 'PWM_BASE');
   readonly adc = new RPADC(this, 'ADC');
 
-  readonly gpio = [
+  readonly gpio: Array<GPIOPin> = [
     new GPIOPin(this, 0),
     new GPIOPin(this, 1),
     new GPIOPin(this, 2),
@@ -99,7 +100,7 @@ export class RP2040 {
     new GPIOPin(this, 29),
   ];
 
-  readonly qspi = [
+  readonly qspi: Array<GPIOPin> = [
     new GPIOPin(this, 0, 'SCLK'),
     new GPIOPin(this, 1, 'SS'),
     new GPIOPin(this, 2, 'SD0'),
@@ -348,6 +349,18 @@ export class RP2040 {
     this.writeUint32(alignedAddress, newValue[0]);
   }
 
+  dma_clearDREQ(dreq: number) {
+    this.dma.clearDREQ(dreq);
+  }
+
+  dma_setDREQ(dreq: number) {
+    this.dma.setDREQ(dreq);
+  }
+
+  get cycles(): number {
+    return this.core0.cycles;
+  }
+
   get gpioValues() {
     const { gpio } = this;
     let result = 0;
@@ -357,6 +370,54 @@ export class RP2040 {
       }
     }
     return result;
+  }
+
+  gpioRawOutputValue(functionSelect: number): number {
+    switch (functionSelect) {
+      case FUNCTION_PWM:
+        return this.pwm.gpioValue;
+      case FUNCTION_SIO:
+        return this.sio.gpioValue;
+      case FUNCTION_PIO0:
+        return this.pio[0].pinValues;
+      case FUNCTION_PIO1:
+        return this.pio[1].pinValues;
+      default:
+        return 0;
+    }
+  }
+
+  gpioRawOutputEnable(functionSelect: number): number {
+    switch (functionSelect) {
+      case FUNCTION_PWM:
+        return this.pwm.gpioDirection;
+      case FUNCTION_SIO:
+        return this.sio.gpioOutputEnable;
+      case FUNCTION_PIO0:
+        return this.pio[0].pinDirections;
+      case FUNCTION_PIO1:
+        return this.pio[1].pinDirections;
+      default:
+        return 0;
+    }
+  }
+
+  gpioInputValueHasBeenSet(index: number) {
+    if(this.gpio[index].functionSelect === FUNCTION_PWM) {
+      this.pwm.gpioOnInput(index);
+    }
+    for (const pio of this.pio) {
+      for (const machine of pio.machines) {
+        if (
+          machine.enabled &&
+          machine.waiting &&
+          machine.waitType === WaitType.Pin &&
+          machine.waitIndex === index
+        ) {
+          machine.checkWait();
+        }
+      }
+    }
   }
 
   setInterrupt(irq: number, value: boolean) {
