@@ -236,8 +236,8 @@ export class RP2350 implements IRPChip {
       return peripheral.readUint32(address & 0x3fff);
     }
 
-    this.logger.warn(LOG_NAME, `Read from invalid memory address: ${address.toString(16)}`);
-    return 0xffffffff;
+    throw Error(`${LOG_NAME} Read from invalid memory address: ${address.toString(16)}`);
+    //return 0xffffffff;
   }
 
   findPeripheral(address: number) {
@@ -297,7 +297,7 @@ export class RP2350 implements IRPChip {
     } else if (address >>> 12 === 0xe000e) {
       //TODO this.ppb.writeUint32ViaCore(address & 0xfff, value, core);
     } else {
-      this.logger.warn(LOG_NAME, `Write to undefined address: ${address.toString(16)}`);
+      throw Error(`${LOG_NAME} Write to invalid memory address: ${address.toString(16)}`);
     }
   }
 
