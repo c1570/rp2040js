@@ -14,14 +14,14 @@ import { RPIO } from './peripherals/io';
 import { RPPADS } from './peripherals/pads';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
 import { RPPIO, WaitType } from './peripherals/pio';
-//TODO import { RPPPB } from './peripherals/ppb';
 import { RPPWM } from './peripherals/pwm';
+import { RP2350PLL } from './peripherals/pll_rp2350';
 import { RPReset } from './peripherals/reset';
 import { RP2040RTC } from './peripherals/rtc';
 import { RPSPI } from './peripherals/spi';
 import { RPSSI } from './peripherals/ssi';
-//TODO import { RP2040SysCfg } from './peripherals/syscfg';
-import { RP2040SysInfo } from './peripherals/sysinfo';
+import { RP2350SysCfg } from './peripherals/syscfg_rp2350';
+import { RP2350SysInfo } from './peripherals/sysinfo_rp2350';
 import { RPTimer } from './peripherals/timer';
 import { RPUART } from './peripherals/uart';
 import { RPUSBController } from './peripherals/usb';
@@ -59,7 +59,6 @@ export class RP2350 implements IRPChip {
   clkSys = 125 * MHz;
   clkPeri = 125 * MHz;
 
-  //TODO readonly ppb = new RPPPB(this, 'PPB');
   readonly sio = new RPSIO(this);
 
   readonly uart = [new RPUART(this, 'UART0', IRQ.UART0), new RPUART(this, 'UART1', IRQ.UART1)];
@@ -123,8 +122,8 @@ export class RP2350 implements IRPChip {
 
   readonly peripherals: { [index: number]: Peripheral } = {
     0x18000: new RPSSI(this, 'SSI'),
-    0x40000: new RP2040SysInfo(this, 'SYSINFO_BASE'),
-    //TODO 0x40008: new RP2040SysCfg(this, 'SYSCFG'),
+    0x40000: new RP2350SysInfo(this, 'SYSINFO_BASE'),
+    0x40008: new RP2350SysCfg(this, 'SYSCFG'),
     0x40010: new RPClocks(this, 'CLOCKS_BASE'),
     0x40018: new UnimplementedPeripheral(this, 'PSM_BASE'),
     0x40020: new RPReset(this, 'RESETS_BASE'),
@@ -133,7 +132,7 @@ export class RP2350 implements IRPChip {
     0x40038: new RPPADS(this, 'PADS_BANK0_BASE', 'bank0'),
     0x40040: new RPPADS(this, 'PADS_QSPI_BASE', 'qspi'),
     0x40048: new UnimplementedPeripheral(this, 'XOSC_BASE'),
-    0x40050: new UnimplementedPeripheral(this, 'PLL_SYS_BASE'),
+    0x40050: new RP2350PLL(this, 'PLL_SYS_BASE'),
     0x40058: new UnimplementedPeripheral(this, 'PLL_USB_BASE'),
     0x40060: new UnimplementedPeripheral(this, 'ACCESSCTRL_BASE'),
     0x40068: new UnimplementedPeripheral(this, 'BUSCTRL_BASE'),
@@ -225,8 +224,6 @@ export class RP2350 implements IRPChip {
       address < DPRAM_START_ADDRESS + this.usbDPRAM.length
     ) {
       return this.usbDPRAMView.getUint32(address - DPRAM_START_ADDRESS, true);
-    } else if (address >>> 12 === 0xe000e) {
-      //TODO return this.ppb.readUint32ViaCore(address & 0xfff, core);
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       return this.sio.readUint32(address - SIO_START_ADDRESS, core);
     }
@@ -294,8 +291,6 @@ export class RP2350 implements IRPChip {
       this.usbCtrl.DPRAMUpdated(offset, value);
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       this.sio.writeUint32(address - SIO_START_ADDRESS, value, core);
-    } else if (address >>> 12 === 0xe000e) {
-      //TODO this.ppb.writeUint32ViaCore(address & 0xfff, value, core);
     } else {
       throw Error(`${LOG_NAME} Write to invalid memory address: ${address.toString(16)}`);
     }

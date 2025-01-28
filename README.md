@@ -14,7 +14,7 @@ Bootrom (starting from SRAM works, varmulet doesn't)
 DMA updates
 PIO updates
 Register offset updates
-Correct timers when overclocking
+Correct timers when changing sys_clk/PLL
 SIO: secure vs. insecure, SIO_NONSEC_BASE
 Doorbells
 RISC-V Platform Timer
@@ -22,9 +22,7 @@ TMDS Encoder
 RTC
 PIO2_BASE
 XIP_AUX_BASE
-SYSCFG_BASE
 XOSC_BASE
-PLL_SYS_BASE
 PLL_USB_BASE
 ACCESSCTRL_BASE
 BUSCTRL_BASE
@@ -114,6 +112,9 @@ zip
 
 ```
 BOOTRAM_BASE
+SYSINFO_BASE
+SYSCFG_BASE *
+PLL_SYS_BASE *
 RV32C
 RV32Zcb (lbu, lhu, not)
 Xh3power (h3.block and h3.unblock)
