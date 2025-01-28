@@ -258,7 +258,7 @@ const opcode0x03func3Table: FuncTable<I_Type> = new Map([
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    const byte = chip.readUint8(rs1Value + imm); //CHECK Int8?
+    const byte = signExtend8(chip.readUint8(rs1Value + imm));
     registerSet.setRegister(rd, byte);
   }],
 
@@ -267,7 +267,7 @@ const opcode0x03func3Table: FuncTable<I_Type> = new Map([
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    const half = chip.readUint16(rs1Value + imm); //CHECK Int16?
+    const half = signExtend16(chip.readUint16(rs1Value + imm));
     registerSet.setRegister(rd, half);
   }],
 
