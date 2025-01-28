@@ -196,6 +196,14 @@ export class CPU {
 
 }
 
+function signExtend8(value: number) {
+  return (value << 24) >> 24;
+}
+
+function signExtend16(value: number) {
+  return (value << 16) >> 16;
+}
+
 export class RegisterSet {
 
   private registerBuffer: ArrayBuffer;
@@ -317,18 +325,20 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     const { rd, rs1, func7, immU, shamt } = instruction;
     const { registerSet } = cpu;
 
-    const rs1Value = registerSet.getRegister(rs1);
-
-    if (func7 === 0) { // sll
+    if (func7 === 0) { // slli
+      const rs1Value = registerSet.getRegisterU(rs1);
       const result = rs1Value << shamt;
-      registerSet.setRegister(rd, result);
+      registerSet.setRegisterU(rd, result);
     } else if (func7 === 0x14) { // bseti (Zbb)
+      const rs1Value = registerSet.getRegister(rs1);
       const result = rs1Value | ( 1 << shamt);
       registerSet.setRegister(rd, result);
     } else if (func7 === 0x24) { // bclri (Zbs)
+      const rs1Value = registerSet.getRegister(rs1);
       const result = rs1Value & ~(1 << shamt);
       registerSet.setRegister(rd, result);
     } else if (immU === 0b011000000001) { // ctz (Zbb)
+      const rs1Value = registerSet.getRegister(rs1);
       let tmp = rs1Value >>> 0;
       if (tmp === 0) {
         registerSet.setRegister(rd, 32);
@@ -338,11 +348,16 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
         registerSet.setRegister(rd, tmp);
       }
     } else if (immU === 0b011000000010) { // cpop (Zbb)
+      const rs1Value = registerSet.getRegister(rs1);
       let tmp = rs1Value >>> 0;
       tmp = tmp - ((tmp >> 1) & 0x55555555);
       tmp = (tmp & 0x33333333) + ((tmp >> 2) & 0x33333333);
       tmp = ((tmp + (tmp >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
       registerSet.setRegister(rd, tmp);
+    } else if (immU === 0b011000000101) { // sext.h (Zbb)
+      const rs1Value = registerSet.getRegisterU(rs1);
+      const value = signExtend16(rs1Value & 0xffff);
+      registerSet.setRegister(rd, value);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
@@ -621,6 +636,9 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     if(func7 === 0) { // OR
       const result = rs1Value | rs2Value;
       registerSet.setRegister(rd, result);
+    } else if(func7 === 0x5) { // MAX (Zbb)
+      const result = rs1Value > rs2Value ? rs1Value : rs2Value;
+      registerSet.setRegister(rd, result);
     } else if(func7 === 0x20) { // ORN (Zbb)
       const result = rs1Value | ~rs2Value;
       registerSet.setRegister(rd, result);
@@ -648,6 +666,9 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
       registerSet.setRegister(rd, result);
     } else if(func7 === 0x5) { // MAXU (Zbkb)
       const result = (rs1Value >>> 0) > (rs2Value >>> 0) ? rs1Value : rs2Value;
+      registerSet.setRegister(rd, result);
+    } else if(func7 === 0x1) { // REMU (RV32M)
+      const result = (rs2Value === 0) ? rs1Value : (rs1Value % rs2Value);
       registerSet.setRegister(rd, result);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
@@ -819,6 +840,7 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     // 30047773                csrrci  a4,mstatus,8 ; clear Interrupt enable bit and set a4=mstatus
     // t = CSRs[csr]; CSRs[csr] = t &∼zimm; x[rd] = t
     console.log(`CSRRCI not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
+    registerSet.setRegister(rd, 0);
   }]
 ]);
 

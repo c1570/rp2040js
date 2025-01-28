@@ -3,7 +3,7 @@ https://github.com/c1570/rp2040js
 
 For generic/original rp2040js docs, [see below](#rp2040js).
 
-### Status
+### Status of rp2350js
 runs blink_simple.c (RISC-V, multicore, busy_wait_us instead of sleep_ms, no_flash/RAM binary)
 
 #### Missing
@@ -43,7 +43,7 @@ OTP_BASE ...
 CORESIGHT_PERIPH_BASE ...
 GLITCH_DETECTOR_BASE
 
-Machine/User mode
+Hazard3: Machine vs. User mode
 Xh3irq
 Xh3pmpm (Physical Memory Protection PMP)
 Xh3bextm
@@ -60,8 +60,6 @@ amoxor.w
 binv
 binvi
 brev8
-bset
-bseti
 clz
 cm.mva01s
 cm.mvsa01
@@ -87,7 +85,6 @@ ebreak
 ecall
 fence *
 fence.i *
-max
 maxu
 min
 minu
@@ -99,14 +96,12 @@ orc.b
 ori
 orn
 rem
-remu
 rev8
 rol
 ror
 rori
 sc.w
 sext.b
-sext.h
 sgtz
 unzip
 wfi
@@ -149,6 +144,8 @@ bltu
 bltz
 bne
 bnez
+bset
+bseti
 cpop
 ctz
 divu *
@@ -163,6 +160,7 @@ lhu
 lr.w
 lui
 lw
+max
 mul *
 mulhu *
 mv
@@ -171,9 +169,11 @@ not
 or
 pack
 packh
+remu *
 ret
 sb
 seqz
+sext.h
 sh1add
 sh2add
 sh3add
