@@ -358,6 +358,10 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
       const rs1Value = registerSet.getRegisterU(rs1);
       const value = signExtend16(rs1Value & 0xffff);
       registerSet.setRegister(rd, value);
+    } else if (immU === 0b011000000100) { // sext.b (Zbb)
+      const rs1Value = registerSet.getRegisterU(rs1);
+      const value = signExtend8(rs1Value & 0xff);
+      registerSet.setRegister(rd, value);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
@@ -596,6 +600,9 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
       registerSet.setRegister(rd, result);
     } else if(func7 === 0x4) { // PACK (Zbkb)
       const result = (rs1Value & 0xffff) | ((rs2Value & 0xffff) << 16);
+      registerSet.setRegister(rd, result);
+    } else if(func7 === 0x20) { // XNOR (Zbb)
+      const result = (~rs1Value) ^ rs2Value;
       registerSet.setRegister(rd, result);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],

@@ -99,11 +99,9 @@ rol
 ror
 rori
 sc.w
-sext.b
 sgtz
 unzip
 wfi
-xnor
 zip
 ```
 
@@ -174,6 +172,7 @@ remu *
 ret
 sb
 seqz
+sext.b
 sext.h
 sh1add
 sh2add
@@ -193,6 +192,7 @@ srl
 srli
 sub
 sw
+xnor
 xor
 xori
 zext.b
