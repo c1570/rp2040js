@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { RP2350 } from '../src';
+import { GPIOPinState } from '../src/gpio-pin';
 import { bootrom_rp2350_A2 } from './bootrom_rp2350';
 import { loadHex } from './intelhex';
 import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
@@ -21,6 +22,13 @@ mcu.loadDisassembly(disassembly);
 mcu.uart[0].onByte = (value: number) => {
   process.stdout.write(new Uint8Array([value]));
 };
+
+// make GPIOs see their own output values as input
+for(let i = 0; i < 11; i++) {
+  mcu.gpio[i].addListener(
+    (state: GPIOPinState, oldState: GPIOPinState) => mcu.gpio[i].setInputValue(state==1)
+  );
+}
 
 mcu.core0.pc = 0x20000220; //TODO why?
 //mcu.core0.pc = 0x7642; // Bootrom riscv_entry_point
