@@ -373,16 +373,14 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
-  [0x3, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, immU, func7 } = instruction;
+  [0x3, (instruction: I_Type, cpu: CPU) => { // sltiu
+    const { rd, rs1, immU } = instruction;
     const { registerSet } = cpu;
 
     const rs1Value = registerSet.getRegisterU(rs1);
 
-    if ( func7 === 0) { // sltiu
-      const result = rs1Value < immU ? 1 : 0;
-      registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
+    const result = rs1Value < immU ? 1 : 0;
+    registerSet.setRegister(rd, result);
   }],
 
   [0x4, (instruction: I_Type, cpu: CPU) => { // xori
@@ -578,7 +576,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
       const result = rs1Value < rs2Value ? 1 : 0;
       registerSet.setRegister(rd, result);
     } else if(func7 === 1) { // mulhu (rv32m)
-      const result = (rs1Value * rs2Value) >> 32;
+      const result = (rs1Value * rs2Value / 0x100000000) >>> 0;
       registerSet.setRegister(rd, result);
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
