@@ -429,16 +429,14 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
-  [0x2, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, imm, func7 } = instruction;
+  [0x2, (instruction: I_Type, cpu: CPU) => { // slti
+    const { rd, rs1, imm } = instruction;
     const { registerSet } = cpu;
 
     const rs1Value = registerSet.getRegister(rs1);
 
-    if ( func7 === 0) { // slti
-      const result = rs1Value < imm ? 1 : 0;
-      registerSet.setRegister(rd, result);
-    } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
+    const result = rs1Value < imm ? 1 : 0;
+    registerSet.setRegister(rd, result);
   }],
 
   [0x3, (instruction: I_Type, cpu: CPU) => { // sltiu
