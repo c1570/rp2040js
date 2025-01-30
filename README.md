@@ -10,6 +10,7 @@ runs blink_simple.c (RISC-V, multicore, busy_wait_us instead of sleep_ms, no_fla
 
 ```
 Interrupts and Exceptions
+CSRs (at least MSTATUS, MIE, MTVEC, MSCRATCH, MEPC, MCAUSE, MIP, MEIxA, MEINEXT, MEICONTEXT, MHARTID)
 Bootrom (starting from SRAM works, varmulet doesn't)
 DMA updates
 PIO updates
@@ -65,19 +66,6 @@ cm.pop
 cm.popret
 cm.popretz
 cm.push
-csrc *
-csrci *
-csrr *
-csrrc *
-csrrci *
-csrrs *
-csrrsi *
-csrrw *
-csrrwi *
-csrs *
-csrsi *
-csrw *
-csrwi *
 div
 ebreak
 ecall
@@ -146,6 +134,19 @@ bnez
 bset
 bseti
 cpop
+csrc
+csrci
+csrr
+csrrc
+csrrci
+csrrs
+csrrsi
+csrrw
+csrrwi
+csrs
+csrsi
+csrw
+csrwi
 ctz
 divu *
 j

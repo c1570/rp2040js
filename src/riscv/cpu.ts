@@ -10,16 +10,28 @@ export class CPU {
   public eventRegistered = false;
 
   registerSet: RegisterSet = new RegisterSet(32);
+  csrs = new Array<number>(0x1000);
   pc = 0;
   next_pc = 0;
   stopped = false; //TODO
   cycles = 0;
-  mtvec: number = 0;
 
   constructor(readonly chip: IRPChip, readonly coreLabel: string, readonly mhartid: number) {
+    this.reset();
   }
 
-  reset() { } //TODO
+  reset() { // TODO
+    this.csrs.fill(0);
+    this.csrs[0x300] = 3<<11;
+    this.csrs[0x301] = 0b01000000100100000001000100000101;
+    this.csrs[0x305] = 0x00001fff00;
+    this.csrs[0x320] = 0x101;
+    //TODO 0x3a1 - 0x7b0
+    this.csrs[0xbe5] = 1<<15;
+    this.csrs[0xf11] = (0x9<<7)|(0x13);
+    this.csrs[0xf12] = 0x1b;
+    this.csrs[0xf13] = 0x86fc4e3f;
+  }
 
   setInterrupt(a: any, b: any) { } //TODO
 
@@ -199,6 +211,51 @@ export class CPU {
     } else {
       throw Error(`Invalid Instruction opcode 0x${opcode.toString(16)}`);
     }
+  }
+
+  setCSR(csr: number, value: number) {
+    switch(csr) {
+      case 0x301:
+      case 0x30a:
+      case 0x310:
+      case 0x31a:
+      case 0x323: case 0x324: case 0x325: case 0x326: case 0x327: case 0x328: case 0x329: case 0x32a: case 0x32b: case 0x32c: case 0x32d: case 0x32e: case 0x32f:
+      case 0x330: case 0x331: case 0x332: case 0x333: case 0x334: case 0x335: case 0x336: case 0x337: case 0x338: case 0x339: case 0x33a: case 0x33b: case 0x33c: case 0x33d: case 0x33e: case 0x33f:
+      case 0x343:
+      case 0x3b8: case 0x3b9: case 0x3ba: case 0x3bb: case 0x3bc: case 0x3bd: case 0x3be: case 0x3bf:
+      //TODO
+      case 0xc00:
+      case 0xc02:
+      case 0xc80:
+      case 0xc82:
+      case 0xf11: case 0xf12: case 0xf13: case 0xf14:
+          return;
+      case 0x300:
+          this.csrs[csr] = value;
+          return;
+    }
+    console.log(`Unknown CSR set: 0x${value.toString(16)} => 0x${csr.toString(16)}`);
+    this.csrs[csr] = value;
+  }
+
+  getCSR(csr: number): number {
+    // MSTATUS 0x300
+    // MIE 0x304
+    // MTVEC 0x305
+    // MSCRATCH 0x340
+    // MEIEA 0xbe0
+    // MEIFA 0xbe2
+    // MEIPRA 0xbe3
+    // MSLEEP 0xbf0
+    switch(csr) {
+      case 0xf14: return this.mhartid;
+      case 0xbe5: return 0x8000; //TODO just return "not in interrupt"
+      case 0x300:
+      case 0x340:
+      case 0xbf0: return this.csrs[csr];
+    }
+    console.log(`Unknown CSR get: 0x${csr.toString(16)}`);
+    return this.csrs[csr];
   }
 
 }
@@ -778,81 +835,67 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     const { rd, func7 } = instruction;
     throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
-  [0x1, (instruction: I_Type, cpu: CPU) => {
+  [0x1, (instruction: I_Type, cpu: CPU) => { // csrrw, csrw
     const { rd, rs1, immU } = instruction; // immU is csr
     const { registerSet } = cpu;
-    // TODO: Implement CSRW
-    // 30551073                csrw    mtvec,a0
-    let value = 0;
-    if (immU === 0x305) { // MTVEC
-      value = cpu.mtvec;
-      cpu.mtvec = registerSet.getRegister(rs1);
-      console.log("CSRW MTVEC");
-    } else {
-      console.log("CSRW not implemented");
+    const newValue = registerSet.getRegister(rs1);
+    if(rd != 0) {
+      const oldValue = cpu.getCSR(immU);
+      registerSet.setRegister(rd, oldValue);
     }
-    if(rd !== 0) {
-      registerSet.setRegister(rd, value);
-    }
+    cpu.setCSR(immU, newValue);
   }],
-  [0x2, (instruction: I_Type, cpu: CPU) => {
+  [0x2, (instruction: I_Type, cpu: CPU) => { // csrrs, csrs, csrr
     const { rd, rs1, immU } = instruction; // immU is csr
     const { registerSet } = cpu;
-    // if(rd != 0) rd.value = csr[addr];
-    // if (rs1.value != 0) csr[addr] = csr[addr] | rs1.value;
-    if ( rd === 0x0 ) {
-      // TODO: Implement CSRS
-      // 3006a073                csrs    mstatus,a3 ; (potentially) set interupt enable bit
-      console.log(`CSRS not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-    } else if (rs1 === 0x0) {
-      // TODO: Implement CSRR
-      // 305027f3                csrr    a5,mtvec
-      if(immU == 0x305) {
-        registerSet.setRegister(rd, cpu.mtvec);
-        console.log(`CSRR read MTVEC, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-      } else if(immU == 0xbe5) {
-        // 20000e10:       be502773                csrr    a4,0xbe5
-        // 20000e14:       01071793                slli    a5,a4,0x10
-        // 20000e18:       0407da63                bgez    a5,20000e6c <best_effort_wfe_or_timeout+0x68>
-        registerSet.setRegister(rd, 0x8000); // return "not in interrupt" flag
-        console.log(`CSRR read 0xbe5, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-      } else if(immU == 0xf14) {
-        // f1402573                csrr    a0,mhartid
-        registerSet.setRegister(rd, cpu.mhartid);
-      } else {
-        console.log(`CSRR not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-      }
+    const oldValue = cpu.getCSR(immU);
+    if(rs1 != 0) {
+      const orValue = registerSet.getRegister(rs1);
+      const newValue = oldValue | orValue;
+      cpu.setCSR(immU, newValue);
     }
+    registerSet.setRegister(rd, oldValue);
   }],
-  [0x3, (instruction: I_Type, cpu: CPU) => {
+  [0x3, (instruction: I_Type, cpu: CPU) => { // csrrc, csrc
+    const { rd, rs1, immU } = instruction; // immU is csr
+    const { registerSet } = cpu;
+    const notValue = registerSet.getRegister(rs1);
+    const oldValue = cpu.getCSR(immU);
+    const newValue = oldValue & (~notValue);
+    if(notValue != 0) {
+      cpu.setCSR(immU, newValue);
+    }
+    registerSet.setRegister(rd, oldValue);
+  }],
+  [0x5, (instruction: I_Type, cpu: CPU) => { // csrwi
+    const { rd, rs1, immU } = instruction; // rs1 is imm, immU is csr
+    const { registerSet } = cpu;
+    const newValue = rs1;
+    if(rd != 0) {
+      const oldValue = cpu.getCSR(immU);
+      registerSet.setRegister(rd, oldValue);
+    }
+    cpu.setCSR(immU, newValue);
+  }],
+  [0x6, (instruction: I_Type, cpu: CPU) => { // csrrsi, csrsi
+    const { rd, rs1, immU } = instruction; // rs1 is imm, immU is csr
+    const { registerSet } = cpu;
+    const oldValue = cpu.getCSR(immU);
+    if(rs1 != 0) {
+      const newValue = oldValue | rs1;
+      cpu.setCSR(immU, newValue);
+    }
+    registerSet.setRegister(rd, oldValue);
+  }],
+  [0x7, (instruction: I_Type, cpu: CPU) => { // csrrci, csrci
     const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
     const { registerSet } = cpu;
-    // TODO: Implement CSRC
-    // be253073                csrc    0xbe2,a0
-    console.log(`CSRC not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-  }],
-  [0x5, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
-    const { registerSet } = cpu;
-    // TODO: Implement CSRWI
-    // bf035073                csrwi   0xbf0,6
-    console.log(`CSRWI not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-  }],
-  [0x6, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
-    const { registerSet } = cpu;
-    // 30046073                csrsi   mstatus,8 (csrrsi x0, mstatus, 8)
-    console.log(`CSRRSI not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-    registerSet.setRegister(rd, 0);
-  }],
-  [0x7, (instruction: I_Type, cpu: CPU) => {
-    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
-    const { registerSet } = cpu;
-    // TODO: Implement CSRRCI
-    // 30047773                csrrci  a4,mstatus,8 ; clear Interrupt enable bit and set a4=mstatus
-    // t = CSRs[csr]; CSRs[csr] = t &∼zimm; x[rd] = t
-    console.log(`CSRRCI not implemented, rd 0x${rd.toString(16)}, rs1 0x${rs1.toString(16)}, csr 0x${immU.toString(16)}`);
-    registerSet.setRegister(rd, 0);
+    const oldValue = cpu.getCSR(immU);
+    if(rs1 != 0) {
+      const newValue = oldValue & (~rs1);
+      cpu.setCSR(immU, newValue);
+    }
+    registerSet.setRegister(rd, oldValue);
   }]
 ]);
 
