@@ -34,6 +34,21 @@ mcu.core0.pc = 0x20000220; //TODO why?
 //mcu.core0.pc = 0x7642; // Bootrom riscv_entry_point
 mcu.core1.pc = 0x20000220;
 //mcu.core1.waiting = true;
-while(1) {
-  mcu.step();
+
+let nextTimeUpdate = 0;
+let dodisass = 0;
+try {
+  while(1) {
+    //if(mcu.core0.pc === 0x2000d7fc) { dodisass = 1; console.log(`Cycle: ${mcu.cycles}`) };
+    //if(mcu.cycles > 128000) dodisass = 1;
+    if(dodisass) mcu.core0.printDisassembly();
+    mcu.step();
+    if(mcu.cycles > nextTimeUpdate) {
+      console.log(`Time: ${((mcu.cycles / 40000000) >>> 0)/10} secs`);
+      nextTimeUpdate += 40000000;
+    }
+  }
+} catch(e) {
+  console.error(`Cycles: ${mcu.cycles}, ${e}`);
+  throw e;
 }

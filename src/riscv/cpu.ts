@@ -31,9 +31,8 @@ export class CPU {
     if(this.break_after_steps == 0) throw Error("Ending.");
     let inst = this.chip.readUint16(this.pc);
     if ((inst & 3) != 3) {
-        // TODO: filter illegal instruction
         if (inst == 0) {
-            console.log(`Illegal 16 bit instruction: ${inst}`);
+            throw Error(`Illegal 16 bit instruction 0 at 0x${this.pc.toString(16)}`);
         }
 
         inst = decompress_rv32c_inst(inst);
@@ -46,12 +45,9 @@ export class CPU {
     return inst >>> 0;
   }
 
-  executeInstruction() {
-    if (this.waiting) {
-      this.cycles++;
-      return;
-    }
-    if (this.chip.disassembly) {
+  printDisassembly() {
+    let pc = this.pc;
+    if(this.chip.disassembly) {
       const search = (this.pc.toString(16) + ":").replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
       const re = new RegExp(search + "(.*)");
       const res = re.exec(this.chip.disassembly);
@@ -60,9 +56,20 @@ export class CPU {
     } else {
       console.log(`*** ${this.coreLabel} - PC 0x${this.pc.toString(16)}`);
     }
+  }
+
+  executeInstruction() {
+    if (this.waiting) {
+      this.cycles++;
+      return;
+    }
     const instruction = this.fetchInstruction();
-    console.log(`executing (decoded) instr 0x${instruction.toString(16)}`);
-    this.step(instruction);
+    try {
+      this.step(instruction);
+    } catch(e) {
+      this.printDisassembly();
+      throw e;
+    }
     this.cycles++; //TODO
   }
 
