@@ -219,7 +219,7 @@ export class S_Type extends Instruction implements HasImmediate {
   }
 
   get immU() {
-    return getRange(this.binary, 11, 7) + (getRange(this.binary, 31, 25) << 5);
+    return (getRange(this.binary, 11, 7) + (getRange(this.binary, 31, 25) << 5)) >>> 0;
   }
 
   set imm(value: number) {
@@ -330,7 +330,7 @@ export class U_Type extends Instruction implements HasImmediate {
   }
 
   get immU() {
-    return getRange(this.binary, 31, 12) << 12;
+    return (getRange(this.binary, 31, 12) << 12) >>> 0; // make sure 0x80000 is read as unsigned
   }
 
   set imm(value: number) {

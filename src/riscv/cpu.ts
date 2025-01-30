@@ -374,15 +374,15 @@ const opcode0x0ffunc3Table: FuncTable<I_Type> = new Map([
 ]);
 
 const opcode0x13func3Table: FuncTable<I_Type> = new Map([
-  [0x0, (instruction: I_Type, cpu: CPU) => {
+  [0x0, (instruction: I_Type, cpu: CPU) => { // addi
     const { rd, rs1, imm } = instruction;
     const { registerSet } = cpu;
 
-    const rs1Value = registerSet.getRegister(rs1);
+    const rs1Value = registerSet.getRegisterU(rs1);
 
-    const result = rs1Value + imm;
+    const result = (rs1Value + imm) >>> 0; // make sure 0x80000000 - 1 works
 
-    registerSet.setRegister(rd, result);
+    registerSet.setRegisterU(rd, result);
   }],
 
   [0x1, (instruction: I_Type, cpu: CPU) => {
@@ -922,10 +922,10 @@ const b_TypeOpcodeTable: OpcodeFuncTable<B_Type> = new Map([
 
 const u_TypeOpcodeTable: OpcodeTable<U_Type> = new Map([
   [0x37, (instruction: U_Type, cpu: CPU) => { // lui
-    const { rd, imm } = instruction;
+    const { rd, immU } = instruction;
     const { registerSet } = cpu;
 
-    registerSet.setRegister(rd, imm);
+    registerSet.setRegisterU(rd, immU);
   }],
 
   [0x17, (instruction: U_Type, cpu: CPU) => { // auipc
