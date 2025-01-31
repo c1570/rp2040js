@@ -478,6 +478,10 @@ const opcode0x13func3Table: FuncTable<I_Type> = new Map([
       const result = (rs1Value >>> shamt) & 1;
       registerSet.setRegister(rd, result);
 
+    } else if (func7 === 0x34) { // rev8 (Zbb)
+      const result = (rs1Value >>> 24) | ((rs1Value >>> 8) & 0xff00) | ((rs1Value << 8) & 0xff0000) | (((rs1Value & 0xff) << 24) >>> 0);
+      registerSet.setRegisterU(rd, result >>> 0);
+
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
@@ -731,7 +735,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 0x4) { // PACKH (Zbkb)
       const result = (rs1Value & 0xff) | ((rs2Value & 0xff) << 8);
       registerSet.setRegister(rd, result);
-    } else if(func7 === 0x5) { // MAXU (Zbkb)
+    } else if(func7 === 0x5) { // MAXU (Zbb)
       const result = (rs1Value >>> 0) > (rs2Value >>> 0) ? rs1Value : rs2Value;
       registerSet.setRegister(rd, result);
     } else if(func7 === 0x1) { // REMU (RV32M)

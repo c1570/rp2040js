@@ -80,7 +80,6 @@ orc.b
 ori
 orn
 rem
-rev8
 rol
 ror
 rori
@@ -171,6 +170,7 @@ pack
 packh
 remu *
 ret
+rev8
 sb
 seqz
 sext.b
