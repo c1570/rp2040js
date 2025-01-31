@@ -8,10 +8,12 @@ import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
 const homedir = require('os').homedir();
 
 const hex = fs.readFileSync('demo/riscv_blink/blink_simple.hex', 'utf-8');
+const initial_pc = 0x20000220; // no_flash binary
+//const initial_pc = 0x10000036; // standard/flash binary
 const mcu = new RP2350();
 mcu.loadBootrom(bootrom_rp2350_A2);
-//loadHex(hex, mcu.flash, 0x20000000);
-loadHex(hex, mcu.sram, 0x20000000);
+//loadHex(hex, mcu.flash, 0x10000000); // standard/flash binary
+loadHex(hex, mcu.sram, 0x20000000); // no_flash binary
 
 const disassembly = fs.readFileSync('./demo/bootrom_rp2350.dis', 'utf-8') + fs.readFileSync('./demo/riscv_blink/blink_simple.dis');
 mcu.loadDisassembly(disassembly);
@@ -30,9 +32,8 @@ for(let i = 0; i < 11; i++) {
   );
 }
 
-mcu.core0.pc = 0x20000220; //TODO why?
-//mcu.core0.pc = 0x7642; // Bootrom riscv_entry_point
-mcu.core1.pc = 0x20000220;
+mcu.core0.pc = initial_pc;
+mcu.core1.pc = initial_pc;
 //mcu.core1.waiting = true;
 
 let nextTimeUpdate = 0;

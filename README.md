@@ -4,17 +4,20 @@ https://github.com/c1570/rp2040js
 For generic/original rp2040js docs, [see below](#rp2040js).
 
 ### Status of rp2350js
-runs blink_simple.c (RISC-V, multicore, busy_wait_us instead of sleep_ms, no_flash/RAM binary)
+* limited RISC-V/Hazard3 support (no ARM support)
+* runs both no_flash/RAM binaries and flash binaries
+* runs blink_simple.c (busy_wait_us instead of sleep_ms)
+* runs [Connomore64](https://github.com/c1570/Connomore64) main mcu (dual core, PIO)
 
 #### Missing
 
 ```
 Interrupts and Exceptions
 CSRs (at least MSTATUS, MIE, MTVEC, MSCRATCH, MEPC, MCAUSE, MIP, MEIxA, MEINEXT, MEICONTEXT, MHARTID)
-Bootrom (starting from SRAM works, varmulet doesn't)
+Bootrom (varmulet mostly untested)
 DMA updates
 PIO updates
-Register offset updates
+Register offset updates (esp. TIMER0/TIMER1)
 Correct timers when changing sys_clk/PLL
 SIO: secure vs. insecure, SIO_NONSEC_BASE
 Doorbells
