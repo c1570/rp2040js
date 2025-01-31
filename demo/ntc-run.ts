@@ -20,9 +20,11 @@ import { loadHex } from './intelhex';
 
 const homedir = require('os').homedir();
 
-const hex_files = [homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_main/cnm64_main.hex',
-                   homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_vic/cnm64_vic.hex',
-                   homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_output/cnm64_output.hex'];
+const hex_files = [["MAIN", homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_main/cnm64_main.hex'],
+                   ["VIC", homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_vic/cnm64_vic.hex'],
+                   ["OUTPUT", homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_output/cnm64_output.hex'],
+                   ["CIA1", homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_cia/cnm64_cia1.hex'],
+                   ["CIA2", homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_cia/cnm64_cia2.hex']];
 
 const pin_gpio: number[] = [2,3,4,5,6,7,8,9,10];
 const pin_label: string[] = ["clock", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"];
@@ -31,7 +33,7 @@ const mcu = new Array(hex_files.length).fill(null).map(() => new RP2040());
 
 for(let i = 0; i < hex_files.length; i++) {
   mcu[i].loadBootrom(bootromB1);
-  loadHex(fs.readFileSync(hex_files[i], 'utf-8'), mcu[i].flash, 0x10000000);
+  loadHex(fs.readFileSync(hex_files[i][1], 'utf-8'), mcu[i].flash, 0x10000000);
   mcu[i].core0.PC = 0x10000000;
   mcu[i].core1.PC = 0x10000000;
   mcu[i].core1.waiting = true;
@@ -157,8 +159,12 @@ for(let i = 0; i < pin_label.length; i++) {
   }
 }
 
-for(let i = 11; i < 30; i++) {
-  mcu_main.gpio[i].setInputValue(true);
+for(let mcu_id = 0; mcu_id < hex_files.length; mcu_id++) {
+  for(let i = 11; i < 30; i++) {
+    mcu[mcu_id].gpio[i].setInputValue(true);
+  }
+  mcu[mcu_id].gpio[0].setInputValue(true);
+  mcu[mcu_id].gpio[1].setInputValue(true);
 }
 
 // write VCD file header
@@ -356,22 +362,23 @@ async function run_mcus() {
           }
         }
 
-        // check for PIO stalls
-        let pio_fdebug = mcu[0].pio[0].fdebug;
-        if(pio_fdebug & 0x0f0f0f00) {
-          //if(pio_fdebug & 0x0f000000) throw new Error(`MAIN PIO TX STALL: ${(pio_fdebug>>24)&15}`);
-          if(pio_fdebug & 0x000f0000) throw new Error(`MAIN PIO TX OVERFLOW: ${(pio_fdebug>>16)&15}`);
-          if(pio_fdebug & 0x00000f00) throw new Error(`MAIN PIO RX UNDERFLOW: ${(pio_fdebug>>8)&15}`);
-        }
-        pio_fdebug = mcu[1].pio[1].fdebug;
-        if(pio_fdebug & 0x0f0f0f00) {
-          if(pio_fdebug & 0x0f000000) throw new Error(`VIC PIO TX STALL IN SM ${(pio_fdebug>>24)&15}`);
-          if(pio_fdebug & 0x000f0000) throw new Error(`VIC PIO TX OVERFLOW IN SM ${(pio_fdebug>>16)&15}`);
-          if(pio_fdebug & 0x00000f00) throw new Error(`VIC PIO RX UNDERFLOW IN SM ${(pio_fdebug>>8)&15}`);
-        }
-
         if(!useFastPinListener) exactPinTick();
         gpio_cycle++;
+      }
+
+      // check for PIO stalls
+      for(let mcu_id = 0; mcu_id < hex_files.length; mcu_id++) {
+        for(let pio = 0; pio <= 1; pio++) {
+          if(mcu_id == 1 && pio == 0) continue; // ignore VIC gfx pio
+          if(mcu_id == 2 && pio == 1) continue;
+          let pio_fdebug = mcu[mcu_id].pio[pio].fdebug;
+          if(pio_fdebug & 0x0f0f0f00) {
+            if(mcu_id != 0) // ignore MAIN TX stalls for now
+            if(pio_fdebug & 0x0f000000) throw new Error(`${hex_files[mcu_id][0]} PIO ${pio} TX STALL: ${(pio_fdebug>>24)&15}`);
+            if(pio_fdebug & 0x000f0000) throw new Error(`${hex_files[mcu_id][0]} PIO ${pio} TX OVERFLOW: ${(pio_fdebug>>16)&15}`);
+            if(pio_fdebug & 0x00000f00) throw new Error(`${hex_files[mcu_id][0]} PIO ${pio} RX UNDERFLOW: ${(pio_fdebug>>8)&15}`);
+          }
+        }
       }
 
       if((main_cycle_start_off==0)&&(mcu[0].core0.profilerTag=="cycle start")) {
