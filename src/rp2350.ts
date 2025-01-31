@@ -52,8 +52,8 @@ export class RP2350 implements IRPChip {
   readonly usbDPRAM = new Uint8Array(4 * KB);
   readonly usbDPRAMView = new DataView(this.usbDPRAM.buffer);
 
-  readonly core0 = new CPU(this, 'RISCVCore0', 0);
-  readonly core1 = new CPU(this, 'RISCVCore1', 1);
+  readonly core0: CPU = new CPU(this, 'RISCVCore0', 0);
+  readonly core1: CPU = new CPU(this, 'RISCVCore1', 1);
 
   /* Clocks */
   clkSys = 125 * MHz;
