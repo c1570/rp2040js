@@ -74,7 +74,6 @@ fence.i *
 maxu
 min
 minu
-mret
 mulh
 mulhsu
 neg
@@ -161,6 +160,7 @@ lr.w
 lui
 lw
 max
+mret *
 mul *
 mulhu *
 mv

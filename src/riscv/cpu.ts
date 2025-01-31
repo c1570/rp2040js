@@ -830,8 +830,20 @@ const opcode0x67func3Table: FuncTable<I_Type> = new Map([
 
 const opcode0x73func3Table: FuncTable<I_Type> = new Map([
   [0x0, (instruction: I_Type, cpu: CPU) => {
-    const { rd, func7 } = instruction;
-    throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
+    let mstatus = 0;
+    switch(instruction.binary) {
+      case 0x30200073: // mret
+        // TODO Restore core privilege level to the value of MSTATUS.MPP
+        mstatus = cpu.getCSR(0x300);
+        mstatus &= ~(3<<11); // Write 0 (U-mode) to MSTATUS.MPP
+        mstatus &= ~0b1000; mstatus |= (mstatus >>> 4) & 0b1000; // Restore MSTATUS.MIE from MSTATUS.MPIE
+        mstatus |= 1<<7; // Write 1 to MSTATUS.MPIE
+        cpu.setCSR(0x300, mstatus);
+        cpu.next_pc = cpu.getCSR(0x341); // Jump to the address in MEPC.
+        break;
+      default:
+        throw Error(`Unknown instruction 0x${instruction.binary.toString(16)}`);
+    }
   }],
   [0x1, (instruction: I_Type, cpu: CPU) => { // csrrw, csrw
     const { rd, rs1, immU } = instruction; // immU is csr
