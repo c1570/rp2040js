@@ -841,6 +841,29 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
         cpu.setCSR(0x300, mstatus);
         cpu.next_pc = cpu.getCSR(0x341); // Jump to the address in MEPC.
         break;
+      case 0x73: // ecall
+        cpu.setCSR(0x431, cpu.pc); // Save the address of the interrupted or excepting instruction to MEPC
+        // 2. Set the MSB of MCAUSE to indicate the cause is an interrupt, or clear it to indicate an exception
+        // 3. Write the detailed trap cause to the LSBs of the MCAUSE register
+        const u_mode = 1; //TODO
+        const reason = u_mode?0x8:0xb;
+        cpu.setCSR(0x342, ((1<<31)|reason)>>>0);
+        // TODO 4. Save the current privilege level to MSTATUS.MPP
+        // TODO 5. Set the privilege to M-mode (note Hazard3 does not implement S-mode)
+        // 6. Save the current value of MSTATUS.MIE to MSTATUS.MPIE
+        mstatus = cpu.getCSR(0x300);
+        mstatus &= ~0b10000000; mstatus |= (mstatus << 4) & 0b10000000;
+        // 7. Disable interrupts by clearing MSTATUS.MIE
+        mstatus &= 1<<7;
+        cpu.setCSR(0x300, mstatus);
+        // 8. Jump to the correct offset from MTVEC depending on the trap cause
+        const mtvec = cpu.getCSR(0x305);
+        if((mtvec & 3) == 0) {
+          cpu.next_pc = mtvec; // direct mtvec mode
+        } else {
+          cpu.next_pc = mtvec + reason; // vectored mtvec mode
+        }
+        break;
       default:
         throw Error(`Unknown instruction 0x${instruction.binary.toString(16)}`);
     }
