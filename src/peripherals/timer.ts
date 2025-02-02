@@ -13,10 +13,6 @@ const ALARM2 = 0x18;
 const ALARM3 = 0x1c;
 const ARMED = 0x20;
 const PAUSE = 0x30;
-const INTR = 0x34;
-const INTE = 0x38;
-const INTF = 0x3c;
-const INTS = 0x40;
 
 const ALARM_0 = 1 << 0;
 const ALARM_1 = 1 << 1;
@@ -46,10 +42,30 @@ export class RPTimer extends BasePeripheral implements Peripheral {
   private intEnable = 0;
   private intForce = 0;
   private paused = false;
+  private INTR = 0;
+  private INTE = 0;
+  private INTF = 0;
+  private INTS = 0;
 
   constructor(rp2040: IRPChip, name: string) {
     super(rp2040, name);
     this.clock = rp2040.clock;
+    switch(rp2040.identifier) {
+      case "rp2040":
+        this.INTR = 0x34;
+        this.INTE = 0x38;
+        this.INTF = 0x3c;
+        this.INTS = 0x40;
+        break;
+      case "rp2350":
+        this.INTR = 0x3c;
+        this.INTE = 0x40;
+        this.INTF = 0x44;
+        this.INTS = 0x48;
+        break;
+      default:
+        throw Error("Unknown rpchip identifier");
+    }
   }
 
   get intStatus() {
@@ -85,13 +101,13 @@ export class RPTimer extends BasePeripheral implements Peripheral {
       case PAUSE:
         return this.paused ? 1 : 0;
 
-      case INTR:
+      case this.INTR:
         return this.intRaw;
-      case INTE:
+      case this.INTE:
         return this.intEnable;
-      case INTF:
+      case this.INTF:
         return this.intForce;
-      case INTS:
+      case this.INTS:
         return this.intStatus;
 
       case ARMED:
@@ -134,15 +150,15 @@ export class RPTimer extends BasePeripheral implements Peripheral {
         }
         // TODO actually pause the timer
         break;
-      case INTR:
+      case this.INTR:
         this.intRaw &= ~this.rawWriteValue;
         this.checkInterrupts();
         break;
-      case INTE:
+      case this.INTE:
         this.intEnable = value & 0xf;
         this.checkInterrupts();
         break;
-      case INTF:
+      case this.INTF:
         this.intForce = value & 0xf;
         this.checkInterrupts();
         break;

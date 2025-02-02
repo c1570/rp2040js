@@ -2,6 +2,8 @@ import { GPIOPin } from './gpio-pin';
 import { IClock } from './clock/clock';
 
 export interface IRPChip {
+  readonly identifier: string; // "rp2040" or "rp2350"
+
   public logger: Logger;
   loadBootrom(bootromData: Uint32Array);
   readonly disassembly: string;

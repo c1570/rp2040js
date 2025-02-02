@@ -17,7 +17,8 @@ CSRs (at least MSTATUS, MIE, MTVEC, MSCRATCH, MEPC, MCAUSE, MIP, MEIxA, MEINEXT,
 Bootrom (varmulet mostly untested)
 DMA updates
 PIO updates
-Register offset updates (esp. TIMER0/TIMER1)
+IRQ number updates
+TIMER: registers LOCK and SOURCE
 Correct timers when changing sys_clk/PLL
 SIO: secure vs. insecure, SIO_NONSEC_BASE
 Doorbells

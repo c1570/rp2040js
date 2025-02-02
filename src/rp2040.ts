@@ -50,6 +50,8 @@ export class RP2040 implements IRPChip {
   readonly usbDPRAM = new Uint8Array(4 * KB);
   readonly usbDPRAMView = new DataView(this.usbDPRAM.buffer);
 
+  readonly identifier = "rp2040";
+
   readonly core0 = new CortexM0Core(this, 'CortexM0Core0');
   readonly core1 = new CortexM0Core(this, 'CortexM0Core1');
 

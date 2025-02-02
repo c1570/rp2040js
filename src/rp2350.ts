@@ -52,6 +52,8 @@ export class RP2350 implements IRPChip {
   readonly usbDPRAM = new Uint8Array(4 * KB);
   readonly usbDPRAMView = new DataView(this.usbDPRAM.buffer);
 
+  readonly identifier = "rp2350";
+
   readonly core0: CPU = new CPU(this, 'RISCVCore0', 0);
   readonly core1: CPU = new CPU(this, 'RISCVCore1', 1);
 
@@ -145,7 +147,7 @@ export class RP2350 implements IRPChip {
     0x400a0: this.adc,
     0x400a8: this.pwm,
     0x400b0: new RPTimer(this, 'TIMER0_BASE'),
-    0x400b8: new UnimplementedPeripheral(this, 'TIMER1_BASE'),
+    0x400b8: new RPTimer(this, 'TIMER1_BASE'),
     0x400c0: new UnimplementedPeripheral(this, 'HSTX_CTRL_BASE'),
 
     0x400d8: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
