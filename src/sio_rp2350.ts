@@ -42,8 +42,8 @@ export class RPSIO {
   readonly core0;
   readonly core1;
 
-  constructor(private readonly rp2040: IRPChip) {
-    const cores = RPSIOCore.create2Cores(rp2040);
+  constructor(private readonly rp2040: IRPChip, readonly sio_proc0_irq: number, readonly sio_proc1_irq: number) {
+    const cores = RPSIOCore.create2Cores(rp2040, sio_proc0_irq, sio_proc1_irq);
     this.core0 = cores[0];
     this.core1 = cores[1];
   }

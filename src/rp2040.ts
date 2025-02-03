@@ -60,13 +60,13 @@ export class RP2040 implements IRPChip {
   clkPeri = 125 * MHz;
 
   readonly ppb = new RPPPB(this, 'PPB');
-  readonly sio = new RPSIO(this);
+  readonly sio = new RPSIO(this, IRQ.SIO_PROC0, IRQ.SIO_PROC1);
 
   readonly uart = [new RPUART(this, 'UART0', IRQ.UART0), new RPUART(this, 'UART1', IRQ.UART1)];
   readonly i2c = [new RPI2C(this, 'I2C0', IRQ.I2C0), new RPI2C(this, 'I2C1', IRQ.I2C1)];
   readonly spi = [new RPSPI(this, 'SPI0', IRQ.SPI0), new RPSPI(this, 'SPI1', IRQ.SPI1)];
-  readonly pwm = new RPPWM(this, 'PWM_BASE');
-  readonly adc = new RPADC(this, 'ADC');
+  readonly pwm = new RPPWM(this, 'PWM_BASE', IRQ.PWM_WRAP);
+  readonly adc = new RPADC(this, 'ADC', IRQ.ADC_FIFO);
 
   readonly gpio: Array<GPIOPin> = [
     new GPIOPin(this, 0),
@@ -110,12 +110,12 @@ export class RP2040 implements IRPChip {
     new GPIOPin(this, 5, 'SD3'),
   ];
 
-  readonly dma = new RPDMA(this, 'DMA');
+  readonly dma = new RPDMA(this, 'DMA', IRQ.DMA_IRQ0);
   readonly pio = [
     new RPPIO(this, 'PIO0', IRQ.PIO0_IRQ0, 0),
     new RPPIO(this, 'PIO1', IRQ.PIO1_IRQ0, 1),
   ];
-  readonly usbCtrl = new RPUSBController(this, 'USB');
+  readonly usbCtrl = new RPUSBController(this, 'USB', IRQ.USBCTRL);
 
   public logger: Logger = new ConsoleLogger(LogLevel.Debug, true);
 
@@ -144,7 +144,7 @@ export class RP2040 implements IRPChip {
     0x40048: this.i2c[1],
     0x4004c: this.adc,
     0x40050: this.pwm,
-    0x40054: new RPTimer(this, 'TIMER_BASE'),
+    0x40054: new RPTimer(this, 'TIMER_BASE', IRQ.TIMER_0),
     0x40058: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
     0x4005c: new RP2040RTC(this, 'RTC_BASE'),
     0x40060: new UnimplementedPeripheral(this, 'ROSC_BASE'),

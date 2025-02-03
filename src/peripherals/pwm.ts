@@ -1,5 +1,5 @@
 import { IClock } from '../clock/clock';
-import { IRQ } from '../irq';
+import { IRPChip } from '../rpchip';
 import { Timer32, Timer32PeriodicAlarm, TimerMode } from '../utils/timer32';
 import { DREQChannel } from './dma';
 import { BasePeripheral, Peripheral } from './peripheral';
@@ -279,6 +279,10 @@ export class RPPWM extends BasePeripheral implements Peripheral {
   gpioValue = 0;
   gpioDirection = 0;
 
+  constructor(readonly rp2040: IRPChip, name: string, readonly pwm_wrap_irq: number) {
+    super(rp2040, name);
+  }
+
   get intStatus() {
     return (this.intRaw & this.intEnable) | this.intForce;
   }
@@ -359,7 +363,7 @@ export class RPPWM extends BasePeripheral implements Peripheral {
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(IRQ.PWM_WRAP, !!this.intStatus);
+    this.rp2040.setInterrupt(this.pwm_wrap_irq, !!this.intStatus);
   }
 
   gpioSet(index: number, value: boolean) {

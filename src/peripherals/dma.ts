@@ -1,5 +1,4 @@
 import { IClockTimer } from '../clock/clock';
-import { IRQ } from '../irq';
 import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
@@ -395,6 +394,10 @@ export class RPDMA extends BasePeripheral implements Peripheral {
 
   readonly dreq: boolean[] = Array(DREQChannel.DREQ_MAX);
 
+  constructor(readonly rp2040: IRPChip, name: string, readonly dma_irq_base: number) {
+    super(rp2040, name);
+  }
+
   get intStatus0() {
     return (this.intRaw & this.intEnable0) | this.intForce0;
   }
@@ -548,7 +551,7 @@ export class RPDMA extends BasePeripheral implements Peripheral {
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(IRQ.DMA_IRQ0, !!this.intStatus0);
-    this.rp2040.setInterrupt(IRQ.DMA_IRQ1, !!this.intStatus1);
+    this.rp2040.setInterrupt(this.dma_irq_base + 0, !!this.intStatus0);
+    this.rp2040.setInterrupt(this.dma_irq_base + 1, !!this.intStatus1);
   }
 }

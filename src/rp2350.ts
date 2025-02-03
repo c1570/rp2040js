@@ -3,7 +3,7 @@ import { IClock } from './clock/clock';
 import { RealtimeClock } from './clock/realtime-clock';
 import { CPU } from './riscv/cpu';
 import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } from './gpio-pin';
-import { IRQ } from './irq';
+import { IRQ } from './irq_rp2350';
 import { RPADC } from './peripherals/adc';
 import { RPBootRAM } from './peripherals/bootram';
 import { RPPOWMAN } from './peripherals/powman';
@@ -61,13 +61,13 @@ export class RP2350 implements IRPChip {
   clkSys = 125 * MHz;
   clkPeri = 125 * MHz;
 
-  readonly sio = new RPSIO(this);
+  readonly sio = new RPSIO(this, IRQ.SIO_IRQ_FIFO, IRQ.SIO_IRQ_FIFO);
 
-  readonly uart = [new RPUART(this, 'UART0', IRQ.UART0), new RPUART(this, 'UART1', IRQ.UART1)];
-  readonly i2c = [new RPI2C(this, 'I2C0', IRQ.I2C0), new RPI2C(this, 'I2C1', IRQ.I2C1)];
-  readonly spi = [new RPSPI(this, 'SPI0', IRQ.SPI0), new RPSPI(this, 'SPI1', IRQ.SPI1)];
-  readonly pwm = new RPPWM(this, 'PWM_BASE');
-  readonly adc = new RPADC(this, 'ADC');
+  readonly uart = [new RPUART(this, 'UART0', IRQ.UART0_IRQ), new RPUART(this, 'UART1', IRQ.UART1_IRQ)];
+  readonly i2c = [new RPI2C(this, 'I2C0', IRQ.I2C0_IRQ), new RPI2C(this, 'I2C1', IRQ.I2C1_IRQ)];
+  readonly spi = [new RPSPI(this, 'SPI0', IRQ.SPI0_IRQ), new RPSPI(this, 'SPI1', IRQ.SPI1_IRQ)];
+  readonly pwm = new RPPWM(this, 'PWM_BASE', IRQ.PWM_IRQ_WRAP_0);
+  readonly adc = new RPADC(this, 'ADC', IRQ.ADC_IRQ_FIFO);
 
   readonly gpio: Array<GPIOPin> = [
     new GPIOPin(this, 0),
@@ -111,12 +111,12 @@ export class RP2350 implements IRPChip {
     new GPIOPin(this, 5, 'SD3'),
   ];
 
-  readonly dma = new RPDMA(this, 'DMA');
+  readonly dma = new RPDMA(this, 'DMA', IRQ.DMA_IRQ_0);
   readonly pio = [
-    new RPPIO(this, 'PIO0', IRQ.PIO0_IRQ0, 0),
-    new RPPIO(this, 'PIO1', IRQ.PIO1_IRQ0, 1),
+    new RPPIO(this, 'PIO0', IRQ.PIO0_IRQ_0, 0),
+    new RPPIO(this, 'PIO1', IRQ.PIO1_IRQ_0, 1),
   ];
-  readonly usbCtrl = new RPUSBController(this, 'USB');
+  readonly usbCtrl = new RPUSBController(this, 'USB', IRQ.USBCTRL_IRQ);
 
   public logger: Logger = new ConsoleLogger(LogLevel.Debug, true);
 
@@ -146,8 +146,8 @@ export class RP2350 implements IRPChip {
     0x40098: this.i2c[1],
     0x400a0: this.adc,
     0x400a8: this.pwm,
-    0x400b0: new RPTimer(this, 'TIMER0_BASE'),
-    0x400b8: new RPTimer(this, 'TIMER1_BASE'),
+    0x400b0: new RPTimer(this, 'TIMER0_BASE', IRQ.TIMER0_IRQ_0),
+    0x400b8: new RPTimer(this, 'TIMER1_BASE', IRQ.TIMER1_IRQ_0),
     0x400c0: new UnimplementedPeripheral(this, 'HSTX_CTRL_BASE'),
 
     0x400d8: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
@@ -441,7 +441,7 @@ export class RP2350 implements IRPChip {
         interruptValue = true;
       }
     }
-    this.setInterrupt(IRQ.IO_BANK0, interruptValue);
+    this.setInterrupt(IRQ.IO_IRQ_BANK0, interruptValue);
   }
 
   stepCores() {

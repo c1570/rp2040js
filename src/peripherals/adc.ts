@@ -1,4 +1,3 @@
-import { IRQ } from '../irq';
 import { IRPChip } from '../rpchip';
 import { FIFO } from '../utils/fifo';
 import { DREQChannel } from './dma';
@@ -145,12 +144,12 @@ export class RPADC extends BasePeripheral implements Peripheral {
     this.cs |= (channel & CS_AINSEL_SHIFT) << CS_AINSEL_SHIFT;
   }
 
-  constructor(rp2040: IRPChip, name: string) {
+  constructor(rp2040: IRPChip, name: string, readonly adc_interrupt: number) {
     super(rp2040, name);
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(IRQ.ADC_FIFO, !!this.intStatus);
+    this.rp2040.setInterrupt(this.adc_interrupt, !!this.intStatus);
   }
 
   startADCRead() {

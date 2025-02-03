@@ -3,7 +3,6 @@ import { RP2040 } from './rp2040';
 import { Core } from './core';
 import { Interpolator } from './interpolator';
 import { FIFO } from './utils/fifo';
-import { IRQ } from './irq';
 
 //HARDWARE DIVIDER
 const DIV_UDIVIDEND = 0x060; //  Divider unsigned dividend
@@ -71,11 +70,11 @@ export class RPSIOCore {
   ROE = false;
   WOF = false;
 
-  static create2Cores(rp2040: IRPChip) {
+  static create2Cores(rp2040: IRPChip, sio_proc0_irq: number, sio_proc1_irq: number) {
     const rxFIFO = new FIFO(8);
     const txFIFO = new FIFO(8);
-    const core0 = new RPSIOCore(rp2040, rxFIFO, txFIFO, Core.Core0);
-    const core1 = new RPSIOCore(rp2040, txFIFO, rxFIFO, Core.Core1);
+    const core0 = new RPSIOCore(rp2040, rxFIFO, txFIFO, sio_proc0_irq, sio_proc1_irq, Core.Core0, Core.Core1);
+    const core1 = new RPSIOCore(rp2040, txFIFO, rxFIFO, sio_proc1_irq, sio_proc0_irq, Core.Core1, Core.Core0);
     return [core0, core1];
   }
 
@@ -83,7 +82,10 @@ export class RPSIOCore {
     private readonly rp2040: IRPChip,
     private readonly rxFIFO: FIFO,
     private readonly txFIFO: FIFO,
-    private readonly core: Core
+    private readonly sio_interrupt: number,
+    private readonly sio_interrupt_other_core: number,
+    private readonly core: Core,
+    private readonly core_other: Core
   ) {}
 
   readUint32(offset: number) {
@@ -200,13 +202,7 @@ export class RPSIOCore {
       case FIFO_RD:
         if (this.rxFIFO.empty) {
           this.ROE = true;
-          switch (this.core) {
-            case Core.Core0:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC0, true, Core.Core0);
-              break;
-            case Core.Core1:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC1, true, Core.Core1);
-          }
+          this.rp2040.setInterruptCore(this.sio_interrupt, true, this.core);
           return 0;
         }
         return this.rxFIFO.pull();
@@ -328,37 +324,16 @@ export class RPSIOCore {
           this.ROE = false;
         }
         if (!this.WOF && !this.ROE && this.rxFIFO.empty) {
-          switch (this.core) {
-            case Core.Core0:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC0, false, Core.Core0);
-              break;
-            case Core.Core1:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC1, false, Core.Core1);
-              break;
-          }
+          this.rp2040.setInterruptCore(this.sio_interrupt, false, this.core);
         }
         break;
       case FIFO_WR:
         if (this.txFIFO.full) {
           this.WOF = true;
-          switch (this.core) {
-            case Core.Core0:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC0, true, Core.Core0);
-              break;
-            case Core.Core1:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC1, true, Core.Core1);
-              break;
-          }
+          this.rp2040.setInterruptCore(this.sio_interrupt, true, this.core);
         } else {
           this.txFIFO.push(value);
-          switch (this.core) {
-            case Core.Core0:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC1, true, Core.Core1);
-              break;
-            case Core.Core1:
-              this.rp2040.setInterruptCore(IRQ.SIO_PROC0, true, Core.Core0);
-              break;
-          }
+          this.rp2040.setInterruptCore(this.sio_interrupt_other_core, true, this.core_other);
         }
         break;
       default:

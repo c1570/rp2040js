@@ -1,4 +1,4 @@
-import { IRQ } from '../irq';
+import { IRPChip } from '../rpchip';
 import { BasePeripheral } from './peripheral';
 
 // USB DPSRAM Registers
@@ -103,6 +103,10 @@ export class RPUSBController extends BasePeripheral {
 
   readDelayMicroseconds = 1;
   writeDelayMicroseconds = 1;
+
+  constructor(readonly rp2040: IRPChip, name: string, readonly usbctrl_irq: number) {
+    super(rp2040, name);
+  }
 
   get intStatus() {
     return (this.intRaw & this.intEnable) | this.intForce;
@@ -280,7 +284,7 @@ export class RPUSBController extends BasePeripheral {
 
   private checkInterrupts() {
     const { intStatus } = this;
-    this.rp2040.setInterrupt(IRQ.USBCTRL, !!intStatus);
+    this.rp2040.setInterrupt(this.usbctrl_irq, !!intStatus);
   }
 
   resetDevice() {
