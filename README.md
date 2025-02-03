@@ -14,9 +14,9 @@ For generic/original rp2040js docs, [see below](#rp2040js).
 ```
 Interrupts and Exceptions
 CSRs (at least MSTATUS, MIE, MTVEC, MSCRATCH, MEPC, MCAUSE, MIP, MEIxA, MEINEXT, MEICONTEXT, MHARTID)
-Bootrom (varmulet mostly untested)
-DMA updates
-PIO updates
+GPIO updates (register locations, GPIO30-47, IRQSUMMARY, QSPI/USB Bank, function select)
+DMA updates (12->16 DMA channels, 2->4 shared IRQs, CHxx_TRANS_COUNT changes, INCR_READ_REV, etc.)
+PIO updates (register locations from 0x128/INTR, GPIOBASE, IRQx_INTE, RXF0_PUTGET0, instruction changes, etc.)
 IRQ number updates
 TIMER: registers LOCK and SOURCE
 Correct timers when changing sys_clk/PLL
@@ -50,7 +50,7 @@ Hazard3: Machine vs. User mode
 Xh3irq
 Xh3pmpm (Physical Memory Protection PMP)
 Xh3bextm
-correct instruction cycle counts
+cycle penalties for dependent register usage and APB access
 RV32Zcb (lh, mul, sb, sext.b, sext.h, sh, zext.b, zext.h)
 amoadd.w
 amoand.w
@@ -98,10 +98,12 @@ zip
 `*` = needs checking/fixing
 
 ```
+Bootrom * (varmulet mostly untested)
 BOOTRAM_BASE
 SYSINFO_BASE
 SYSCFG_BASE *
 PLL_SYS_BASE *
+somewhat correct instruction cycle counts *
 RV32C
 RV32Zcb (lbu, lhu, not)
 Xh3power (h3.block and h3.unblock)

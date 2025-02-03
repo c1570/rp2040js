@@ -13,6 +13,7 @@ export class CPU {
   csrs = new Array<number>(0x1000);
   pc = 0;
   next_pc = 0;
+  did_just_jump = false;
   stopped = false; //TODO
   cycles = 0;
 
@@ -36,11 +37,8 @@ export class CPU {
   setInterrupt(a: any, b: any) { } //TODO
 
   inst_length = 0;
-  private break_after_steps = 100000;
 
   private fetchInstruction(): number {
-    this.break_after_steps--;
-    if(this.break_after_steps == 0) throw Error("Ending.");
     let inst = this.chip.readUint16(this.pc);
     if ((inst & 3) != 3) {
         if (inst == 0) {
@@ -52,6 +50,7 @@ export class CPU {
     } else {
         // we have a 32 bit instruction
         inst |= this.chip.readUint16(this.pc + 2) << 16;
+        if(this.did_just_jump && (this.pc & 3)) this.cycles++; // jumped to non 32 bit aligned instr
         this.inst_length = 4;
     }
     return inst >>> 0;
@@ -82,7 +81,7 @@ export class CPU {
       this.printDisassembly();
       throw e;
     }
-    this.cycles++; //TODO
+    this.cycles++;
   }
 
   step(instruction: number) {
@@ -116,10 +115,31 @@ export class CPU {
     if(this.next_pc != 0) {
       this.pc = this.next_pc;
       this.next_pc = 0;
+      this.did_just_jump = true;
     } else {
       this.pc += this.inst_length;
+      this.did_just_jump = false;
     }
 
+  }
+
+  // Hazard3 branch predictor
+  private btb: number = -1;
+  public h3_branch_cycles(taken: boolean) {
+    const from_pc = this.pc;
+    const to_pc = this.next_pc;
+    const jumped_back = to_pc < from_pc;
+    if(from_pc === this.btb) {
+      if(taken && jumped_back) return; // predictor hit
+      // known branch mispredicted
+      this.btb = -1;
+      this.cycles++;
+      return;
+    }
+    if(taken) {
+      this.cycles++;
+      if(jumped_back) this.btb = from_pc; // new backwards branch
+    }
   }
 
   private executeR_Type(instruction: R_Type) {
@@ -369,7 +389,7 @@ const opcode0x0ffunc3Table: FuncTable<I_Type> = new Map([
     const { rd, rs1, imm } = instruction;
     const rs1Value = registerSet.getRegister(rs1);
 
-    console.log("FENCE not implemented");
+    //console.log("FENCE not implemented");
   }],
 ]);
 
@@ -557,6 +577,7 @@ const opcode0x2ffunc3Table: FuncTable<R_Type> = new Map([
       registerSet.setRegister(rd, rs1Mem);
       const value = rs1Mem | rs2Value;
       chip.writeUint32(rs1Value, value);
+      cpu.cycles += 3;
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 ]);
@@ -693,6 +714,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if (func7 === 0x01) { // divu (rv32m)
       const result = (rs1Value / rs2Value) >>> 0;
       registerSet.setRegister(rd, result);
+      cpu.cycles += 17;
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
 
   }],
@@ -741,6 +763,7 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     } else if(func7 === 0x1) { // REMU (RV32M)
       const result = (rs2Value === 0) ? rs1Value : (rs1Value % rs2Value);
       registerSet.setRegister(rd, result);
+      cpu.cycles += 17;
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
   }],
 
@@ -754,9 +777,11 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
-    if (rs1Value === rs2Value) {
+    const do_branch = rs1Value === rs2Value;
+    if (do_branch) {
       cpu.next_pc = cpu.pc + imm;
     }
+    cpu.h3_branch_cycles(do_branch);
   }],
 
   [0x1, (instruction: B_Type, cpu: CPU) => {
@@ -766,9 +791,11 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
-    if (rs1Value !== rs2Value) {
+    const do_branch = rs1Value !== rs2Value;
+    if (do_branch) {
       cpu.next_pc = cpu.pc + imm;
     }
+    cpu.h3_branch_cycles(do_branch);
   }],
 
   [0x4, (instruction: B_Type, cpu: CPU) => {
@@ -778,9 +805,11 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
-    if (rs1Value < rs2Value) {
+    const do_branch = rs1Value < rs2Value;
+    if (do_branch) {
       cpu.next_pc = cpu.pc + imm;
     }
+    cpu.h3_branch_cycles(do_branch);
   }],
 
   [0x5, (instruction: B_Type, cpu: CPU) => {
@@ -790,9 +819,11 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs1Value = registerSet.getRegister(rs1);
     const rs2Value = registerSet.getRegister(rs2);
 
-    if (rs1Value >= rs2Value) {
+    const do_branch = rs1Value >= rs2Value;
+    if (do_branch) {
       cpu.next_pc = cpu.pc + imm;
     }
+    cpu.h3_branch_cycles(do_branch);
   }],
 
   [0x6, (instruction: B_Type, cpu: CPU) => {
@@ -802,9 +833,11 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs1Value = registerSet.getRegisterU(rs1);
     const rs2Value = registerSet.getRegisterU(rs2);
 
-    if (rs1Value < rs2Value) {
+    const do_branch = rs1Value < rs2Value;
+    if (do_branch) {
       cpu.next_pc = cpu.pc + imm;
     }
+    cpu.h3_branch_cycles(do_branch);
   }],
 
   [0x7, (instruction: B_Type, cpu: CPU) => {
@@ -814,9 +847,11 @@ const opcode0x63func3Table: FuncTable<B_Type> = new Map([
     const rs1Value = registerSet.getRegisterU(rs1);
     const rs2Value = registerSet.getRegisterU(rs2);
 
-    if (rs1Value >= rs2Value) {
+    const do_branch = rs1Value >= rs2Value;
+    if (do_branch) {
       cpu.next_pc = cpu.pc + imm;
     }
+    cpu.h3_branch_cycles(do_branch);
   }],
 ]);
 
@@ -829,6 +864,7 @@ const opcode0x67func3Table: FuncTable<I_Type> = new Map([
 
     registerSet.setRegister(rd, cpu.pc + cpu.inst_length);
     cpu.next_pc = rs1Value + imm;
+    cpu.cycles++;
   }]
 ]);
 
@@ -844,6 +880,7 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
         mstatus |= 1<<7; // Write 1 to MSTATUS.MPIE
         cpu.setCSR(0x300, mstatus);
         cpu.next_pc = cpu.getCSR(0x341); // Jump to the address in MEPC.
+        cpu.cycles++;
         break;
       case 0x73: // ecall
         cpu.setCSR(0x431, cpu.pc); // Save the address of the interrupted or excepting instruction to MEPC
@@ -867,6 +904,7 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
         } else {
           cpu.next_pc = mtvec + reason; // vectored mtvec mode
         }
+        cpu.cycles += 2;
         break;
       default:
         throw Error(`Unknown instruction 0x${instruction.binary.toString(16)}`);
@@ -980,6 +1018,7 @@ const j_TypeOpcodeTable: OpcodeTable<J_Type> = new Map([
 
     registerSet.setRegister(rd, cpu.pc + cpu.inst_length);
     cpu.next_pc = cpu.pc + imm;
+    cpu.cycles++;
   }]
 ]);
 
