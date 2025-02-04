@@ -18,10 +18,13 @@ export class CPU {
   csrs = new Array<number>(0x1000);
   pc = 0;
   next_pc = 0;
-  did_just_jump = false;
   stopped = false; //TODO
   cycles = 0;
   currentMode: ExecutionMode = ExecutionMode.Mode_Machine;
+  pendingInterrupts = BigInt(0);
+  interruptsUpdated: boolean = false;
+
+  did_just_jump = false;
 
   constructor(readonly chip: IRPChip, readonly coreLabel: string, readonly mhartid: number) {
     this.reset();
@@ -43,8 +46,6 @@ export class CPU {
     this.csrs[0xf12] = 0x1b;
     this.csrs[0xf13] = 0x86fc4e3f;
   }
-
-  setInterrupt(a: any, b: any) { } //TODO
 
   inst_length = 0;
 
@@ -80,6 +81,11 @@ export class CPU {
   }
 
   executeInstruction() {
+    if (this.interruptsUpdated) {
+      if (this.checkForInterrupts()) {
+        this.waiting = false;
+      }
+    }
     if (this.waiting) {
       this.cycles++;
       return;
@@ -131,6 +137,58 @@ export class CPU {
       this.did_just_jump = false;
     }
 
+  }
+
+  setInterrupt(irq: number, value: boolean) {
+    const irqBit = BigInt(1) << BigInt(irq);
+    if (value && !(this.pendingInterrupts & irqBit)) {
+      this.pendingInterrupts |= irqBit;
+      this.interruptsUpdated = true;
+      if (this.waiting && this.checkForInterrupts()) {
+        this.waiting = false;
+      }
+    } else if (!value) {
+      this.pendingInterrupts &= ~irqBit;
+    }
+  }
+
+  checkForInterrupts() {
+    // TODO
+    this.interruptsUpdated = false;
+    if(this.csrs[0x304] & 0b100000000000) { // if MIE.MEIE is set... TODO consider software and timer interrupts as well
+      if(this.pendingInterrupts > 0) { // and an interrupt is pending...
+        if(this.csrs[0x300] & 0b1000) { // if MSTATUS.MIE is set...
+          this.exceptionEntry(((1<<31) | 11) >>> 0); //TODO hardwired cause MEIP = external interrupt
+        }
+        return true; // "wfi ignores the global interrupt enable, MSTATUS.MIE"
+      }
+    }
+    this.logger.warn(this.coreLabel, `Interrupts ignored: ${this.pendingInterrupts.toString(2)}`);
+    return false;
+  }
+
+  exceptionEntry(mcause: number) {
+    this.logger.info(this.coreLabel, `Entering exception, mcause ${mcause.toString(16)}`);
+    this.setCSR(0x431, this.pc); // Save the address of the interrupted or excepting instruction to MEPC
+    // 2. Set the MSB of MCAUSE to indicate the cause is an interrupt, or clear it to indicate an exception
+    // 3. Write the detailed trap cause to the LSBs of the MCAUSE register
+    this.setCSR(0x342, mcause);
+    // TODO 4. Save the current privilege level to MSTATUS.MPP
+    // TODO 5. Set the privilege to M-mode (note Hazard3 does not implement S-mode)
+    // 6. Save the current value of MSTATUS.MIE to MSTATUS.MPIE
+    let mstatus = this.getCSR(0x300);
+    mstatus &= ~0b10000000; mstatus |= (mstatus << 4) & 0b10000000;
+    // 7. Disable interrupts by clearing MSTATUS.MIE
+    mstatus &= 1<<7;
+    this.setCSR(0x300, mstatus);
+    // 8. Jump to the correct offset from MTVEC depending on the trap cause
+    const mtvec = this.getCSR(0x305);
+    if((mtvec & 1) == 0) {
+      this.next_pc = mtvec; // direct mtvec mode
+    } else {
+      this.next_pc = (mtvec & ~0b11) + ((mcause & 0b1111) << 2); // vectored mtvec mode
+    }
+    this.cycles += 2;
   }
 
   // Hazard3 branch predictor
@@ -262,6 +320,10 @@ export class CPU {
       case 0x300:
           this.csrs[csr] = value;
           return;
+      case 0x304: // MIE
+          this.csrs[csr] = value;
+          this.checkForInterrupts();
+          break;
     }
     this.logger.info(this.coreLabel, `Unknown CSR set: 0x${value.toString(16)} => 0x${csr.toString(16)}`);
     this.csrs[csr] = value;
@@ -278,10 +340,15 @@ export class CPU {
     // MSLEEP 0xbf0
     switch(csr) {
       case 0xf14: return this.mhartid;
-      case 0xbe5: return 0x8000; //TODO just return "not in interrupt"
+      case 0xbe5: return 0x8000; //TODO MEICONTEXT.NOIRQ=1: just return "not in interrupt". Actually consider meinext.noirq/update.
       case 0x300:
       case 0x340:
       case 0xbf0: return this.csrs[csr];
+      case 0xbe4: // MEINEXT TODO should actually look at meipa and meiea
+        for(let i = 4; i >= 0; i--) {
+          if(this.pendingInterrupts & BigInt(1 << i)) return i << 2;
+        }
+        return (1 << 31) >>> 0; // no interrupt pending
     }
     this.logger.info(this.coreLabel, `Unknown CSR get: 0x${csr.toString(16)}`);
     return this.csrs[csr];
@@ -892,28 +959,9 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
         cpu.cycles++;
         break;
       case 0x73: // ecall
-        cpu.setCSR(0x431, cpu.pc); // Save the address of the interrupted or excepting instruction to MEPC
-        // 2. Set the MSB of MCAUSE to indicate the cause is an interrupt, or clear it to indicate an exception
-        // 3. Write the detailed trap cause to the LSBs of the MCAUSE register
-        const u_mode = 1; //TODO
+        const u_mode = 0; //TODO
         const reason = u_mode?0x8:0xb;
-        cpu.setCSR(0x342, ((1<<31)|reason)>>>0);
-        // TODO 4. Save the current privilege level to MSTATUS.MPP
-        // TODO 5. Set the privilege to M-mode (note Hazard3 does not implement S-mode)
-        // 6. Save the current value of MSTATUS.MIE to MSTATUS.MPIE
-        mstatus = cpu.getCSR(0x300);
-        mstatus &= ~0b10000000; mstatus |= (mstatus << 4) & 0b10000000;
-        // 7. Disable interrupts by clearing MSTATUS.MIE
-        mstatus &= 1<<7;
-        cpu.setCSR(0x300, mstatus);
-        // 8. Jump to the correct offset from MTVEC depending on the trap cause
-        const mtvec = cpu.getCSR(0x305);
-        if((mtvec & 3) == 0) {
-          cpu.next_pc = mtvec; // direct mtvec mode
-        } else {
-          cpu.next_pc = mtvec + reason; // vectored mtvec mode
-        }
-        cpu.cycles += 2;
+        cpu.exceptionEntry(reason);
         break;
       default:
         throw Error(`Unknown instruction 0x${instruction.binary.toString(16)}`);
