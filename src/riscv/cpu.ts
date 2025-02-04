@@ -21,6 +21,10 @@ export class CPU {
     this.reset();
   }
 
+  get logger() {
+    return this.chip.logger;
+  }
+
   reset() { // TODO
     this.csrs.fill(0);
     this.csrs[0x300] = 3<<11;
@@ -63,9 +67,9 @@ export class CPU {
       const re = new RegExp(search + "(.*)");
       const res = re.exec(this.chip.disassembly);
       const dis = (res == null) ? "?" : res[1];
-      console.log(`*** ${this.coreLabel} - PC 0x${this.pc.toString(16)} - ${dis}`);
+      this.logger.info(this.coreLabel, `PC 0x${this.pc.toString(16)} - ${dis}`);
     } else {
-      console.log(`*** ${this.coreLabel} - PC 0x${this.pc.toString(16)}`);
+      this.logger.info(this.coreLabel, `PC 0x${this.pc.toString(16)}`);
     }
   }
 
@@ -254,7 +258,7 @@ export class CPU {
           this.csrs[csr] = value;
           return;
     }
-    console.log(`Unknown CSR set: 0x${value.toString(16)} => 0x${csr.toString(16)}`);
+    this.logger.info(this.coreLabel, `Unknown CSR set: 0x${value.toString(16)} => 0x${csr.toString(16)}`);
     this.csrs[csr] = value;
   }
 
@@ -274,7 +278,7 @@ export class CPU {
       case 0x340:
       case 0xbf0: return this.csrs[csr];
     }
-    console.log(`Unknown CSR get: 0x${csr.toString(16)}`);
+    this.logger.info(this.coreLabel, `Unknown CSR get: 0x${csr.toString(16)}`);
     return this.csrs[csr];
   }
 
