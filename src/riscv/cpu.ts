@@ -3,6 +3,11 @@ import { getRange } from "./binaryFunctions";
 import { IRPChip } from "../rpchip";
 import { decompress_rv32c_inst } from "./rv32c";
 
+enum ExecutionMode {
+  Mode_Machine,
+  Mode_User,
+}
+
 export class CPU {
 
   public onSEV?: () => void;
@@ -16,6 +21,7 @@ export class CPU {
   did_just_jump = false;
   stopped = false; //TODO
   cycles = 0;
+  currentMode: ExecutionMode = ExecutionMode.Mode_Machine;
 
   constructor(readonly chip: IRPChip, readonly coreLabel: string, readonly mhartid: number) {
     this.reset();
