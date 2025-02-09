@@ -13,11 +13,10 @@ For generic/original rp2040js docs, [see below](#rp2040js).
 
 ```
 Interrupts and Exceptions
-CSRs (at least MSTATUS, MIE, MTVEC, MSCRATCH, MEPC, MCAUSE, MIP, MEIxA, MEINEXT, MEICONTEXT, MHARTID)
+CSRs (note Xh3irq [CSR write bypass](https://github.com/Wren6991/Hazard3/blob/787da131a1e982543d9b308c1c25a09160e71a65/hdl/hazard3_core.v#L921))
 GPIO updates (register locations, GPIO30-47, IRQSUMMARY, QSPI/USB Bank, function select)
 DMA updates (12->16 DMA channels, 2->4 shared IRQs, CHxx_TRANS_COUNT changes, INCR_READ_REV, etc.)
 PIO updates (register locations from 0x128/INTR, GPIOBASE, IRQx_INTE, RXF0_PUTGET0, instruction changes, etc.)
-IRQ number updates
 TIMER: registers LOCK and SOURCE
 Correct timers when changing sys_clk/PLL
 SIO: secure vs. insecure, SIO_NONSEC_BASE
@@ -31,7 +30,6 @@ XOSC_BASE
 PLL_USB_BASE
 ACCESSCTRL_BASE
 BUSCTRL_BASE
-TIMER1_BASE
 HSTX_FIFO_BASE
 HSTX_CTRL_BASE
 XIP_CTRL_BASE
@@ -51,6 +49,7 @@ Xh3irq
 Xh3pmpm (Physical Memory Protection PMP)
 Xh3bextm
 cycle penalties for dependent register usage and APB access
+also see Hazard3 [rv_opcodes.vh](https://github.com/Wren6991/Hazard3/blob/stable/hdl/rv_opcodes.vh) and [hazard3_decode.v](https://github.com/Wren6991/Hazard3/blob/787da131a1e982543d9b308c1c25a09160e71a65/hdl/hazard3_decode.v#L305):
 RV32Zcb (lh, mul, sb, sext.b, sext.h, sh, zext.b, zext.h)
 amoadd.w
 amoand.w
@@ -102,7 +101,9 @@ Bootrom * (varmulet mostly untested)
 BOOTRAM_BASE
 SYSINFO_BASE
 SYSCFG_BASE *
+TIMER1_BASE
 PLL_SYS_BASE *
+updated IRQ constants
 somewhat correct instruction cycle counts *
 RV32C
 RV32Zcb (lbu, lhu, not)

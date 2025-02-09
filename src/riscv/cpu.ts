@@ -169,20 +169,20 @@ export class CPU {
 
   exceptionEntry(mcause: number) {
     this.logger.info(this.coreLabel, `Entering exception, mcause ${mcause.toString(16)}`);
-    this.setCSR(0x431, this.pc); // Save the address of the interrupted or excepting instruction to MEPC
+    this.setCSR(0x431, this.pc, 0); // Save the address of the interrupted or excepting instruction to MEPC
     // 2. Set the MSB of MCAUSE to indicate the cause is an interrupt, or clear it to indicate an exception
     // 3. Write the detailed trap cause to the LSBs of the MCAUSE register
-    this.setCSR(0x342, mcause);
+    this.setCSR(0x342, mcause, 0);
     // TODO 4. Save the current privilege level to MSTATUS.MPP
     // TODO 5. Set the privilege to M-mode (note Hazard3 does not implement S-mode)
     // 6. Save the current value of MSTATUS.MIE to MSTATUS.MPIE
-    let mstatus = this.getCSR(0x300);
+    let mstatus = this.getCSR(0x300, 0);
     mstatus &= ~0b10000000; mstatus |= (mstatus << 4) & 0b10000000;
     // 7. Disable interrupts by clearing MSTATUS.MIE
     mstatus &= 1<<7;
-    this.setCSR(0x300, mstatus);
+    this.setCSR(0x300, mstatus, 0);
     // 8. Jump to the correct offset from MTVEC depending on the trap cause
-    const mtvec = this.getCSR(0x305);
+    const mtvec = this.getCSR(0x305, 0);
     if((mtvec & 1) == 0) {
       this.next_pc = mtvec; // direct mtvec mode
     } else {
@@ -301,7 +301,8 @@ export class CPU {
     }
   }
 
-  setCSR(csr: number, value: number) {
+  setCSR(csr: number, value: number, raw_write: number) {
+    // raw_write: instruction raw write value, used for Xh3irq interrupt array indices
     switch(csr) {
       case 0x301:
       case 0x30a:
@@ -329,7 +330,8 @@ export class CPU {
     this.csrs[csr] = value;
   }
 
-  getCSR(csr: number): number {
+  getCSR(csr: number, raw_write: number): number {
+    // raw_write: instruction raw write value, used for Xh3irq interrupt array indices
     // MSTATUS 0x300
     // MIE 0x304
     // MTVEC 0x305
@@ -950,12 +952,12 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     switch(instruction.binary) {
       case 0x30200073: // mret
         // TODO Restore core privilege level to the value of MSTATUS.MPP
-        mstatus = cpu.getCSR(0x300);
+        mstatus = cpu.getCSR(0x300, 0);
         mstatus &= ~(3<<11); // Write 0 (U-mode) to MSTATUS.MPP
         mstatus &= ~0b1000; mstatus |= (mstatus >>> 4) & 0b1000; // Restore MSTATUS.MIE from MSTATUS.MPIE
         mstatus |= 1<<7; // Write 1 to MSTATUS.MPIE
-        cpu.setCSR(0x300, mstatus);
-        cpu.next_pc = cpu.getCSR(0x341); // Jump to the address in MEPC.
+        cpu.setCSR(0x300, mstatus, 0);
+        cpu.next_pc = cpu.getCSR(0x341, 0); // Jump to the address in MEPC.
         cpu.cycles++;
         break;
       case 0x73: // ecall
@@ -972,19 +974,19 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     const { registerSet } = cpu;
     const newValue = registerSet.getRegister(rs1);
     if(rd != 0) {
-      const oldValue = cpu.getCSR(immU);
+      const oldValue = cpu.getCSR(immU, newValue);
       registerSet.setRegister(rd, oldValue);
     }
-    cpu.setCSR(immU, newValue);
+    cpu.setCSR(immU, newValue, newValue);
   }],
   [0x2, (instruction: I_Type, cpu: CPU) => { // csrrs, csrs, csrr
     const { rd, rs1, immU } = instruction; // immU is csr
     const { registerSet } = cpu;
-    const oldValue = cpu.getCSR(immU);
+    const orValue = registerSet.getRegister(rs1);
+    const oldValue = cpu.getCSR(immU, orValue);
     if(rs1 != 0) {
-      const orValue = registerSet.getRegister(rs1);
       const newValue = oldValue | orValue;
-      cpu.setCSR(immU, newValue);
+      cpu.setCSR(immU, newValue, orValue);
     }
     registerSet.setRegister(rd, oldValue);
   }],
@@ -992,10 +994,10 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     const { rd, rs1, immU } = instruction; // immU is csr
     const { registerSet } = cpu;
     const notValue = registerSet.getRegister(rs1);
-    const oldValue = cpu.getCSR(immU);
+    const oldValue = cpu.getCSR(immU, notValue);
     const newValue = oldValue & (~notValue);
     if(notValue != 0) {
-      cpu.setCSR(immU, newValue);
+      cpu.setCSR(immU, newValue, notValue);
     }
     registerSet.setRegister(rd, oldValue);
   }],
@@ -1004,28 +1006,28 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
     const { registerSet } = cpu;
     const newValue = rs1;
     if(rd != 0) {
-      const oldValue = cpu.getCSR(immU);
+      const oldValue = cpu.getCSR(immU, newValue);
       registerSet.setRegister(rd, oldValue);
     }
-    cpu.setCSR(immU, newValue);
+    cpu.setCSR(immU, newValue, newValue);
   }],
   [0x6, (instruction: I_Type, cpu: CPU) => { // csrrsi, csrsi
     const { rd, rs1, immU } = instruction; // rs1 is imm, immU is csr
     const { registerSet } = cpu;
-    const oldValue = cpu.getCSR(immU);
+    const oldValue = cpu.getCSR(immU, rs1);
     if(rs1 != 0) {
       const newValue = oldValue | rs1;
-      cpu.setCSR(immU, newValue);
+      cpu.setCSR(immU, newValue, rs1);
     }
     registerSet.setRegister(rd, oldValue);
   }],
   [0x7, (instruction: I_Type, cpu: CPU) => { // csrrci, csrci
-    const { rd, rs1, immU } = instruction; // rs1 is iumm, immU is csr
+    const { rd, rs1, immU } = instruction; // rs1 is imm, immU is csr
     const { registerSet } = cpu;
-    const oldValue = cpu.getCSR(immU);
+    const oldValue = cpu.getCSR(immU, rs1);
     if(rs1 != 0) {
       const newValue = oldValue & (~rs1);
-      cpu.setCSR(immU, newValue);
+      cpu.setCSR(immU, newValue, rs1);
     }
     registerSet.setRegister(rd, oldValue);
   }]
