@@ -6,14 +6,15 @@ For generic/original rp2040js docs, [see below](#rp2040js).
 ### Status of rp2350js
 * limited RISC-V/Hazard3 support (no ARM support)
 * runs both no_flash/RAM binaries and flash binaries
-* runs blink_simple.c (busy_wait_us instead of sleep_ms)
+* runs pico-examples/blink_simple.c and hello_timer.c
 * runs [Connomore64](https://github.com/c1570/Connomore64) main mcu (dual core, PIO)
 
 #### Missing
 
 ```
-Interrupts and Exceptions
-CSRs (note Xh3irq [CSR write bypass](https://github.com/Wren6991/Hazard3/blob/787da131a1e982543d9b308c1c25a09160e71a65/hdl/hazard3_core.v#L921))
+Timer and System Interrupts
+Exceptions
+Many CSRs
 GPIO updates (register locations, GPIO30-47, IRQSUMMARY, QSPI/USB Bank, function select)
 DMA updates (12->16 DMA channels, 2->4 shared IRQs, CHxx_TRANS_COUNT changes, INCR_READ_REV, etc.)
 PIO updates (register locations from 0x128/INTR, GPIOBASE, IRQx_INTE, RXF0_PUTGET0, instruction changes, etc.)
@@ -45,11 +46,9 @@ CORESIGHT_PERIPH_BASE ...
 GLITCH_DETECTOR_BASE
 
 Hazard3: Machine vs. User mode
-Xh3irq
 Xh3pmpm (Physical Memory Protection PMP)
 Xh3bextm
 cycle penalties for dependent register usage and APB access
-also see Hazard3 [rv_opcodes.vh](https://github.com/Wren6991/Hazard3/blob/stable/hdl/rv_opcodes.vh) and [hazard3_decode.v](https://github.com/Wren6991/Hazard3/blob/787da131a1e982543d9b308c1c25a09160e71a65/hdl/hazard3_decode.v#L305):
 RV32Zcb (lh, mul, sb, sext.b, sext.h, sh, zext.b, zext.h)
 amoadd.w
 amoand.w
@@ -93,6 +92,10 @@ wfi
 zip
 ```
 
+Notes
+* Xh3irq [CSR write bypass](https://github.com/Wren6991/Hazard3/blob/787da131a1e982543d9b308c1c25a09160e71a65/hdl/hazard3_core.v#L921)
+* Hazard3 [rv_opcodes.vh](https://github.com/Wren6991/Hazard3/blob/stable/hdl/rv_opcodes.vh) and [hazard3_decode.v](https://github.com/Wren6991/Hazard3/blob/787da131a1e982543d9b308c1c25a09160e71a65/hdl/hazard3_decode.v#L305):
+
 #### Implemented
 `*` = needs checking/fixing
 
@@ -103,11 +106,13 @@ SYSINFO_BASE
 SYSCFG_BASE *
 TIMER1_BASE
 PLL_SYS_BASE *
+External interrupts *
 updated IRQ constants
-somewhat correct instruction cycle counts *
+Xh3irq (MEIEA, MEIPA, MEIFA, MEIPRA, MEINEXT, MEICONTEXT) *
+Xh3power (h3.block and h3.unblock)
 RV32C
 RV32Zcb (lbu, lhu, not)
-Xh3power (h3.block and h3.unblock)
+somewhat correct instruction cycle counts *
 add
 addi
 and

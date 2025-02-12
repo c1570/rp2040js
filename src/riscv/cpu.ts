@@ -8,6 +8,10 @@ enum ExecutionMode {
   Mode_User,
 }
 
+class EICAND {
+  constructor(readonly irq_number: number, readonly priority: number) {}
+}
+
 export class CPU {
 
   public onSEV?: () => void;
@@ -21,8 +25,13 @@ export class CPU {
   stopped = false; //TODO
   cycles = 0;
   currentMode: ExecutionMode = ExecutionMode.Mode_Machine;
-  pendingInterrupts = BigInt(0);
-  interruptsUpdated: boolean = false;
+
+  interruptsUpdated = false;
+  meiea = new Array<number>(512);
+  meipa = new Array<number>(512);
+  meifa = new Array<number>(512);
+  meipra = new Array<number>(512);
+  meicand = new Array<EICAND>();
 
   did_just_jump = false;
 
@@ -35,6 +44,13 @@ export class CPU {
   }
 
   reset() { // TODO
+    this.meiea.fill(0);
+    this.meipa.fill(0);
+    this.meifa.fill(0);
+    this.meipra.fill(0);
+    this.meicand = new Array<EICAND>();
+    this.interruptsUpdated = false;
+
     this.csrs.fill(0);
     this.csrs[0x300] = 3<<11;
     this.csrs[0x301] = 0b01000000100100000001000100000101;
@@ -81,11 +97,7 @@ export class CPU {
   }
 
   executeInstruction() {
-    if (this.interruptsUpdated) {
-      if (this.checkForInterrupts()) {
-        this.waiting = false;
-      }
-    }
+    this.checkForInterrupts();
     if (this.waiting) {
       this.cycles++;
       return;
@@ -139,37 +151,116 @@ export class CPU {
 
   }
 
-  setInterrupt(irq: number, value: boolean) {
-    const irqBit = BigInt(1) << BigInt(irq);
-    if (value && !(this.pendingInterrupts & irqBit)) {
-      this.pendingInterrupts |= irqBit;
-      this.interruptsUpdated = true;
-      if (this.waiting && this.checkForInterrupts()) {
-        this.waiting = false;
-      }
-    } else if (!value) {
-      this.pendingInterrupts &= ~irqBit;
+  setInterruptEnabled(irq: number, value: boolean) {
+    if (value && !this.meiea[irq] && this.meipa[irq]) {
+      // interrupt was pending and just has been enabled, put into meicand
+      this.meiea[irq] = 1;
+      this.meipa[irq] = 0;
+      this.setInterrupt(irq, true);
+    } else if (!value && this.meiea[irq] && this.meipa[irq]) {
+      // interrupt is pending and just has been disabled, remove from meicand
+      this.setInterrupt(irq, false);
+      this.meipa[irq] = 1;
     }
+    this.meiea[irq] = +value;
+  }
+
+  setInterrupt(irq: number, value: boolean) {
+    //this.logger.warn(this.coreLabel, `New interrupt: ${irq} = ${value}`);
+    if (value && !this.meipa[irq] && this.meiea[irq]) {
+      this.meipa[irq] = 1;
+      this.meicand.push(new EICAND(irq, this.meipra[irq]));
+      this.meicand.sort((a,b) => ((b.priority - a.priority) << 9) + (a.irq_number - b.irq_number));
+      this.updateMEINEXT();
+      this.interruptsUpdated = true;
+    } else if (!value && this.meipa[irq]) {
+      this.meipa[irq] = 0;
+      this.meicand = this.meicand.filter((icand) => icand.irq_number != irq);
+      this.updateMEINEXT();
+    }
+  }
+
+  updateMEINEXT() {
+    // updates MEINEXT and MIE.MEIP
+    const meicontext_ppreempt = (this.csrs[0xbe5] >>> 24) & 0b1111;
+    if(this.meicand.length > 0 && this.meicand[0].priority >= meicontext_ppreempt) {
+      // note that we're looking at *PP*REEMPT here - interrupts with equal or higher priority than that ARE visible in MEINEXT
+      // but might still NOT trigger a trap in case their priority is lower than *P*REEMPT.
+      this.csrs[0xbe4] = this.meicand[0].irq_number << 2;
+      this.csrs[0x344] |= 1 << 11;
+    } else {
+      this.csrs[0xbe4] = (1 << 31) >>> 0;
+      this.csrs[0x344] &= ~(1 << 11);
+    }
+  }
+
+  updateMEICONTEXT_update() {
+    // called on MEINEXT.UPDATE write
+    // clear NOIRQ and IRQ
+    let meicontext = this.csrs[0xbe5];
+    meicontext &= ~(0b1001111111110000);
+    // update NOIRQ
+    meicontext |= (this.csrs[0xbe4] >>> 31) << 15;
+    // update IRQ
+    const current_irq = (this.csrs[0xbe4] >>> 2) & 511;
+    meicontext |= current_irq << 4;
+    this.csrs[0xbe5] = meicontext;
+  }
+
+  updateMEICONTEXT_priority_save() {
+    // called on priority save (external interrupt trap)
+    let meicontext = this.csrs[0xbe5];
+    // clear PPPREEMPT, PPREEMPT, PREEMPT, MTIESAVE, MSIESAVE, CLEARTS
+    meicontext &= 0b1111111111110001;
+    // update PPREEMPT from old PREEMPT
+    meicontext |= ((this.csrs[0xbe5] >>> 16) & 0b1111) << 24;
+    // update PPPREEMPT from old PPREEMPT
+    meicontext |= ((this.csrs[0xbe5] >>> 24) & 0b1111) << 28;
+    // update PREEMPT
+    const current_irq = (this.csrs[0xbe4] >>> 2) & 511;
+    if(current_irq > 0) {
+      meicontext |= (this.meipra[current_irq] + 1) << 16;
+    } else {
+      meicontext |= 16 << 16;
+    }
+    meicontext |= 1; // set MEICONTEXT.MRETEIRQ
+    this.csrs[0xbe5] = meicontext;
+  }
+
+  updateMEICONTEXT_priority_restore() {
+    // called on potential priority restore (mret)
+    let meicontext = this.csrs[0xbe5];
+    if(!(meicontext & 1)) return; // only proceed if MRETEIRQ is set
+    // clear PPP/PP/PREEMPT/MRETEIRQ
+    meicontext &= 0b111111111111110;
+    // set PPREEMPT from old PPPREEMPT
+    meicontext |= (this.csrs[0xbe5] >>> 28) << 24;
+    // set PREEMPT from old PPREEMPT
+    meicontext |= ((this.csrs[0xbe5] >>> 24) & 0b1111) << 16;
+    this.csrs[0xbe5] = meicontext;
   }
 
   checkForInterrupts() {
-    // TODO
+    if(!this.interruptsUpdated) return;
     this.interruptsUpdated = false;
     if(this.csrs[0x304] & 0b100000000000) { // if MIE.MEIE is set... TODO consider software and timer interrupts as well
-      if(this.pendingInterrupts > 0) { // and an interrupt is pending...
-        if(this.csrs[0x300] & 0b1000) { // if MSTATUS.MIE is set...
-          this.exceptionEntry(((1<<31) | 11) >>> 0); //TODO hardwired cause MEIP = external interrupt
+      const meinext_irq_number = (this.csrs[0xbe4] >>> 2) & 511;
+      const meinext_irq_prio = this.meipra[meinext_irq_number];
+      const meicontext_preempt = (this.csrs[0xbe5] >>> 16) & 0b11111;
+      if(meinext_irq_number > 0 && meinext_irq_prio >= meicontext_preempt) { // ...and the interrupt visible in MEINEXT has at least PREEMPT priority...
+        if(this.csrs[0x300] & 0b1000) { // ...and MSTATUS.MIE is set...
+          this.updateMEICONTEXT_priority_save(); // this gets called ONLY on external interrupt trap
+          this.trapEntry(((1<<31) | 11) >>> 0); //TODO hardwired cause MEIP = external interrupt
         }
-        return true; // "wfi ignores the global interrupt enable, MSTATUS.MIE"
+        this.waiting = false; // "wfi ignores the global interrupt enable, MSTATUS.MIE"
       }
     }
-    this.logger.warn(this.coreLabel, `Interrupts ignored: ${this.pendingInterrupts.toString(2)}`);
-    return false;
   }
 
-  exceptionEntry(mcause: number) {
-    this.logger.info(this.coreLabel, `Entering exception, mcause ${mcause.toString(16)}`);
-    this.setCSR(0x431, this.pc, 0); // Save the address of the interrupted or excepting instruction to MEPC
+  trapEntry(mcause: number) {
+    //this.logger.info(this.coreLabel, `Entering trap handler, mcause 0x${mcause.toString(16)}`);
+    if(mcause != (((1<<31) | 11) >>> 0)) this.csrs[0xbe5] &= ~1; // clear MIECONTEXT.MRETEIRQ on any trap that's not an external interrupt
+    this.setCSR(0x341, this.pc, 0); // Save the address of the interrupted or excepting instruction to MEPC
     // 2. Set the MSB of MCAUSE to indicate the cause is an interrupt, or clear it to indicate an exception
     // 3. Write the detailed trap cause to the LSBs of the MCAUSE register
     this.setCSR(0x342, mcause, 0);
@@ -183,11 +274,16 @@ export class CPU {
     this.setCSR(0x300, mstatus, 0);
     // 8. Jump to the correct offset from MTVEC depending on the trap cause
     const mtvec = this.getCSR(0x305, 0);
-    if((mtvec & 1) == 0) {
-      this.next_pc = mtvec; // direct mtvec mode
+    if(mcause >> 31) {
+      if((mtvec & 1) == 0) {
+        this.pc = mtvec; // direct mtvec mode
+      } else {
+        this.pc = (mtvec & ~0b11) + ((mcause & 0b1111) << 2); // vectored mtvec mode
+      }
     } else {
-      this.next_pc = (mtvec & ~0b11) + ((mcause & 0b1111) << 2); // vectored mtvec mode
+      this.pc = mtvec; // "Exceptions jump to exactly the address of MTVEC"
     }
+    this.next_pc = 0;
     this.cycles += 2;
   }
 
@@ -303,7 +399,15 @@ export class CPU {
 
   setCSR(csr: number, value: number, raw_write: number) {
     // raw_write: instruction raw write value, used for Xh3irq interrupt array indices
+    value >>>= 0; raw_write >>>= 0;
     switch(csr) {
+      case 0x300:
+          this.csrs[csr] = value;
+          return;
+      case 0x304: // MIE
+          this.csrs[csr] = value;
+          this.interruptsUpdated = true;
+          return;
       case 0x301:
       case 0x30a:
       case 0x310:
@@ -312,45 +416,106 @@ export class CPU {
       case 0x330: case 0x331: case 0x332: case 0x333: case 0x334: case 0x335: case 0x336: case 0x337: case 0x338: case 0x339: case 0x33a: case 0x33b: case 0x33c: case 0x33d: case 0x33e: case 0x33f:
       case 0x343:
       case 0x3b8: case 0x3b9: case 0x3ba: case 0x3bb: case 0x3bc: case 0x3bd: case 0x3be: case 0x3bf:
+          return;
+      case 0x340:
+      case 0x341:
+      case 0x342:
+          this.csrs[csr] = value;
+          return;
+      //TODO
+      case 0xbe0: { // MEIEA
+          let state = value >>> 16;
+          for(let irq = (raw_write & 0b11111) * 16; irq < (raw_write & 0b11111) * 16 + 16; irq++) { this.setInterruptEnabled(irq, !!(state & 1)); state >>= 1; }
+          return; }
+      case 0xbe1: return; // MEIPA
+      case 0xbe2: { // MEIFA
+          let state = value >>> 16;
+          for(let irq = (raw_write & 0b11111) * 16; irq < (raw_write & 0b11111) * 16 + 16; irq++) {
+            this.meifa[irq] = state & 1;
+            this.setInterrupt(irq, !!(state & 1));
+            state >>= 1;
+          }
+          return; }
+      case 0xbe3: { // MEIPRA
+          let state = value >>> 16;
+          for(let irq = (raw_write & 0b11111) * 4; irq < (raw_write & 0b11111) * 4 + 4; irq++) {
+            this.meipra[irq] = state & 0b1111;
+            if(this.meipa[irq]) {
+              this.setInterrupt(irq, false);
+              this.setInterrupt(irq, true);
+            }
+            state >>= 4;
+          }
+          return; }
+      case 0xbe4: { // MEINEXT
+          if(value & 1) { // MEINEXT.UPDATE set
+            this.updateMEICONTEXT_update();
+            this.updateMEINEXT();
+            this.interruptsUpdated = true;
+          }
+          return; }
+      case 0xbe5: // MEICONTEXT - note MTIESAVE/MSIESAVE/CLEARTS writes are a side effect of getCTS here
+          this.csrs[csr] = value;
+          this.updateMEINEXT();
+          this.interruptsUpdated = true;
+          return;
+      //TODO
       case 0xc00:
       case 0xc02:
       case 0xc80:
       case 0xc82:
       case 0xf11: case 0xf12: case 0xf13: case 0xf14:
           return;
-      case 0x300:
-          this.csrs[csr] = value;
-          return;
-      case 0x304: // MIE
-          this.csrs[csr] = value;
-          this.checkForInterrupts();
-          break;
     }
     this.logger.info(this.coreLabel, `Unknown CSR set: 0x${value.toString(16)} => 0x${csr.toString(16)}`);
     this.csrs[csr] = value;
   }
 
   getCSR(csr: number, raw_write: number): number {
+    raw_write >>>= 0;
     // raw_write: instruction raw write value, used for Xh3irq interrupt array indices
     // MSTATUS 0x300
     // MIE 0x304
     // MTVEC 0x305
     // MSCRATCH 0x340
-    // MEIEA 0xbe0
-    // MEIFA 0xbe2
-    // MEIPRA 0xbe3
     // MSLEEP 0xbf0
     switch(csr) {
       case 0xf14: return this.mhartid;
-      case 0xbe5: return 0x8000; //TODO MEICONTEXT.NOIRQ=1: just return "not in interrupt". Actually consider meinext.noirq/update.
       case 0x300:
+      case 0x301:
+      case 0x302:
+      case 0x303:
+      case 0x304:
+      case 0x305:
       case 0x340:
+      case 0x341:
+      case 0x342:
+      case 0x343:
+      case 0x344:
       case 0xbf0: return this.csrs[csr];
-      case 0xbe4: // MEINEXT TODO should actually look at meipa and meiea
-        for(let i = 4; i >= 0; i--) {
-          if(this.pendingInterrupts & BigInt(1 << i)) return i << 2;
+      case 0xbe0: return (this.meiea.slice((raw_write & 0b11111) * 16, (raw_write & 0b11111) * 16 + 16).reduceRight((acc, val) => (acc << 1) | val, 0) << 16) >>> 0;
+      case 0xbe1: return (this.meipa.slice((raw_write & 0b11111) * 16, (raw_write & 0b11111) * 16 + 16).reduceRight((acc, val) => (acc << 1) | val, 0) << 16) >>> 0;
+      case 0xbe2: return (this.meifa.slice((raw_write & 0b11111) * 16, (raw_write & 0b11111) * 16 + 16).reduceRight((acc, val) => (acc << 1) | val, 0) << 16) >>> 0;
+      case 0xbe3: return (this.meipra.slice((raw_write & 0b11111) * 4, (raw_write & 0b11111) * 4 + 4).reduceRight((acc, val) => (acc << 4) | val, 0) << 16) >>> 0;
+      case 0xbe4:
+        const meinext = this.csrs[csr] >>> 0;
+        if(!(meinext >> 31)) {
+          // reading MEINEXT clears MEIFA bits
+          this.meifa[(meinext >> 2) & 511] = 0;
         }
-        return (1 << 31) >>> 0; // no interrupt pending
+        return meinext;
+      case 0xbe5:
+        let meicontext = this.csrs[0xbe5];
+        if(raw_write & 0b0010) { // write to CLEARTS
+          meicontext &= ~0b1110;
+          meicontext |= ((this.csrs[0x304] >>> 7) & 1) << 3; // MTIE
+          meicontext |= ((this.csrs[0x304] >>> 3) & 1) << 2; // MSIE
+          this.csrs[0x304] &= ~(0b10001000); // clear MIE.MTIE and MSIE
+        } else {
+          if(raw_write & 0b1000) this.csrs[0x304] |= 1<<7; // write to MTIESAVE: set MIE.MTIE
+          if(raw_write & 0b0100) this.csrs[0x304] |= 1<<3; // write to MSIESAVE: set MIE.MSIE
+        }
+        return meicontext;
     }
     this.logger.info(this.coreLabel, `Unknown CSR get: 0x${csr.toString(16)}`);
     return this.csrs[csr];
@@ -959,11 +1124,13 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
         cpu.setCSR(0x300, mstatus, 0);
         cpu.next_pc = cpu.getCSR(0x341, 0); // Jump to the address in MEPC.
         cpu.cycles++;
+        cpu.updateMEICONTEXT_priority_restore(); // Xh3irq
+        cpu.interruptsUpdated = true;
         break;
       case 0x73: // ecall
         const u_mode = 0; //TODO
         const reason = u_mode?0x8:0xb;
-        cpu.exceptionEntry(reason);
+        cpu.trapEntry(reason);
         break;
       default:
         throw Error(`Unknown instruction 0x${instruction.binary.toString(16)}`);
