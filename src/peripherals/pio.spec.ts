@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDriver } from '../../test-utils/create-test-driver';
 import { ICortexTestDriver } from '../../test-utils/test-driver';
+import { RP2040TestDriver } from '../../test-utils/test-driver-rp2040';
 import {
   PIO_COND_ALWAYS,
   PIO_COND_NOTEMPTYOSR,
@@ -114,6 +115,16 @@ describe('PIO', () => {
     await cpu.writeUint32(SM0_PINCTRL, 5 << SET_COUNT_SHIFT);
   }
 
+  function nextPioPC() {
+    return (cpu as RP2040TestDriver).rp2040.pio[0].machines[0].nextPC;
+  }
+
+  function executePioSteps(count: number) {
+    for(let i = 0; i < count; i++) {
+      (cpu as RP2040TestDriver).rp2040.pio[0].machines[0].step();
+    }
+  }
+
   it('should execute a `SET PINS` instruction correctly', async () => {
     // SET PINS, 13
     // then check the debug register and verify that that output from the pins matches the PINS value
@@ -169,7 +180,7 @@ describe('PIO', () => {
     expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_Y, 23));
     await cpu.writeUint32(SM0_INSTR, pioMOV(PIO_MOV_DEST_PC, PIO_OP_NONE, PIO_SRC_Y));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(23);
+    expect(nextPioPC()).toBe(23);
   });
 
   it('should correctly a `MOV ISR, STATUS` instruction when the STATUS_SEL is 0 (TX FIFO)', async () => {
@@ -201,7 +212,7 @@ describe('PIO', () => {
   it('should correctly execute a `JMP` (always) instruction', async () => {
     await resetStateMachines();
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_ALWAYS, 10));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(10);
+    expect(nextPioPC()).toBe(10);
   });
 
   it('should correctly execute a `JMP !X` instruction', async () => {
@@ -209,10 +220,10 @@ describe('PIO', () => {
     expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_X, 5));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_NOTX, 8));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
+    expect(nextPioPC()).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_X, 0));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_NOTX, 8));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(8);
+    expect(nextPioPC()).toBe(8);
   });
 
   it('should correctly execute a `JMP X--` instruction', async () => {
@@ -221,14 +232,14 @@ describe('PIO', () => {
     expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_X, 5));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_XDEC, 12));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(12);
+    expect(nextPioPC()).toBe(12);
     // X should be 4:
     await cpu.writeUint32(SM0_INSTR, pioMOV(PIO_DEST_PINS, PIO_OP_NONE, PIO_SRC_X));
     expect(await cpu.readUint32(DBG_PADOUT)).toBe(4);
     // now set X to zero and ensure that we don't jump again
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_X, 0));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_XDEC, 6));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(12);
+    expect(nextPioPC()).toBe(12);
   });
 
   it('should correctly execute a `JMP !Y` instruction', async () => {
@@ -236,10 +247,10 @@ describe('PIO', () => {
     expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_Y, 6));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_NOTY, 8));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
+    expect(nextPioPC()).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_Y, 0));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_NOTY, 8));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(8);
+    expect(nextPioPC()).toBe(8);
   });
 
   it('should correctly execute a `JMP Y--` instruction', async () => {
@@ -248,14 +259,14 @@ describe('PIO', () => {
     expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_Y, 15));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_YDEC, 12));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(12);
+    expect(nextPioPC()).toBe(12);
     // Y should be 14:
     await cpu.writeUint32(SM0_INSTR, pioMOV(PIO_DEST_PINS, PIO_OP_NONE, PIO_SRC_Y));
     expect(await cpu.readUint32(DBG_PADOUT)).toBe(14);
     // now set X to zero and ensure that we don't jump again
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_Y, 0));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_YDEC, 6));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(12);
+    expect(nextPioPC()).toBe(12);
   });
 
   it('should correctly execute a `JMP X!=Y` instruction', async () => {
@@ -269,7 +280,7 @@ describe('PIO', () => {
     // Set X to a value different from Y:
     await cpu.writeUint32(SM0_INSTR, pioSET(PIO_DEST_X, 3));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_XNEY, 26));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(26);
+    expect(nextPioPC()).toBe(26);
   });
 
   it('should correctly execute a `JMP OSRE` instruction', async () => {
@@ -279,11 +290,11 @@ describe('PIO', () => {
     // The following command fills the OSR (Output Shift Register)
     await cpu.writeUint32(SM0_INSTR, pioMOV(PIO_MOV_DEST_OSR, PIO_OP_NONE, PIO_SRC_NULL));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_NOTEMPTYOSR, 11));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(11);
+    expect(nextPioPC()).toBe(11);
     // Now empty the OSR by shifting bits out of it, and observe that the JMP isn't taken
     await cpu.writeUint32(SM0_INSTR, pioOUT(PIO_DEST_NULL, 32));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_NOTEMPTYOSR, 22));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(11);
+    expect(nextPioPC()).toBe(11);
   });
 
   it('should correctly execute a program with `PULL` instruction', async () => {
@@ -304,7 +315,7 @@ describe('PIO', () => {
     await cpu.writeUint32(SM0_INSTR, pioPULL(false, false));
     expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioOUT(PIO_DEST_EXEC, 32));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(16);
+    expect(nextPioPC()).toBe(16);
   });
 
   it('should correctly execute the `OUT PC` instruction', async () => {
@@ -314,7 +325,7 @@ describe('PIO', () => {
     await cpu.writeUint32(SM0_INSTR, pioPULL(false, false));
     expect(await cpu.readUint32(SM0_ADDR)).toBe(0);
     await cpu.writeUint32(SM0_INSTR, pioOUT(PIO_DEST_PC, 32));
-    expect(await cpu.readUint32(SM0_ADDR)).toBe(29);
+    expect(nextPioPC()).toBe(29);
   });
 
   it('should correctly execute a program with a `PUSH` instruction', async () => {
@@ -359,10 +370,13 @@ describe('PIO', () => {
     await cpu.writeUint32(INSTR_MEM1, pioWAIT(true, PIO_WAIT_SRC_IRQ, 7));
     await cpu.writeUint32(INSTR_MEM2, pioJMP(PIO_COND_ALWAYS, 2));
     await cpu.writeUint32(CTRL, 1); // Starts State Machine #0
+    executePioSteps(3);
     expect(await cpu.readUint32(SM0_ADDR)).toEqual(1);
     await cpu.writeUint32(SM2_INSTR, pioIRQ(false, false, 5)); // Set IRQ 5
+    executePioSteps(1);
     expect(await cpu.readUint32(SM0_ADDR)).toEqual(1);
     await cpu.writeUint32(SM2_INSTR, pioIRQ(false, false, 7)); // Set IRQ 7
+    executePioSteps(1);
     expect(await cpu.readUint32(SM0_ADDR)).toEqual(2);
     expect(await cpu.readUint32(IRQ)).toEqual(1 << 5); // Wait should have cleared IRQ 7
   });
@@ -375,8 +389,10 @@ describe('PIO', () => {
     await cpu.writeUint32(INSTR_MEM1, pioWAIT(false, PIO_WAIT_SRC_IRQ, 7));
     await cpu.writeUint32(INSTR_MEM2, pioJMP(PIO_COND_ALWAYS, 2));
     await cpu.writeUint32(CTRL, 1); // Starts State Machine #0
+    executePioSteps(3);
     expect(await cpu.readUint32(SM0_ADDR)).toEqual(1);
     await cpu.writeUint32(IRQ, 1 << 7); // Clear IRQ 7
+    executePioSteps(1);
     expect(await cpu.readUint32(SM0_ADDR)).toEqual(2);
   });
 
@@ -395,7 +411,7 @@ describe('PIO', () => {
     await cpu.writeUint32(SM0_INSTR, pioOUT(PIO_DEST_Y, 32)); // Y <- 0xffffffff
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_ALWAYS, 8));
     await cpu.writeUint32(SM0_INSTR, pioJMP(PIO_COND_XNEY, 16)); // Shouldn't take the jump
-    expect(await cpu.readUint32(SM0_ADDR)).toEqual(8); // Assert that the 2nd jump wasn't taken
+    expect(nextPioPC()).toEqual(8); // Assert that the 2nd jump wasn't taken
   });
 
   it('should wrap the program when it gets to EXECCTRL_WRAP_TOP', async () => {
@@ -422,6 +438,7 @@ describe('PIO', () => {
     await cpu.writeUint32(INSTR_MEM3, pioJMP(PIO_COND_ALWAYS, 3)); // infinite loop
 
     await cpu.writeUint32(CTRL, 1); // Starts State Machine #0
+    executePioSteps(10);
     expect(await cpu.readUint32(SM0_ADDR)).toEqual(1);
   });
 
