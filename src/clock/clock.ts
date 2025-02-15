@@ -9,4 +9,5 @@ export interface IClock {
   readonly nanos: number;
 
   createAlarm(callback: AlarmCallback): IAlarm;
+  tick(nanos: number): void;
 }

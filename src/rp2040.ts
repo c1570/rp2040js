@@ -483,15 +483,17 @@ export class RP2040 implements IRPChip {
     return this.core0.cycles - core0StartCycles;
   }
 
-  stepPios(cycles: number) {
+  stepThings(cycles: number) {
     for(let cycle = 0; cycle < cycles; cycle++) {
       this.pio[0].step();
       this.pio[1].step();
     }
+    const cycleNanos = 1e9 / this.clkSys;
+    this.clock.tick(cycles * cycleNanos);
   }
 
   step() {
-    this.stepPios(this.stepCores());
+    this.stepThings(this.stepCores());
   }
 
   stop() {}

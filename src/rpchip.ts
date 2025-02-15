@@ -39,6 +39,6 @@ export interface IRPChip {
   setInterruptCore(irq: number, value: boolean, core: number);
   updateIOInterrupt();
   stepCores();
-  stepPios(cycles: number);
+  stepThings(cycles: number);
   step();
 }

@@ -1,14 +1,15 @@
 import { IRPChip } from './rpchip';
 import { IClock } from './clock/clock';
-import { RealtimeClock } from './clock/realtime-clock';
+import { SimulationClock } from './clock/simulation-clock';
 import { CPU } from './riscv/cpu';
 import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } from './gpio-pin';
 import { IRQ } from './irq_rp2350';
 import { RPADC } from './peripherals/adc';
+import { RPBUSCTRL } from './peripherals/busctrl';
 import { RPBootRAM } from './peripherals/bootram';
 import { RPPOWMAN } from './peripherals/powman';
 import { RPClocks } from './peripherals/clocks';
-import { RPDMA } from './peripherals/dma';
+import { DREQChannel, RPDMA } from './peripherals/dma';
 import { RPI2C } from './peripherals/i2c';
 import { RPIO } from './peripherals/io';
 import { RPPADS } from './peripherals/pads';
@@ -22,15 +23,17 @@ import { RPSPI } from './peripherals/spi';
 import { RPSSI } from './peripherals/ssi';
 import { RP2350SysCfg } from './peripherals/syscfg_rp2350';
 import { RP2350SysInfo } from './peripherals/sysinfo_rp2350';
+import { RPTBMAN } from './peripherals/tbman';
 import { RPTimer } from './peripherals/timer';
 import { RPUART } from './peripherals/uart';
 import { RPUSBController } from './peripherals/usb';
 import { RPSIO } from './sio_rp2350';
+import { RPWatchdog } from './peripherals/watchdog';
 import { Core } from './core';
 import { ConsoleLogger, Logger, LogLevel } from './utils/logging';
-import { RPTBMAN } from './peripherals/tbman';
 
 export const FLASH_START_ADDRESS = 0x10000000;
+export const FLASH_END_ADDRESS = 0x14000000;
 export const RAM_START_ADDRESS = 0x20000000;
 export const APB_START_ADDRESS = 0x40000000;
 export const DPRAM_START_ADDRESS = 0x50100000;
@@ -63,9 +66,17 @@ export class RP2350 implements IRPChip {
 
   readonly sio = new RPSIO(this, IRQ.SIO_IRQ_FIFO, IRQ.SIO_IRQ_FIFO);
 
-  readonly uart = [new RPUART(this, 'UART0', IRQ.UART0_IRQ), new RPUART(this, 'UART1', IRQ.UART1_IRQ)];
+  readonly uart = [
+    new RPUART(this, 'UART0', IRQ.UART0_IRQ, {
+      rx: DREQChannel.DREQ_UART0_RX,
+      tx: DREQChannel.DREQ_UART0_TX,
+    }),
+    new RPUART(this, 'UART1', IRQ.UART1_IRQ, {
+      rx: DREQChannel.DREQ_UART1_RX,
+      tx: DREQChannel.DREQ_UART1_TX,
+    }),
+  ];
   readonly i2c = [new RPI2C(this, 'I2C0', IRQ.I2C0_IRQ), new RPI2C(this, 'I2C1', IRQ.I2C1_IRQ)];
-  readonly spi = [new RPSPI(this, 'SPI0', IRQ.SPI0_IRQ), new RPSPI(this, 'SPI1', IRQ.SPI1_IRQ)];
   readonly pwm = new RPPWM(this, 'PWM_BASE', IRQ.PWM_IRQ_WRAP_0);
   readonly adc = new RPADC(this, 'ADC', IRQ.ADC_IRQ_FIFO);
 
@@ -117,6 +128,16 @@ export class RP2350 implements IRPChip {
     new RPPIO(this, 'PIO1', IRQ.PIO1_IRQ_0, 1),
   ];
   readonly usbCtrl = new RPUSBController(this, 'USB', IRQ.USBCTRL_IRQ);
+  readonly spi = [
+    new RPSPI(this, 'SPI0', IRQ.SPI0_IRQ, {
+      rx: DREQChannel.DREQ_SPI0_RX,
+      tx: DREQChannel.DREQ_SPI0_TX,
+    }),
+    new RPSPI(this, 'SPI1', IRQ.SPI1_IRQ, {
+      rx: DREQChannel.DREQ_SPI1_RX,
+      tx: DREQChannel.DREQ_SPI1_TX,
+    }),
+  ];
 
   public logger: Logger = new ConsoleLogger(LogLevel.Debug, true);
 
@@ -137,7 +158,7 @@ export class RP2350 implements IRPChip {
     0x40050: new RP2350PLL(this, 'PLL_SYS_BASE'),
     0x40058: new UnimplementedPeripheral(this, 'PLL_USB_BASE'),
     0x40060: new UnimplementedPeripheral(this, 'ACCESSCTRL_BASE'),
-    0x40068: new UnimplementedPeripheral(this, 'BUSCTRL_BASE'),
+    0x40068: new UnimplementedPeripheral(this, 'BUSCTRL_BASE'), //TODO new RPBUSCTRL(this, 'BUSCTRL_BASE'),
     0x40070: this.uart[0],
     0x40078: this.uart[1],
     0x40080: this.spi[0],
@@ -150,7 +171,7 @@ export class RP2350 implements IRPChip {
     0x400b8: new RPTimer(this, 'TIMER1_BASE', IRQ.TIMER1_IRQ_0),
     0x400c0: new UnimplementedPeripheral(this, 'HSTX_CTRL_BASE'),
 
-    0x400d8: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'),
+    0x400d8: new UnimplementedPeripheral(this, 'WATCHDOG_BASE'), //TODO new RPWatchdog(this, 'WATCHDOG_BASE'),
     //0x400xx: new RP2040RTC(this, 'RTC_BASE'),
     0x400e0: new RPBootRAM(this, 'BOOTRAM_BASE'),
     0x400e8: new UnimplementedPeripheral(this, 'ROSC_BASE'),
@@ -165,7 +186,7 @@ export class RP2350 implements IRPChip {
     //0x50400: this.pio[2],
   };
 
-  constructor(readonly debug: boolean = false, readonly clock: IClock = new RealtimeClock()) {
+  constructor(readonly debug: boolean = false, readonly clock: IClock = new SimulationClock()) {
     this.reset();
     this.core0.onSEV = () => {
       if (this.core1.waiting) {
@@ -214,11 +235,14 @@ export class RP2350 implements IRPChip {
     const core = this.isCore0Running ? Core.Core0 : Core.Core1;
     if (address < bootrom.length * 4) {
       return bootrom[address / 4];
-    } else if (
-      address >= FLASH_START_ADDRESS &&
-      address < FLASH_START_ADDRESS + this.flash.length
-    ) {
-      return this.flashView.getUint32(address - FLASH_START_ADDRESS, true);
+    } else if (address >= FLASH_START_ADDRESS && address < FLASH_END_ADDRESS) {
+      // Flash is mirrored four times:
+      // - 0x10000000 XIP
+      // - 0x11000000 XIP_NOALLOC
+      // - 0x12000000 XIP_NOCACHE
+      // - 0x13000000 XIP_NOCACHE_NOALLOC
+      const offset = address & 0x00ff_ffff;
+      return this.flashView.getUint32(offset, true);
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       return this.sramView.getUint32(address - RAM_START_ADDRESS, true);
     } else if (
@@ -459,15 +483,17 @@ export class RP2350 implements IRPChip {
     return this.core0.cycles - core0StartCycles;
   }
 
-  stepPios(cycles: number) {
+  stepThings(cycles: number) {
     for(let cycle = 0; cycle < cycles; cycle++) {
       this.pio[0].step();
       this.pio[1].step();
     }
+    const cycleNanos = 1e9 / this.clkSys;
+    this.clock.tick(cycles * cycleNanos);
   }
 
   step() {
-    this.stepPios(this.stepCores());
+    this.stepThings(this.stepCores());
   }
 
   stop() {}
