@@ -1,3 +1,9 @@
+let dodisass = 0;
+const filename = 'demo/riscv_blink/blink_simple';
+const initial_pc = 0x20000220; // no_flash binary
+//const initial_pc = 0x10000036; // standard/flash binary
+const log_gpios = true;
+
 import * as fs from 'fs';
 import { RP2350 } from '../src';
 import { GPIOPinState } from '../src/gpio-pin';
@@ -7,15 +13,16 @@ import { GDBTCPServer } from '../src/gdb/gdb-tcp-server';
 
 const homedir = require('os').homedir();
 
-const hex = fs.readFileSync('demo/riscv_blink/blink_simple.hex', 'utf-8');
-const initial_pc = 0x20000220; // no_flash binary
-//const initial_pc = 0x10000036; // standard/flash binary
+const hex = fs.readFileSync(`${filename}.hex`, 'utf-8');
 const mcu = new RP2350();
 mcu.loadBootrom(bootrom_rp2350_A2);
-//loadHex(hex, mcu.flash, 0x10000000); // standard/flash binary
-loadHex(hex, mcu.sram, 0x20000000); // no_flash binary
+if(initial_pc < 0x20000000) {
+  loadHex(hex, mcu.flash, 0x10000000); // standard/flash binary
+} else {
+  loadHex(hex, mcu.sram, 0x20000000); // no_flash binary
+}
 
-const disassembly = fs.readFileSync('./demo/bootrom_rp2350.dis', 'utf-8') + fs.readFileSync('./demo/riscv_blink/blink_simple.dis');
+const disassembly = fs.readFileSync('./demo/bootrom_rp2350.dis', 'utf-8') + fs.readFileSync(`${filename}.dis`);
 mcu.loadDisassembly(disassembly);
 
 //const gdbServer = new GDBTCPServer(mcu, 3333);
@@ -27,9 +34,11 @@ mcu.uart[0].onByte = (value: number) => {
 
 // make GPIOs see their own output values as input
 for(let i = 0; i < 11; i++) {
-  mcu.gpio[i].addListener(
-    (state: GPIOPinState, oldState: GPIOPinState) => mcu.gpio[i].setInputValue(state==1)
-  );
+  if(log_gpios) {
+    mcu.gpio[i].addListener( (state: GPIOPinState, oldState: GPIOPinState) => { mcu.gpio[i].setInputValue(state==1); console.log(`GPIO ${i}: ${state==1}`); } );
+  } else {
+    mcu.gpio[i].addListener( (state: GPIOPinState, oldState: GPIOPinState) => mcu.gpio[i].setInputValue(state==1) );
+  }
 }
 
 mcu.core0.pc = initial_pc;
@@ -37,7 +46,6 @@ mcu.core1.pc = initial_pc;
 //mcu.core1.waiting = true;
 
 let nextTimeUpdate = 0;
-let dodisass = 0;
 try {
   while(1) {
     //if(mcu.core0.pc === 0x2000d7fc) { dodisass = 1; console.log(`Cycle: ${mcu.cycles}`) };
