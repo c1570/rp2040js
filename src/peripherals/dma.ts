@@ -227,10 +227,8 @@ export class RPDMAChannel {
 
   scheduleTransfer() {
     if (this.dma.dreq[this.treqValue] || this.treqValue === TREQ.Permanent) {
-      this.transfer(); return; //FIXME broken timers workaround, is this still needed?
       this.transferAlarm.schedule(0);
     } else {
-      return; //XXX workaround
       const delay = this.dma.getTimer(this.treqValue);
       if (delay) {
         this.transferAlarm.schedule(delay * 1000);
