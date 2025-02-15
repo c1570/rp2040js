@@ -1,3 +1,4 @@
+import { describe, expect, test } from 'vitest';
 import { Assembler } from "../Assembler/assembler";
 
 describe('Testing assembleLine function:', () => {

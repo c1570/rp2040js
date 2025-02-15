@@ -1,5 +1,7 @@
+import { describe, expect, test } from 'vitest';
 import { Assembler } from "../Assembler/assembler";
-import { CPU, RegisterSet } from "../cpu";
+import { RegisterSet } from "../cpu";
+import { RP2350 } from "../../rp2350";
 
 describe('Testing RegisterSet class:', () => {
   test('Set x1 to 5', () => {
@@ -17,7 +19,9 @@ describe('Testing R-Type instruction execution:', () => {
 
   test('Add 3 + 5, place the result in x3', () => {
 
-    const cpu = new CPU(new ArrayBuffer(0), 0);
+    const chip = new RP2350();
+    const cpu = chip.core0;
+    chip.core1.waiting = true;
 
     cpu.registerSet.setRegister(1, 3);
     cpu.registerSet.setRegister(2, 5);
@@ -27,7 +31,7 @@ describe('Testing R-Type instruction execution:', () => {
 
     const addInstruction = Assembler.assembleLine('add x3, x1, x2');
 
-    cpu.executeInstruction(addInstruction.binary);
+    cpu.step(addInstruction.binary);
 
     expect(cpu.registerSet.getRegister(3)).toBe(8);
 
@@ -49,16 +53,23 @@ describe('Testing basic toy programs:', () => {
       'add zero, zero, x1',
     ]
 
-    const bin = Assembler.assemble(program);
+    const chip = new RP2350();
+    const cpu = chip.core0;
+    chip.core1.waiting = true;
 
-    const cpu = new CPU(bin, 0);
+    const bin = Assembler.assemble(program);
+    const prg = new Uint32Array(bin);
+    for(let i = 0; i < 20; i++) {
+      chip.writeUint32(0x20000000 + (i << 2), prg[i]);
+    }
+    cpu.pc = 0x20000000;
 
     cpu.registerSet.setRegister(1, 5);
     cpu.registerSet.setRegister(2, -8);
     cpu.registerSet.setRegister(3, 64);
 
     for (let i = 0; i < 6; i++) {
-      cpu.executionStep();
+      cpu.executeInstruction();
     }
 
     expect(cpu.registerSet.getRegister(3)).toBe(2);
