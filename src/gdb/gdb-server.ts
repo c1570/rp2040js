@@ -129,7 +129,7 @@ export class GDBServer {
           return gdbMessage('vCont;c;C;s;S');
         }
         if (cmd.startsWith('vCont;c')) {
-          if (!this.target.executing(Core.Core0)) {
+          if (!this.target.executing) {
             this.target.execute();
           }
           return;
@@ -146,7 +146,7 @@ export class GDBServer {
         break;
 
       case 'c':
-        if (!this.target.executing(Core.Core0)) {
+        if (!this.target.executing) {
           this.target.execute();
         }
         return gdbMessage('OK');
@@ -264,7 +264,7 @@ export class GDBServer {
     this.connections.add(connection);
     rp2040.core0.onBreak = () => {
       this.target.stop();
-      rp2040.core0.PC -= rp2040.core.breakRewind;
+      rp2040.core0.PC -= rp2040.core0.breakRewind;
       for (const connection of this.connections) {
         connection.onBreakpoint();
       }
