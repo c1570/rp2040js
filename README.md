@@ -14,10 +14,10 @@ For generic/original rp2040js docs, [see below](#rp2040js).
 ```
 Timer and System Interrupts
 Exceptions
-Many CSRs
-GPIO updates (register locations, GPIO30-47, IRQSUMMARY, QSPI/USB Bank, function select)
+GPIO updates (IRQSUMMARY, USB pins, PROC1_INTxx)
 DMA updates (12->16 DMA channels, 2->4 shared IRQs, CHxx_TRANS_COUNT changes, INCR_READ_REV, etc.)
-PIO updates (register locations from 0x128/INTR, GPIOBASE, IRQx_INTE, RXF0_PUTGET0, instruction changes, etc.)
+PIO updates (IRQx_INTE, RXF0_PUTGET0, instruction changes, etc.)
+PWM updates (8->12 slices, second shared interrupt)
 TIMER: registers LOCK and SOURCE
 Correct timers when changing sys_clk/PLL
 SIO: secure vs. insecure, SIO_NONSEC_BASE
@@ -25,7 +25,6 @@ Doorbells
 RISC-V Platform Timer
 TMDS Encoder
 RTC
-PIO2_BASE
 XIP_AUX_BASE
 XOSC_BASE
 PLL_USB_BASE
@@ -101,7 +100,10 @@ Notes
 
 ```
 Bootrom * (varmulet mostly untested)
+GPIOs 30-47
 BOOTRAM_BASE
+PIO updates (register locations for INTR and up, GPIOBASE)
+PIO2_BASE
 SYSINFO_BASE
 SYSCFG_BASE *
 TIMER1_BASE

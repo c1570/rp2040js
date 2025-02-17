@@ -79,38 +79,7 @@ export class RP2040 implements IRPChip {
   readonly pwm = new RPPWM(this, 'PWM_BASE', IRQ.PWM_WRAP);
   readonly adc = new RPADC(this, 'ADC', IRQ.ADC_FIFO);
 
-  readonly gpio: Array<GPIOPin> = [
-    new GPIOPin(this, 0),
-    new GPIOPin(this, 1),
-    new GPIOPin(this, 2),
-    new GPIOPin(this, 3),
-    new GPIOPin(this, 4),
-    new GPIOPin(this, 5),
-    new GPIOPin(this, 6),
-    new GPIOPin(this, 7),
-    new GPIOPin(this, 8),
-    new GPIOPin(this, 9),
-    new GPIOPin(this, 10),
-    new GPIOPin(this, 11),
-    new GPIOPin(this, 12),
-    new GPIOPin(this, 13),
-    new GPIOPin(this, 14),
-    new GPIOPin(this, 15),
-    new GPIOPin(this, 16),
-    new GPIOPin(this, 17),
-    new GPIOPin(this, 18),
-    new GPIOPin(this, 19),
-    new GPIOPin(this, 20),
-    new GPIOPin(this, 21),
-    new GPIOPin(this, 22),
-    new GPIOPin(this, 23),
-    new GPIOPin(this, 24),
-    new GPIOPin(this, 25),
-    new GPIOPin(this, 26),
-    new GPIOPin(this, 27),
-    new GPIOPin(this, 28),
-    new GPIOPin(this, 29),
-  ];
+  readonly gpio: Array<GPIOPin> = Array(30).fill(0).map((v,i) => new GPIOPin(this, i));
 
   readonly qspi: Array<GPIOPin> = [
     new GPIOPin(this, 0, 'SCLK'),
@@ -383,10 +352,10 @@ export class RP2040 implements IRPChip {
     return this.core0.cycles;
   }
 
-  get gpioValues() {
+  gpioValues(start_index: number) {
     const { gpio } = this;
     let result = 0;
-    for (let gpioIndex = 0; gpioIndex < gpio.length; gpioIndex++) {
+    for (let gpioIndex = start_index; gpioIndex < gpio.length; gpioIndex++) {
       if (gpio[gpioIndex].inputValue) {
         result |= 1 << gpioIndex;
       }
@@ -394,33 +363,37 @@ export class RP2040 implements IRPChip {
     return result;
   }
 
-  gpioRawOutputValue(functionSelect: number): number {
+  gpioRawOutputValue(index: number): boolean {
+    const functionSelect = this.gpio[index].functionSelect;
+    const mask = 1 << index;
     switch (functionSelect) {
       case FUNCTION_PWM:
-        return this.pwm.gpioValue;
+        return !!(this.pwm.gpioValue & mask);
       case FUNCTION_SIO:
-        return this.sio.gpioValue;
+        return !!(this.sio.gpioValue & mask);
       case FUNCTION_PIO0:
-        return this.pio[0].pinValues;
+        return this.pio[0].getPinValue(index);
       case FUNCTION_PIO1:
-        return this.pio[1].pinValues;
+        return this.pio[1].getPinValue(index);
       default:
-        return 0;
+        return false;
     }
   }
 
-  gpioRawOutputEnable(functionSelect: number): number {
+  gpioRawOutputEnable(index: number): boolean {
+    const functionSelect = this.gpio[index].functionSelect;
+    const mask = 1 << index;
     switch (functionSelect) {
       case FUNCTION_PWM:
-        return this.pwm.gpioDirection;
+        return !!(this.pwm.gpioDirection & mask);
       case FUNCTION_SIO:
-        return this.sio.gpioOutputEnable;
+        return !!(this.sio.gpioOutputEnable & mask);
       case FUNCTION_PIO0:
-        return this.pio[0].pinDirections;
+        return this.pio[0].getPinOutputEnabled(index);
       case FUNCTION_PIO1:
-        return this.pio[1].pinDirections;
+        return this.pio[1].getPinOutputEnabled(index);
       default:
-        return 0;
+        return false;
     }
   }
 

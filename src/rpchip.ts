@@ -12,9 +12,9 @@ export interface IRPChip {
 
   readonly qspi: Array<GPIOPin>;
   readonly gpio: Array<GPIOPin>;
-  readonly gpioValues: number;
-  gpioRawOutputValue(functionSelect: number): number;
-  gpioRawOutputEnable(functionSelect: number): number;
+  gpioValues(start_index: number): number;
+  gpioRawOutputValue(index: number): boolean;
+  gpioRawOutputEnable(index: number): boolean;
   gpioInputValueHasBeenSet(index: number): void;
 
   readonly usbDPRAM: Uint8Array;

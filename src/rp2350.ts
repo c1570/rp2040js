@@ -2,7 +2,7 @@ import { IRPChip } from './rpchip';
 import { IClock } from './clock/clock';
 import { SimulationClock } from './clock/simulation-clock';
 import { CPU } from './riscv/cpu';
-import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } from './gpio-pin';
+import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1, FUNCTION_PIO2 } from './gpio-pin';
 import { IRQ } from './irq_rp2350';
 import { RPADC } from './peripherals/adc';
 import { RPBUSCTRL } from './peripherals/busctrl';
@@ -11,8 +11,8 @@ import { RPPOWMAN } from './peripherals/powman';
 import { RPClocks } from './peripherals/clocks';
 import { DREQChannel, RPDMA } from './peripherals/dma';
 import { RPI2C } from './peripherals/i2c';
-import { RPIO } from './peripherals/io';
-import { RPPADS } from './peripherals/pads';
+import { RPIO } from './peripherals/io_rp2350';
+import { RPPADS } from './peripherals/pads_rp2350';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
 import { RPPIO, WaitType } from './peripherals/pio';
 import { RPPWM } from './peripherals/pwm';
@@ -80,38 +80,7 @@ export class RP2350 implements IRPChip {
   readonly pwm = new RPPWM(this, 'PWM_BASE', IRQ.PWM_IRQ_WRAP_0);
   readonly adc = new RPADC(this, 'ADC', IRQ.ADC_IRQ_FIFO);
 
-  readonly gpio: Array<GPIOPin> = [
-    new GPIOPin(this, 0),
-    new GPIOPin(this, 1),
-    new GPIOPin(this, 2),
-    new GPIOPin(this, 3),
-    new GPIOPin(this, 4),
-    new GPIOPin(this, 5),
-    new GPIOPin(this, 6),
-    new GPIOPin(this, 7),
-    new GPIOPin(this, 8),
-    new GPIOPin(this, 9),
-    new GPIOPin(this, 10),
-    new GPIOPin(this, 11),
-    new GPIOPin(this, 12),
-    new GPIOPin(this, 13),
-    new GPIOPin(this, 14),
-    new GPIOPin(this, 15),
-    new GPIOPin(this, 16),
-    new GPIOPin(this, 17),
-    new GPIOPin(this, 18),
-    new GPIOPin(this, 19),
-    new GPIOPin(this, 20),
-    new GPIOPin(this, 21),
-    new GPIOPin(this, 22),
-    new GPIOPin(this, 23),
-    new GPIOPin(this, 24),
-    new GPIOPin(this, 25),
-    new GPIOPin(this, 26),
-    new GPIOPin(this, 27),
-    new GPIOPin(this, 28),
-    new GPIOPin(this, 29),
-  ];
+  readonly gpio: Array<GPIOPin> = Array(48).fill(0).map((v,i) => new GPIOPin(this, i));
 
   readonly qspi: Array<GPIOPin> = [
     new GPIOPin(this, 0, 'SCLK'),
@@ -126,6 +95,7 @@ export class RP2350 implements IRPChip {
   readonly pio = [
     new RPPIO(this, 'PIO0', IRQ.PIO0_IRQ_0, 0),
     new RPPIO(this, 'PIO1', IRQ.PIO1_IRQ_0, 1),
+    new RPPIO(this, 'PIO2', IRQ.PIO2_IRQ_0, 1),
   ];
   readonly usbCtrl = new RPUSBController(this, 'USB', IRQ.USBCTRL_IRQ);
   readonly spi = [
@@ -183,7 +153,7 @@ export class RP2350 implements IRPChip {
     0x50110: this.usbCtrl,
     0x50200: this.pio[0],
     0x50300: this.pio[1],
-    //0x50400: this.pio[2],
+    0x50400: this.pio[2],
   };
 
   constructor(readonly debug: boolean = false, readonly clock: IClock = new SimulationClock()) {
@@ -383,10 +353,10 @@ export class RP2350 implements IRPChip {
     return this.core0.cycles;
   }
 
-  get gpioValues() {
+  gpioValues(start_index: number) {
     const { gpio } = this;
     let result = 0;
-    for (let gpioIndex = 0; gpioIndex < gpio.length; gpioIndex++) {
+    for (let gpioIndex = start_index; gpioIndex < gpio.length; gpioIndex++) {
       if (gpio[gpioIndex].inputValue) {
         result |= 1 << gpioIndex;
       }
@@ -394,33 +364,41 @@ export class RP2350 implements IRPChip {
     return result;
   }
 
-  gpioRawOutputValue(functionSelect: number): number {
+  gpioRawOutputValue(index: number): boolean {
+    const functionSelect = this.gpio[index].functionSelect;
+    const mask = 1 << index;
     switch (functionSelect) {
       case FUNCTION_PWM:
-        return this.pwm.gpioValue;
+        return !!(this.pwm.gpioValue & mask);
       case FUNCTION_SIO:
-        return this.sio.gpioValue;
+        return this.sio.getPinValue(index);
       case FUNCTION_PIO0:
-        return this.pio[0].pinValues;
+        return this.pio[0].getPinValue(index);
       case FUNCTION_PIO1:
-        return this.pio[1].pinValues;
+        return this.pio[1].getPinValue(index);
+      case FUNCTION_PIO2:
+        return this.pio[2].getPinValue(index);
       default:
-        return 0;
+        return false;
     }
   }
 
-  gpioRawOutputEnable(functionSelect: number): number {
+  gpioRawOutputEnable(index: number): boolean {
+    const functionSelect = this.gpio[index].functionSelect;
+    const mask = 1 << index;
     switch (functionSelect) {
       case FUNCTION_PWM:
-        return this.pwm.gpioDirection;
+        return !!(this.pwm.gpioDirection & mask);
       case FUNCTION_SIO:
-        return this.sio.gpioOutputEnable;
+        return this.sio.getOutputEnabled(index);
       case FUNCTION_PIO0:
-        return this.pio[0].pinDirections;
+        return this.pio[0].getPinOutputEnabled(index);
       case FUNCTION_PIO1:
-        return this.pio[1].pinDirections;
+        return this.pio[1].getPinOutputEnabled(index);
+      case FUNCTION_PIO2:
+        return this.pio[2].getPinOutputEnabled(index);
       default:
-        return 0;
+        return false;
     }
   }
 
@@ -487,6 +465,7 @@ export class RP2350 implements IRPChip {
     for(let cycle = 0; cycle < cycles; cycle++) {
       this.pio[0].step();
       this.pio[1].step();
+      this.pio[2].step();
     }
     const cycleNanos = 1e9 / this.clkSys;
     this.clock.tick(cycles * cycleNanos);

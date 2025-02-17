@@ -58,7 +58,7 @@ export class RPSIO {
     }
     switch (offset) {
       case GPIO_IN:
-        return this.rp2040.gpioValues;
+        return this.rp2040.gpioValues(0);
       case GPIO_HI_IN: {
         const { qspi } = this.rp2040;
         let result = 0;

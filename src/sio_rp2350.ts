@@ -36,8 +36,8 @@ const SPINLOCK31 = 0x17c;
 export class RPSIO {
   gpioValue = 0;
   gpioOutputEnable = 0;
-  qspiGpioValue = 0;
-  qspiGpioOutputEnable = 0;
+  gpioHiValue = 0;
+  gpioHiOutputEnable = 0;
   spinLock = 0;
   readonly core0;
   readonly core1;
@@ -60,7 +60,7 @@ export class RPSIO {
     }
     switch (offset) {
       case GPIO_IN:
-        return this.rp2040.gpioValues;
+        return this.rp2040.gpioValues(0);
       case GPIO_HI_IN: {
         const { qspi } = this.rp2040;
         let result = 0;
@@ -69,6 +69,8 @@ export class RPSIO {
             result |= 1 << qspiIndex;
           }
         }
+        result <<= 26;
+        result |= this.rp2040.gpioValues(32);
         return result;
       }
       case GPIO_OUT:
@@ -76,9 +78,9 @@ export class RPSIO {
       case GPIO_OE:
         return this.gpioOutputEnable;
       case GPIO_HI_OUT:
-        return this.qspiGpioValue;
+        return this.gpioHiValue;
       case GPIO_HI_OE:
-        return this.qspiGpioOutputEnable;
+        return this.gpioHiOutputEnable;
       case GPIO_OUT_SET:
       case GPIO_OUT_CLR:
       case GPIO_OUT_XOR:
@@ -120,6 +122,8 @@ export class RPSIO {
     }
     const prevGpioValue = this.gpioValue;
     const prevGpioOutputEnable = this.gpioOutputEnable;
+    const prevGpioHiValue = this.gpioHiValue;
+    const prevGpioHiOutputEnable = this.gpioHiOutputEnable;
     switch (offset) {
       case GPIO_OUT:
         this.gpioValue = value & GPIO_MASK;
@@ -146,28 +150,28 @@ export class RPSIO {
         this.gpioOutputEnable ^= value & GPIO_MASK;
         break;
       case GPIO_HI_OUT:
-        this.qspiGpioValue = value & GPIO_MASK;
+        this.gpioHiValue = value & GPIO_MASK;
         break;
       case GPIO_HI_OUT_SET:
-        this.qspiGpioValue |= value & GPIO_MASK;
+        this.gpioHiValue |= value & GPIO_MASK;
         break;
       case GPIO_HI_OUT_CLR:
-        this.qspiGpioValue &= ~value;
+        this.gpioHiValue &= ~value;
         break;
       case GPIO_HI_OUT_XOR:
-        this.qspiGpioValue ^= value & GPIO_MASK;
+        this.gpioHiValue ^= value & GPIO_MASK;
         break;
       case GPIO_HI_OE:
-        this.qspiGpioOutputEnable = value & GPIO_MASK;
+        this.gpioHiOutputEnable = value & GPIO_MASK;
         break;
       case GPIO_HI_OE_SET:
-        this.qspiGpioOutputEnable |= value & GPIO_MASK;
+        this.gpioHiOutputEnable |= value & GPIO_MASK;
         break;
       case GPIO_HI_OE_CLR:
-        this.qspiGpioOutputEnable &= ~value;
+        this.gpioHiOutputEnable &= ~value;
         break;
       case GPIO_HI_OE_XOR:
-        this.qspiGpioOutputEnable ^= value & GPIO_MASK;
+        this.gpioHiOutputEnable ^= value & GPIO_MASK;
         break;
       default:
         // Divider, Interpolator, FIFO get handled per core in sio-core
@@ -180,15 +184,47 @@ export class RPSIO {
             break;
         }
     }
-    const pinsToUpdate =
+
+    let pinsToUpdate =
       (this.gpioValue ^ prevGpioValue) | (this.gpioOutputEnable ^ prevGpioOutputEnable);
+    const { gpio } = this.rp2040;
     if (pinsToUpdate) {
-      const { gpio } = this.rp2040;
-      for (let gpioIndex = 0; gpioIndex < gpio.length; gpioIndex++) {
+      for (let gpioIndex = 0; gpioIndex < 32; gpioIndex++) {
         if (pinsToUpdate & (1 << gpioIndex)) {
           gpio[gpioIndex].checkForUpdates();
         }
       }
     }
+
+    pinsToUpdate =
+      (this.gpioHiValue ^ prevGpioHiValue) | (this.gpioHiOutputEnable ^ prevGpioHiOutputEnable);
+    if (pinsToUpdate) {
+      for (let gpioIndex = 32; gpioIndex < gpio.length; gpioIndex++) {
+        if (pinsToUpdate & (1 << (gpioIndex - 32))) {
+          gpio[gpioIndex].checkForUpdates();
+        }
+      }
+    }
+    //TODO qspi pins
+  }
+
+  getPinValue(index: number) {
+    if (index < 32) {
+      return !!(this.gpioValue & (1 << index));
+    } else if (index < 48) {
+      return !!(this.gpioHiValue & (1 << (index - 32)));
+    }
+    //TODO qspi pins
+    return false;
+  }
+
+  getOutputEnabled(index: number) {
+    if (index < 32) {
+      return !!(this.gpioOutputEnable & (1 << index));
+    } else if (index < 48) {
+      return !!(this.gpioHiOutputEnable & (1 << (index - 32)));
+    }
+    //TODO qspi pins
+    return false;
   }
 }

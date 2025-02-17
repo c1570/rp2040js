@@ -69,4 +69,25 @@ describe('RP2350', () => {
       expect((output.match(/Repeat at/g) || []).length).equals(19);
     }, 20000);
   });
+
+  it('should run pio_blink', () => {
+    const rp2350 = new RP2350();
+    rp2350.loadBootrom(bootrom_rp2350_A2);
+    const hex = fs.readFileSync("./demo/riscv_pio_blink/pio_blink.hex", 'utf-8');
+    loadHex(hex, rp2350.sram, 0x20000000);
+
+    rp2350.core0.pc = rp2350.core1.pc = 0x20000220;
+    let output = "";
+    rp2350.uart[0].onByte = (value: number) => {
+      process.stdout.write(new Uint8Array([value]));
+      output = output + String.fromCharCode(value);
+    };
+    let gpio3toggle = 0;
+    let gpio32toggle = 0;
+    rp2350.gpio[3].addListener( (state: GPIOPinState, oldState: GPIOPinState) => { rp2350.gpio[3].setInputValue(state == 1); if(state == 1 && oldState == 0) gpio3toggle++ } );
+    rp2350.gpio[32].addListener( (state: GPIOPinState, oldState: GPIOPinState) => { rp2350.gpio[32].setInputValue(state == 1); if(state == 1 && oldState == 0) gpio32toggle++ } );
+    for(let i = 0; i < 2000000; i++) rp2350.step();
+    expect(gpio3toggle).equals(2);
+    expect(gpio32toggle).equals(2);
+  }, 20000);
 });

@@ -13,7 +13,7 @@ export class RP2350SysInfo extends BasePeripheral implements Peripheral {
         return 0x20004927;
 
       case PACKAGE_SEL:
-        return 0x00000001; // QFN60
+        return 0x00000000; // QFN80
 
       case PLATFORM:
         return 0x00000000;

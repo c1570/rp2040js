@@ -18,12 +18,15 @@ const INSTR_MEM0 = 0x48;
 const INSTR_MEM31 = 0x0c4;
 
 const INTR = 0x128; // Raw Interrupts
+const RP2350_INTR = 0x16c;
 const IRQ0_INTE = 0x12c; // Interrupt Enable for irq0
 const IRQ0_INTF = 0x130; // Interrupt Force for irq0
 const IRQ0_INTS = 0x134; // Interrupt status after masking & forcing for irq0
 const IRQ1_INTE = 0x138; // Interrupt Enable for irq1
 const IRQ1_INTF = 0x13c; // Interrupt Force for irq1
 const IRQ1_INTS = 0x140; // Interrupt status after masking & forcing for irq1
+
+const RP2350_GPIOBASE = 0x168;
 
 // State-machine specific registers
 const TXF0 = 0x010;
@@ -265,7 +268,7 @@ export class StateMachine {
   }
 
   get inPins() {
-    const { gpioValues } = this.rp2040;
+    const gpioValues = this.rp2040.gpioValues(this.pio.gpiobase);
     const { inBase } = this;
     return inBase ? (gpioValues << (32 - inBase)) | (gpioValues >>> inBase) : gpioValues;
   }
@@ -883,7 +886,7 @@ export class StateMachine {
       case WaitType.Pin: {
         if (
           this.waitIndex < this.rp2040.gpio.length &&
-          this.rp2040.gpio[this.waitIndex].inputValue === this.waitPolarity
+          this.rp2040.gpio[this.waitIndex + this.pio.gpiobase].inputValue === this.waitPolarity
         ) {
           this.waiting = false;
         }
@@ -944,11 +947,14 @@ export class RPPIO extends BasePeripheral implements Peripheral {
   fdebug = 0;
   inputSyncBypass = 0;
   irq = 0;
+  gpiobase = 0;
   pinValues = 0;
   pinDirections = 0;
   oldPinValues = 0;
   oldPinDirections = 0;
   private runTimer: NodeJS.Timeout | null = null;
+
+  irq_reg_offset = 0;
 
   irq0IntEnable = 0;
   irq0IntForce = 0;
@@ -957,6 +963,15 @@ export class RPPIO extends BasePeripheral implements Peripheral {
 
   constructor(rp2040: IRPChip, name: string, readonly firstIrq: number, readonly index: number) {
     super(rp2040, name);
+    switch(rp2040.identifier) {
+      case "rp2040":
+        break;
+      case "rp2350":
+        this.irq_reg_offset = RP2350_INTR - INTR;
+        break;
+      default:
+        throw new Error("Unknown chip id");
+    }
   }
 
   get intRaw() {
@@ -1044,20 +1059,24 @@ export class RPPIO extends BasePeripheral implements Peripheral {
         return this.pinDirections;
       case DBG_CFGINFO:
         return 0x200404;
-      case INTR:
+      case INTR + this.irq_reg_offset:
         return this.intRaw;
-      case IRQ0_INTE:
+      case IRQ0_INTE + this.irq_reg_offset:
         return this.irq0IntEnable;
-      case IRQ0_INTF:
+      case IRQ0_INTF + this.irq_reg_offset:
         return this.irq0IntForce;
-      case IRQ0_INTS:
+      case IRQ0_INTS + this.irq_reg_offset:
         return this.irq0IntStatus;
-      case IRQ1_INTE:
+      case IRQ1_INTE + this.irq_reg_offset:
         return this.irq1IntEnable;
-      case IRQ1_INTF:
+      case IRQ1_INTF + this.irq_reg_offset:
         return this.irq1IntForce;
-      case IRQ1_INTS:
+      case IRQ1_INTS + this.irq_reg_offset:
         return this.irq1IntStatus;
+      case RP2350_GPIOBASE:
+        if (this.rp2040.identifier != "rp2040") {
+          return this.gpiobase;
+        }
     }
     return super.readUint32(offset);
   }
@@ -1130,25 +1149,42 @@ export class RPPIO extends BasePeripheral implements Peripheral {
         this.irq |= value;
         this.irqUpdated();
         break;
-      case IRQ0_INTE:
+      case IRQ0_INTE + this.irq_reg_offset:
         this.irq0IntEnable = value & 0xfff;
         this.checkInterrupts();
         break;
-      case IRQ0_INTF:
+      case IRQ0_INTF + this.irq_reg_offset:
         this.irq0IntForce = value & 0xfff;
         this.checkInterrupts();
         break;
-      case IRQ1_INTE:
+      case IRQ1_INTE + this.irq_reg_offset:
         this.irq1IntEnable = value & 0xfff;
         this.checkInterrupts();
         break;
-      case IRQ1_INTF:
+      case IRQ1_INTF + this.irq_reg_offset:
         this.irq1IntForce = value & 0xfff;
         this.checkInterrupts();
         break;
+      case RP2350_GPIOBASE:
+        if(this.rp2040.identifier != "rp2040") {
+          this.gpiobase = value & 16;
+          break;
+        }
       default:
         super.writeUint32(offset, value);
     }
+  }
+
+  getPinValue(chip_gpio_index: number) {
+    const index = chip_gpio_index - this.gpiobase;
+    if (index < 0 || index > 31) return false;
+    return !!(this.pinValues & (1 << index));
+  }
+
+  getPinOutputEnabled(chip_gpio_index: number) {
+    const index = chip_gpio_index - this.gpiobase;
+    if (index < 0 || index > 31) return false;
+    return !!(this.pinDirections & (1 << index));
   }
 
   pinValuesChanged(value: number, firstPin: number, count: number) {
@@ -1187,9 +1223,9 @@ export class RPPIO extends BasePeripheral implements Peripheral {
 
       // Notify GPIO about the changed pins
       const { gpio } = this.rp2040;
-      for (let gpioIndex = 0; gpioIndex < gpio.length; gpioIndex++) {
-        if (changedPins & (1 << gpioIndex)) {
-          gpio[gpioIndex].checkForUpdates();
+      for (let pinIndex = 0; pinIndex < 32; pinIndex++) {
+        if (changedPins & (1 << pinIndex)) {
+          gpio[pinIndex + this.gpiobase].checkForUpdates();
         }
       }
     }

@@ -1,4 +1,3 @@
-import { WaitType } from './peripherals/pio';
 import { IRPChip } from './rpchip';
 
 export enum GPIOPinState {
@@ -13,6 +12,7 @@ export const FUNCTION_PWM = 4;
 export const FUNCTION_SIO = 5;
 export const FUNCTION_PIO0 = 6;
 export const FUNCTION_PIO1 = 7;
+export const FUNCTION_PIO2 = 8;
 
 export type GPIOPinListener = (state: GPIOPinState, oldState: GPIOPinState) => void;
 
@@ -38,7 +38,7 @@ const IRQ_LEVEL_LOW = 1 << 0;
 
 export class GPIOPin {
   private rawInputValue = false;
-  private lastValue = this.value;
+  private lastValue = GPIOPinState.Input;
 
   ctrl: number = 0x1f;
   padValue: number = 0b0110110;
@@ -102,18 +102,6 @@ export class GPIOPin {
     return (this.ctrl >> 28) & 0x3;
   }
 
-  get rawOutputEnable() {
-    const { index, rp2040, functionSelect } = this;
-    const bitmask = 1 << index;
-    return !!(rp2040.gpioRawOutputEnable(functionSelect) & bitmask);
-  }
-
-  get rawOutputValue() {
-    const { index, rp2040, functionSelect } = this;
-    const bitmask = 1 << index;
-    return !!(rp2040.gpioRawOutputValue(functionSelect) & bitmask);
-  }
-
   get inputValue() {
     return applyOverride(this.rawInputValue && this.inputEnable, this.inputOverride);
   }
@@ -123,11 +111,11 @@ export class GPIOPin {
   }
 
   get outputEnable() {
-    return applyOverride(this.rawOutputEnable, this.outputEnableOverride);
+    return applyOverride(this.rp2040.gpioRawOutputEnable(this.index), this.outputEnableOverride);
   }
 
   get outputValue() {
-    return applyOverride(this.rawOutputValue, this.outputOverride);
+    return applyOverride(this.rp2040.gpioRawOutputValue(this.index), this.outputOverride);
   }
 
   /**
@@ -139,9 +127,9 @@ export class GPIOPin {
     const inToPeri = this.inputValue ? 1 << 19 : 0;
     const inFromPad = this.rawInputValue ? 1 << 17 : 0;
     const oeToPad = this.outputEnable ? 1 << 13 : 0;
-    const oeFromPeri = this.rawOutputEnable ? 1 << 12 : 0;
+    const oeFromPeri = this.rp2040.gpioRawOutputEnable(this.index) ? 1 << 12 : 0;
     const outToPad = this.outputValue ? 1 << 9 : 0;
-    const outFromPeri = this.rawOutputValue ? 1 << 8 : 0;
+    const outFromPeri = this.rp2040.gpioRawOutputValue(this.index) ? 1 << 8 : 0;
     return (
       irqToProc | irqFromPad | inToPeri | inFromPad | oeToPad | oeFromPeri | outToPad | outFromPeri
     );
