@@ -117,7 +117,8 @@ export class RP2040TestDriver implements ICortexTestDriver {
   }
 
   async singleStep() {
-    this.rp2040.step();
+    const cycles = this.rp2040.core.executeInstruction();
+    this.rp2040.clock.tick(cycles * 1e9 / 125_000_000); // 125 MHz
   }
 
   async readRegisters(): Promise<ICortexRegisters> {
