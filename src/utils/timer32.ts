@@ -15,7 +15,7 @@ export class Timer32 {
   private enabled = true;
   readonly listeners: (() => void)[] = [];
 
-  constructor(readonly clock: IClock, private baseFreq: number) {}
+  constructor(readonly label: string, readonly clock: IClock, private baseFreq: number) {}
 
   reset() {
     this.baseNanos = this.clock.nanos;
@@ -142,6 +142,7 @@ export class Timer32PeriodicAlarm {
   private clockAlarm;
 
   constructor(
+    readonly label: string,
     readonly timer: Timer32,
     readonly callback: () => void,
   ) {

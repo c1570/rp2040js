@@ -56,14 +56,14 @@ enum PWMDivMode {
 }
 
 class PWMChannel {
-  readonly timer = new Timer32(this.clock, this.pwm.clockFreq);
-  readonly alarmA = new Timer32PeriodicAlarm(this.timer, () => {
+  readonly timer = new Timer32(`PWM_Ch${this.index}_timer`, this.clock, this.pwm.clockFreq);
+  readonly alarmA = new Timer32PeriodicAlarm(`PWM_Ch${this.index}_alarmA`, this.timer, () => {
     this.setA(false);
   });
-  readonly alarmB = new Timer32PeriodicAlarm(this.timer, () => {
+  readonly alarmB = new Timer32PeriodicAlarm(`PWM_Ch${this.index}_alarmB`, this.timer, () => {
     this.setB(false);
   });
-  readonly alarmBottom = new Timer32PeriodicAlarm(this.timer, () => this.wrap());
+  readonly alarmBottom = new Timer32PeriodicAlarm(`PWM_Ch${this.index}_alarmBottom`, this.timer, () => this.wrap());
 
   csr: number = 0;
   div: number = 0;

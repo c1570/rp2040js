@@ -62,10 +62,10 @@ export class RPWatchdog extends BasePeripheral implements Peripheral {
   // User provided
   constructor(rp2040: RP2040, name: string) {
     super(rp2040, name);
-    this.timer = new Timer32(rp2040.clock, TICK_FREQUENCY);
+    this.timer = new Timer32("RPWatchdog_timer", rp2040.clock, TICK_FREQUENCY);
     this.timer.mode = TimerMode.Decrement;
     this.timer.enable = false;
-    this.alarm = new Timer32PeriodicAlarm(this.timer, () => {
+    this.alarm = new Timer32PeriodicAlarm("RPWatchdog_alarm", this.timer, () => {
       this.reason = TIMER;
       this.onWatchdogTrigger?.();
     });

@@ -53,8 +53,8 @@ export class RPPPB extends BasePeripheral implements Peripheral {
   systickClkSource = false;
   systickIntEnable = false;
   systickReload = 0;
-  readonly systickTimer = new Timer32(this.rp2040.clock, this.rp2040.clkSys);
-  readonly systickAlarm = new Timer32PeriodicAlarm(this.systickTimer, () => {
+  readonly systickTimer = new Timer32("PPB_systick_timer", this.rp2040.clock, this.rp2040.clkSys);
+  readonly systickAlarm = new Timer32PeriodicAlarm("PPB_systick_alarm", this.systickTimer, () => {
     this.systickCountFlag = true;
     if (this.systickIntEnable) {
       const rp2040 = this.rp2040 as RP2040;
