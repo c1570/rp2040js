@@ -1132,6 +1132,9 @@ const opcode0x73func3Table: FuncTable<I_Type> = new Map([
         const reason = u_mode?0x8:0xb;
         cpu.trapEntry(reason);
         break;
+      case 0x100073: // ebreak
+        cpu.trapEntry(3);
+        break;
       default:
         throw Error(`Unknown instruction 0x${instruction.binary.toString(16)}`);
     }

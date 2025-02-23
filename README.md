@@ -68,7 +68,6 @@ cm.popret
 cm.popretz
 cm.push
 div
-ebreak
 fence *
 fence.i *
 maxu
@@ -160,6 +159,7 @@ csrw
 csrwi
 ctz
 divu *
+ebreak
 ecall *
 j
 jal
