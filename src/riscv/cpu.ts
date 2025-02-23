@@ -401,7 +401,8 @@ export class CPU {
     // raw_write: instruction raw write value, used for Xh3irq interrupt array indices
     value >>>= 0; raw_write >>>= 0;
     switch(csr) {
-      case 0x300:
+      case 0x300: // MSTATUS
+      case 0x305: // MTVEC
           this.csrs[csr] = value;
           return;
       case 0x304: // MIE
@@ -474,20 +475,16 @@ export class CPU {
   getCSR(csr: number, raw_write: number): number {
     raw_write >>>= 0;
     // raw_write: instruction raw write value, used for Xh3irq interrupt array indices
-    // MSTATUS 0x300
-    // MIE 0x304
-    // MTVEC 0x305
-    // MSCRATCH 0x340
     // MSLEEP 0xbf0
     switch(csr) {
       case 0xf14: return this.mhartid;
-      case 0x300:
+      case 0x300: // MSTATUS
       case 0x301:
       case 0x302:
       case 0x303:
-      case 0x304:
-      case 0x305:
-      case 0x340:
+      case 0x304: // MIE
+      case 0x305: // MTVEC
+      case 0x340: // MSCRATCH
       case 0x341:
       case 0x342:
       case 0x343:
