@@ -1,6 +1,6 @@
-import { SimulationClock } from './clock/simulation-clock.js';
-import { IGDBTarget } from './gdb/gdb-target.js';
-import { RP2040 } from './rp2040.js';
+import { SimulationClock } from './clock/simulation-clock';
+import { IGDBTarget } from './gdb/gdb-target';
+import { RP2040 } from './rp2040';
 
 export class Simulator implements IGDBTarget {
   executeTimer: ReturnType<typeof setTimeout> | null = null;
