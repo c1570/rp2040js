@@ -20,11 +20,13 @@ PIO updates (IRQx_INTE, RXF0_PUTGET0, instruction changes, etc.)
 PWM updates (8->12 slices, second shared interrupt)
 TIMER: registers LOCK and SOURCE
 Correct timers when changing sys_clk/PLL
+QMI address translation
 SIO: secure vs. insecure, SIO_NONSEC_BASE
 Doorbells
 RISC-V Platform Timer
 TMDS Encoder
 RTC
+XIP_MAINTENANCE_BASE
 XIP_AUX_BASE
 XOSC_BASE
 PLL_USB_BASE
@@ -47,7 +49,7 @@ GLITCH_DETECTOR_BASE
 Hazard3: Machine vs. User mode
 Xh3pmpm (Physical Memory Protection PMP)
 Xh3bextm
-cycle penalties for dependent register usage and APB access
+cycle penalties for dependent register usage, APB access, XIP access
 RV32Zcb (lh, mul, sb, sext.b, sext.h, sh, zext.b, zext.h)
 amoadd.w
 amoand.w

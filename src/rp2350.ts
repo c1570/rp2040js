@@ -20,7 +20,6 @@ import { RP2350PLL } from './peripherals/pll_rp2350';
 import { RPReset } from './peripherals/reset';
 import { RP2040RTC } from './peripherals/rtc';
 import { RPSPI } from './peripherals/spi';
-import { RPSSI } from './peripherals/ssi';
 import { RP2350SysCfg } from './peripherals/syscfg_rp2350';
 import { RP2350SysInfo } from './peripherals/sysinfo_rp2350';
 import { RPTBMAN } from './peripherals/tbman';
@@ -33,7 +32,6 @@ import { Core } from './core';
 import { ConsoleLogger, Logger, LogLevel } from './utils/logging';
 
 export const FLASH_START_ADDRESS = 0x10000000;
-export const FLASH_END_ADDRESS = 0x14000000;
 export const RAM_START_ADDRESS = 0x20000000;
 export const APB_START_ADDRESS = 0x40000000;
 export const DPRAM_START_ADDRESS = 0x50100000;
@@ -45,11 +43,13 @@ const KB = 1024;
 const MB = 1024 * KB;
 const MHz = 1_000_000;
 
+const FLASH_SIZE = 16 * MB;
+
 export class RP2350 implements IRPChip {
   readonly bootrom = new Uint32Array((32 >>> 2) * KB);
   readonly sram = new Uint8Array((256 * 2 + 8) * KB);
   readonly sramView = new DataView(this.sram.buffer);
-  readonly flash = new Uint8Array(16 * MB);
+  readonly flash = new Uint8Array(FLASH_SIZE);
   readonly flash16 = new Uint16Array(this.flash.buffer);
   readonly flashView = new DataView(this.flash.buffer);
   readonly usbDPRAM = new Uint8Array(4 * KB);
@@ -114,7 +114,6 @@ export class RP2350 implements IRPChip {
   private executeTimer: NodeJS.Timeout | null = null;
 
   readonly peripherals: { [index: number]: Peripheral } = {
-    0x18000: new RPSSI(this, 'SSI'),
     0x40000: new RP2350SysInfo(this, 'SYSINFO_BASE'),
     0x40008: new RP2350SysCfg(this, 'SYSCFG'),
     0x40010: new RPClocks(this, 'CLOCKS_BASE'),
@@ -205,13 +204,10 @@ export class RP2350 implements IRPChip {
     const core = this.isCore0Running ? Core.Core0 : Core.Core1;
     if (address < bootrom.length * 4) {
       return bootrom[address / 4];
-    } else if (address >= FLASH_START_ADDRESS && address < FLASH_END_ADDRESS) {
-      // Flash is mirrored four times:
-      // - 0x10000000 XIP
-      // - 0x11000000 XIP_NOALLOC
-      // - 0x12000000 XIP_NOCACHE
-      // - 0x13000000 XIP_NOCACHE_NOALLOC
-      const offset = address & 0x00ff_ffff;
+    } else if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
+      // XIP mirrors flash four times. Also, reads from invalid adresses
+      // don't seem to trigger exceptions (see Micropython)
+      const offset = address & (FLASH_SIZE - 1);
       return this.flashView.getUint32(offset, true);
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       return this.sramView.getUint32(address - RAM_START_ADDRESS, true);
@@ -239,8 +235,8 @@ export class RP2350 implements IRPChip {
 
   /** We assume the address is 16-bit aligned */
   readUint16(address: number) {
-    if (address >= FLASH_START_ADDRESS && address < FLASH_START_ADDRESS + this.flash.length) {
-      return this.flashView.getUint16(address - FLASH_START_ADDRESS, true);
+    if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
+      return this.flashView.getUint16(address & (FLASH_SIZE - 1), true);
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       return this.sramView.getUint16(address - RAM_START_ADDRESS, true);
     }
@@ -250,8 +246,8 @@ export class RP2350 implements IRPChip {
   }
 
   readUint8(address: number) {
-    if (address >= FLASH_START_ADDRESS && address < FLASH_START_ADDRESS + this.flash.length) {
-      return this.flash[address - FLASH_START_ADDRESS];
+    if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
+      return this.flash[address & (FLASH_SIZE - 1)];
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       return this.sram[address - RAM_START_ADDRESS];
     }
@@ -273,9 +269,9 @@ export class RP2350 implements IRPChip {
       bootrom[address / 4] = value;
     } else if (
       address >= FLASH_START_ADDRESS &&
-      address < FLASH_START_ADDRESS + this.flash.length
+      address < RAM_START_ADDRESS
     ) {
-      this.flashView.setUint32(address - FLASH_START_ADDRESS, value, true);
+      return; // "XIP memory is read-only by default" (writes get downgraded to reads)
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sramView.setUint32(address - RAM_START_ADDRESS, value, true);
     } else if (
@@ -295,6 +291,9 @@ export class RP2350 implements IRPChip {
   writeUint8(address: number, value: number) {
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sram[address - RAM_START_ADDRESS] = value;
+      return;
+    }
+    if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
       return;
     }
 
@@ -323,6 +322,9 @@ export class RP2350 implements IRPChip {
 
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sramView.setUint16(address - RAM_START_ADDRESS, value, true);
+      return;
+    }
+    if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
       return;
     }
 
