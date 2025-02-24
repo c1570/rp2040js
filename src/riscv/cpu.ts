@@ -631,6 +631,13 @@ const opcode0x0ffunc3Table: FuncTable<I_Type> = new Map([
 
     //console.log("FENCE not implemented");
   }],
+  [0x1, (instruction: I_Type, cpu: CPU) => { // TODO FENCE.I
+    const { registerSet, chip } = cpu;
+    const { rd, rs1, imm } = instruction;
+    const rs1Value = registerSet.getRegister(rs1);
+
+    //console.log("FENCE.I not implemented");
+  }],
 ]);
 
 const opcode0x13func3Table: FuncTable<I_Type> = new Map([
@@ -922,6 +929,16 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     if(func7 === 0) {
       const result = rs1Value ^ rs2Value;
       registerSet.setRegister(rd, result);
+    } else if(func7 === 0x1) { // div (rv32m)
+      if(rs2Value === 0) {
+        registerSet.setRegisterU(rd, 0xffffffff);
+      } else if((rs1Value >>> 0) === 0x80000000 && (rs2Value >>> 0) === 0xffffffff) {
+        registerSet.setRegisterU(rd, 0x80000000);
+      } else {
+        const result = (rs1Value / rs2Value) | 0;
+        registerSet.setRegister(rd, result);
+      }
+      cpu.cycles += 17;
     } else if(func7 === 0x10) { // sh2add (Zbb)
       const result = ((rs1Value << 2) + rs2Value) & 0xffffffff;
       registerSet.setRegister(rd, result);
@@ -944,16 +961,24 @@ const opcode0x33func3Table: FuncTable<R_Type> = new Map([
     if (func7 === 0x00) {
       const result = rs1Value >>> rs2Value;
       registerSet.setRegister(rd, result);
-
+    } else if (func7 === 0x5) { // minu (Zbb)
+      const r1 = rs1Value >>> 0;
+      const r2 = rs2Value >>> 0;
+      const result = r1 < r2 ? r1 : r2;
+      registerSet.setRegister(rd, result);
     } else if (func7 === 0x20) {
       const result = rs1Value >> rs2Value;
       registerSet.setRegister(rd, result);
     } else if (func7 === 0x24) { // bext (Zbs)
-      const result = rs1Value >>> (rs2Value & 31);
+      const result = (rs1Value >>> (rs2Value & 31)) & 1;
       registerSet.setRegister(rd, result);
     } else if (func7 === 0x01) { // divu (rv32m)
-      const result = (rs1Value / rs2Value) >>> 0;
-      registerSet.setRegister(rd, result);
+      if(rs2Value === 0) {
+        registerSet.setRegisterU(rd, 0xffffffff);
+      } else {
+        const result = (rs1Value / rs2Value) >>> 0;
+        registerSet.setRegister(rd, result);
+      }
       cpu.cycles += 17;
     } else throw Error(`Unknown instruction, func7: 0x${func7.toString(16)}`);
 

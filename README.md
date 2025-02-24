@@ -67,12 +67,8 @@ cm.pop
 cm.popret
 cm.popretz
 cm.push
-div
-fence *
-fence.i *
 maxu
 min
-minu
 mulh
 mulhsu
 neg
@@ -158,9 +154,12 @@ csrsi
 csrw
 csrwi
 ctz
-divu *
+div
+divu
 ebreak
 ecall *
+fence *
+fence.i *
 j
 jal
 jalr
@@ -173,6 +172,7 @@ lr.w
 lui
 lw
 max
+minu
 mret *
 mul *
 mulhu *
