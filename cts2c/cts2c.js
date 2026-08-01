@@ -2170,15 +2170,36 @@ function emitImpl(node, out) {
       // monomorphized instantiation (see "ChipType monomorphization" above) — never
       // under their own bare (generic) name.
       if (genericFreeFunctionDecls.has(name)) break;
-      // Stub functions that use unsupported patterns
-      if (['checkTraceMagic'].includes(name)) {
+      // checkTraceMagic firmware tracing hook
+      if (name === 'checkTraceMagic') {
         const fn = freeFunctions.get(name);
         if (fn) {
+          const p = fn.params.map((pp) => cName(pp.name));
           out.push(
             `static ${fn.retType} ${name}(${fn.params
-              .map((p) => `${p.type} ${cName(p.name)}`)
-              .join(', ')}) { /* TODO: stubbed${loc(node)} */ }`
+              .map((pp) => `${pp.type} ${cName(pp.name)}`)
+              .join(', ')}) {`
           );
+          out.push(
+            `  if (RP2350_readUint16(${p[0]}->chip, ${p[1]}) == 0xabcd && RP2350_readUint16(${p[0]}->chip, ${p[1]} + 2) == 0xffff) {`
+          );
+          out.push(`    char __trace_tag[64];`);
+          out.push(`    int __trace_n = 0;`);
+          out.push(
+            `    for (int32_t __trace_i = ${p[1]} + 4; __trace_n < (int)sizeof(__trace_tag) - 1; __trace_i++) {`
+          );
+          out.push(
+            `      int32_t __trace_ch = (int32_t)RP2350_readUint8(${p[0]}->chip, __trace_i);`
+          );
+          out.push(`      if (__trace_ch == 0) break;`);
+          out.push(`      __trace_tag[__trace_n++] = (char)__trace_ch;`);
+          out.push(`    }`);
+          out.push(`    __trace_tag[__trace_n] = '\\0';`);
+          out.push(
+            `    if (${p[0]}->chip->onTrace_fn) ${p[0]}->chip->onTrace_fn(${p[0]}->chip->onTrace_ctx, ${p[0]}->mhartid, ${p[0]}->pc, __trace_tag);`
+          );
+          out.push(`  }`);
+          out.push('}');
           out.push('');
           break;
         }
