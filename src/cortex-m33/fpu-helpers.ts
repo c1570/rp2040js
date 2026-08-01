@@ -6,6 +6,8 @@
  * payload semantics.
  */
 
+import { Float32 } from '../utils/types';
+
 const INF = Infinity;
 const NEG_INF = -Infinity;
 const QNAN = NaN;
@@ -18,14 +20,18 @@ export const FPSCR_UFC = 1 << 3; // underflow
 export const FPSCR_IXC = 1 << 4; // inexact
 export const FPSCR_IDC = 1 << 7; // input denormal
 
-/** Read FPSCR flags (NZCV at bits [31:28], QC at 27). */
-export function getFpscrNzcv(fpscr: number): { N: boolean; Z: boolean; C: boolean; V: boolean } {
-  return {
-    N: (fpscr & 0x80000000) !== 0,
-    Z: (fpscr & 0x40000000) !== 0,
-    C: (fpscr & 0x20000000) !== 0,
-    V: (fpscr & 0x10000000) !== 0,
-  };
+/**
+ * Out-parameter for the f32add/f32sub/f32mul/f32div/f32fma/f32sqrt/checkInput/
+ * postProcess family below. cts2c has no support for array-destructuring assignment:
+ * it evaluates the call for side effects and silently leaves the target vars
+ * untouched, so a `[result, fpscr] = f32add(...)` would lose both. Caller-owned and
+ * reused across calls (no allocation in C). Reusing the same struct as internal
+ * scratch is safe — every function reads `out.value`/`out.fpscr` back into locals
+ * immediately after writing them, so nothing is read after a later call overwrites it.
+ */
+export interface FpResult {
+  value: Float32;
+  fpscr: number;
 }
 
 /** Pack N/Z/C/V into FPSCR bits [31:28]. */
@@ -46,77 +52,102 @@ export function setFpscrNzcv(
 }
 
 /** Check if a float32 value is denormal (subnormal). */
-function isDenormal(f: number): boolean {
+function isDenormal(f: Float32): boolean {
   return f !== 0 && Math.abs(f) < 1.1754943508222875e-38; // smallest normal
 }
 
 /** Check FZ (flush-to-zero) and set IDC if input was denormal. */
-export function checkInput(f: number, fpscr: number): [number, number] {
+export function checkInput(f: Float32, fpscr: number, out: FpResult): void {
   if (isDenormal(f)) {
     // IDC accumulates on ANY denormal input, regardless of FZ (ARM §B3.4.4).
     fpscr |= FPSCR_IDC;
     if ((fpscr & 0x100) !== 0) {
       // FZ=1: flush to signed zero, preserving the sign bit.
-      return [f < 0 ? -0 : 0, fpscr];
+      out.value = f < 0 ? -0 : 0;
+      out.fpscr = fpscr;
+      return;
     }
   }
-  return [f, fpscr];
+  out.value = f;
+  out.fpscr = fpscr;
 }
 
 /**
  * VFP compare (VCMP/VCMP.E). Sets FPSCR NZCV.
  * On M33: compares with NaN (unordered) → N=0 Z=0 C=1 V=1, plus IOC.
  */
-export function f32cmp(fpscr: number, a: number, b: number): number {
+export function f32cmp(fpscr: number, a: Float32, b: Float32): number {
   if (isNaN(a) || isNaN(b)) {
     // Unordered: N=0 Z=0 C=1 V=1 (C set so BGE/BHI see unordered as true).
     fpscr = setFpscrNzcv(fpscr, false, false, true, true);
     return fpscr | FPSCR_IOC;
   }
+  // Plain sequential assignments, not array-destructuring (cts2c has no support
+  // for it — see cts2c.js's array-destructuring-assignment TODO stub).
   let n: boolean, z: boolean, c: boolean, v: boolean;
   if (a < b) {
-    [n, z, c, v] = [true, false, false, false];
+    n = true;
+    z = false;
+    c = false;
+    v = false;
   } else if (a > b) {
-    [n, z, c, v] = [false, false, true, false];
+    n = false;
+    z = false;
+    c = true;
+    v = false;
   } else {
-    [n, z, c, v] = [false, true, true, false];
+    n = false;
+    z = true;
+    c = true;
+    v = false;
   }
   return setFpscrNzcv(fpscr, n, z, c, v);
 }
 
 /** F32 add/sub/mul/div with IEEE flag detection. */
-export function f32add(fpscr: number, a: number, b: number): [number, number] {
-  [a, fpscr] = checkInput(a, fpscr);
-  [b, fpscr] = checkInput(b, fpscr);
-  let result = Math.fround(a + b);
-  [result, fpscr] = postProcess(result, a, b, fpscr, 'add');
-  return [result, fpscr];
+export function f32add(fpscr: number, a: Float32, b: Float32, out: FpResult): void {
+  checkInput(a, fpscr, out);
+  a = out.value;
+  fpscr = out.fpscr;
+  checkInput(b, fpscr, out);
+  b = out.value;
+  fpscr = out.fpscr;
+  const result = Math.fround(a + b);
+  postProcess(result, a, b, fpscr, 'add', out);
 }
 
-export function f32sub(fpscr: number, a: number, b: number): [number, number] {
-  return f32add(fpscr, a, -b);
+export function f32sub(fpscr: number, a: Float32, b: Float32, out: FpResult): void {
+  f32add(fpscr, a, -b, out);
 }
 
-export function f32mul(fpscr: number, a: number, b: number): [number, number] {
-  [a, fpscr] = checkInput(a, fpscr);
-  [b, fpscr] = checkInput(b, fpscr);
-  let result = Math.fround(a * b);
-  [result, fpscr] = postProcess(result, a, b, fpscr, 'mul');
-  return [result, fpscr];
+export function f32mul(fpscr: number, a: Float32, b: Float32, out: FpResult): void {
+  checkInput(a, fpscr, out);
+  a = out.value;
+  fpscr = out.fpscr;
+  checkInput(b, fpscr, out);
+  b = out.value;
+  fpscr = out.fpscr;
+  const result = Math.fround(a * b);
+  postProcess(result, a, b, fpscr, 'mul', out);
 }
 
-export function f32div(fpscr: number, a: number, b: number): [number, number] {
-  [a, fpscr] = checkInput(a, fpscr);
-  [b, fpscr] = checkInput(b, fpscr);
+export function f32div(fpscr: number, a: Float32, b: Float32, out: FpResult): void {
+  checkInput(a, fpscr, out);
+  a = out.value;
+  fpscr = out.fpscr;
+  checkInput(b, fpscr, out);
+  b = out.value;
+  fpscr = out.fpscr;
   if (b === 0 && a !== 0 && !isNaN(a)) {
     fpscr |= FPSCR_DZC;
     // Native a/b yields a correctly-signed infinity (JS division preserves the
     // sign of the zero divisor, unlike a Math.sign() product).
-    return [a / b, fpscr];
+    out.value = a / b;
+    out.fpscr = fpscr;
+    return;
   }
-  let result = Math.fround(a / b);
-  [result, fpscr] = postProcess(result, a, b, fpscr, 'div');
-  return [result, fpscr];
+  const result = Math.fround(a / b);
+  postProcess(result, a, b, fpscr, 'div', out);
 }
 
 /**
@@ -129,15 +160,22 @@ export function f32div(fpscr: number, a: number, b: number): [number, number] {
  */
 export function f32fma(
   fpscr: number,
-  addend: number,
-  a: number,
-  b: number,
+  addend: Float32,
+  a: Float32,
+  b: Float32,
   negateAddend: boolean,
-  negateProduct: boolean
-): [number, number] {
-  [addend, fpscr] = checkInput(addend, fpscr);
-  [a, fpscr] = checkInput(a, fpscr);
-  [b, fpscr] = checkInput(b, fpscr);
+  negateProduct: boolean,
+  out: FpResult
+): void {
+  checkInput(addend, fpscr, out);
+  addend = out.value;
+  fpscr = out.fpscr;
+  checkInput(a, fpscr, out);
+  a = out.value;
+  fpscr = out.fpscr;
+  checkInput(b, fpscr, out);
+  b = out.value;
+  fpscr = out.fpscr;
   // 0 * Infinity is invalid regardless of the addend (matches f32mul/postProcess's check).
   if ((a === 0 || b === 0) && (Math.abs(a) === INF || Math.abs(b) === INF)) {
     fpscr |= FPSCR_IOC;
@@ -146,27 +184,31 @@ export function f32fma(
   if (negateProduct) product = -product;
   const signedAddend = negateAddend ? -addend : addend;
   const result = Math.fround(signedAddend + product);
-  return postProcess(result, signedAddend, product, fpscr, 'add');
+  postProcess(result, signedAddend, product, fpscr, 'add', out);
 }
 
-export function f32sqrt(fpscr: number, a: number): [number, number] {
-  [a, fpscr] = checkInput(a, fpscr);
+export function f32sqrt(fpscr: number, a: Float32, out: FpResult): void {
+  checkInput(a, fpscr, out);
+  a = out.value;
+  fpscr = out.fpscr;
   if (a < 0 && !isNaN(a)) {
-    return [QNAN, fpscr | FPSCR_IOC];
+    out.value = QNAN;
+    out.fpscr = fpscr | FPSCR_IOC;
+    return;
   }
-  let result = Math.fround(Math.sqrt(a));
-  [result, fpscr] = postProcess(result, a, 0, fpscr, 'sqrt');
-  return [result, fpscr];
+  const result = Math.fround(Math.sqrt(a));
+  postProcess(result, a, 0, fpscr, 'sqrt', out);
 }
 
 /** Detect overflow/underflow/inexact and update flags. */
 function postProcess(
-  result: number,
-  a: number,
-  b: number,
+  result: Float32,
+  a: Float32,
+  b: Float32,
   fpscr: number,
-  op: string
-): [number, number] {
+  op: string,
+  out: FpResult
+): void {
   if (isNaN(result)) {
     if (
       op === 'mul' &&
@@ -175,20 +217,29 @@ function postProcess(
     ) {
       fpscr |= FPSCR_IOC;
     }
-    return [result, fpscr];
+    out.value = result;
+    out.fpscr = fpscr;
+    return;
   }
   if (Math.abs(result) === INF) {
     fpscr |= FPSCR_OFC | FPSCR_IXC;
-    return [result, fpscr];
+    out.value = result;
+    out.fpscr = fpscr;
+    return;
   }
   if (isDenormal(result)) {
     if (fpscr & 0x100) {
       // Flush-to-zero: return signed zero.
       fpscr |= FPSCR_UFC | FPSCR_IDC;
-      return [result < 0 ? -0 : 0, fpscr];
+      out.value = result < 0 ? -0 : 0;
+      out.fpscr = fpscr;
+      return;
     }
     fpscr |= FPSCR_UFC | FPSCR_IXC;
-    return [result, fpscr];
+    out.value = result;
+    out.fpscr = fpscr;
+    return;
   }
-  return [result, fpscr];
+  out.value = result;
+  out.fpscr = fpscr;
 }

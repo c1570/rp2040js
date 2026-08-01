@@ -1,3 +1,4 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const SSI_TXFLR = 0x00000020;
@@ -13,7 +14,10 @@ const SSI_VERSION_ID = 0x0000005c;
 
 const CMD_READ_STATUS = 0x05;
 
-export class RPSSI extends BasePeripheral implements Peripheral {
+export class RPSSI<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private dr0 = 0;
 
   readUint32(offset: number) {

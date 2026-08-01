@@ -8,8 +8,8 @@ This is a much improved fork of Uri Shaked's [rp2040js](https://github.com/wokwi
 
 ### Status of rp2350js
 
-- RISC-V/Hazard3 machine mode support (no user mode support)
-- basic ARM/Cortex M33 core support (no secure/insecure mode)
+- **RISC-V/Hazard3** machine mode support (no user mode support)
+- basic **ARM/Cortex M33** support (no secure/insecure mode)
 - runs from bootrom
 - runs both no_flash/RAM binaries and flash binaries
 - runs **pico-examples/blink_simple.c, hello_timer.c, hello_usb.c**
@@ -17,7 +17,9 @@ This is a much improved fork of Uri Shaked's [rp2040js](https://github.com/wokwi
 - runs **MicroPython** (both RISC-V and ARM variants)
 - **GDB interface** ("monitor" outputting PIO/GPIO info; memory watch not supported)
 - **MCP server** and **Agent Skill** for interfacing with coding agents (features similar to GDB); register MCP with, e.g., `opencode mcp add` and `npx ts-node demo/mcp-server.ts`; for skill CLI helper see .opencode/.claude
-- built-in cycle profiler using markers in the code
+- built-in cycle profiler using markers in the RP's firmware
+- on recent PCs, expect about **10M cycles per second** from rp2350js
+- can get **transpiled to C** for 2-8x speed increase ([cts2c](/cts2c/README.md))
 
 #### Implemented
 

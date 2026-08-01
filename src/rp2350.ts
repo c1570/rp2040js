@@ -10,7 +10,7 @@ import {
   FUNCTION_PIO1,
   FUNCTION_PIO2,
 } from './gpio-pin';
-import { IRQ } from './irq_rp2350';
+import { IRQ2350 } from './irq_rp2350';
 import { RPADC } from './peripherals/adc';
 import { RPBUSCTRL } from './peripherals/busctrl';
 import { RPBootRAM } from './peripherals/bootram';
@@ -44,11 +44,8 @@ import { ConsoleLogger, Logger, LogLevel } from './utils/logging';
 import { CortexM33Core } from './cortex-m33/core';
 import { RPPPB2350 } from './peripherals/ppb_rp2350';
 import { bootrom_rp2350_A2 } from './bootroms';
-import {
-  loadFirmware as loadFirmwareHelper,
-  LoadFirmwareOptions,
-  LoadFirmwareResult,
-} from './utils/load-firmware';
+import { loadFirmware, LoadFirmwareOptions, LoadFirmwareResult } from './utils/load-firmware';
+import { Uint32, Float64 } from './utils/types';
 
 export const FLASH_START_ADDRESS = 0x10000000;
 export const RAM_START_ADDRESS = 0x20000000;
@@ -89,7 +86,7 @@ export interface RP2350Options {
 
 export class RP2350 implements IRPChip {
   readonly bootrom = new Uint32Array((32 >>> 2) * KB);
-  readonly bootromBytes = this.bootrom.length * 4;
+  readonly bootromBytes: Uint32 = this.bootrom.length * 4;
   readonly sram = new Uint8Array((256 * 2 + 8) * KB);
   readonly sram32 = new Uint32Array(this.sram.buffer);
   readonly sram16 = new Uint16Array(this.sram.buffer);
@@ -103,6 +100,10 @@ export class RP2350 implements IRPChip {
 
   /** Architecture of both cores (homogeneous in v1). */
   readonly coreArch: CoreArch;
+
+  // Cached `coreArch === 'arm'` to avoid repeated string comparisons in the hot
+  // memory access path (transpiled C build: strcmp() costs ~8-10% runtime).
+  readonly isArmCore: boolean;
 
   /**
    * CPU cores. The concrete element type depends on {@link coreArch}:
@@ -149,7 +150,12 @@ export class RP2350 implements IRPChip {
   clkSys = 125 * MHz;
   clkPeri = 125 * MHz;
 
-  readonly sio = new RPSIO(this, IRQ.SIO_IRQ_FIFO, IRQ.SIO_IRQ_FIFO, IRQ.SIO_IRQ_MTIMECMP);
+  readonly sio = new RPSIO(
+    this,
+    IRQ2350.SIO_IRQ_FIFO,
+    IRQ2350.SIO_IRQ_FIFO,
+    IRQ2350.SIO_IRQ_MTIMECMP
+  );
 
   /** RP2350 OTP fuse array and control interface. */
   readonly otp = new RP2350OTP(this, 'OTP_BASE');
@@ -157,18 +163,21 @@ export class RP2350 implements IRPChip {
   readonly watchdog = new RPWatchdog(this, 'WATCHDOG_BASE');
 
   readonly uart = [
-    new RPUART(this, 'UART0', IRQ.UART0_IRQ, {
+    new RPUART(this, 'UART0', IRQ2350.UART0_IRQ, {
       rx: DREQChannel.DREQ_UART0_RX,
       tx: DREQChannel.DREQ_UART0_TX,
     }),
-    new RPUART(this, 'UART1', IRQ.UART1_IRQ, {
+    new RPUART(this, 'UART1', IRQ2350.UART1_IRQ, {
       rx: DREQChannel.DREQ_UART1_RX,
       tx: DREQChannel.DREQ_UART1_TX,
     }),
   ];
-  readonly i2c = [new RPI2C(this, 'I2C0', IRQ.I2C0_IRQ), new RPI2C(this, 'I2C1', IRQ.I2C1_IRQ)];
-  readonly pwm = new RPPWM(this, 'PWM_BASE', IRQ.PWM_IRQ_WRAP_0, DREQChannel.DREQ_PWM_WRAP0);
-  readonly adc = new RPADC(this, 'ADC', IRQ.ADC_IRQ_FIFO, DREQChannel.DREQ_ADC);
+  readonly i2c = [
+    new RPI2C(this, 'I2C0', IRQ2350.I2C0_IRQ),
+    new RPI2C(this, 'I2C1', IRQ2350.I2C1_IRQ),
+  ];
+  readonly pwm = new RPPWM(this, 'PWM_BASE', IRQ2350.PWM_IRQ_WRAP_0, DREQChannel.DREQ_PWM_WRAP0);
+  readonly adc = new RPADC(this, 'ADC', IRQ2350.ADC_IRQ_FIFO, DREQChannel.DREQ_ADC);
 
   readonly gpio: Array<GPIOPin> = Array(48)
     .fill(0)
@@ -183,12 +192,12 @@ export class RP2350 implements IRPChip {
     new GPIOPin(this, 5, 'SD3'),
   ];
 
-  readonly dma = new RPDMA(this, 'DMA', IRQ.DMA_IRQ_0);
+  readonly dma = new RPDMA(this, 'DMA', IRQ2350.DMA_IRQ_0);
   readonly pio: Array<RPPIO> = [
     new RPPIO(
       this,
       'PIO0',
-      IRQ.PIO0_IRQ_0,
+      IRQ2350.PIO0_IRQ_0,
       0,
       DREQChannel.DREQ_PIO0_RX0,
       DREQChannel.DREQ_PIO0_TX0
@@ -196,7 +205,7 @@ export class RP2350 implements IRPChip {
     new RPPIO(
       this,
       'PIO1',
-      IRQ.PIO1_IRQ_0,
+      IRQ2350.PIO1_IRQ_0,
       1,
       DREQChannel.DREQ_PIO1_RX0,
       DREQChannel.DREQ_PIO1_TX0
@@ -204,19 +213,19 @@ export class RP2350 implements IRPChip {
     new RPPIO(
       this,
       'PIO2',
-      IRQ.PIO2_IRQ_0,
+      IRQ2350.PIO2_IRQ_0,
       2,
       DREQChannel.DREQ_PIO2_RX0,
       DREQChannel.DREQ_PIO2_TX0
     ),
   ];
-  readonly usbCtrl = new RPUSBController(this, 'USB', IRQ.USBCTRL_IRQ);
+  readonly usbCtrl = new RPUSBController(this, 'USB', IRQ2350.USBCTRL_IRQ);
   readonly spi = [
-    new RPSPI(this, 'SPI0', IRQ.SPI0_IRQ, {
+    new RPSPI(this, 'SPI0', IRQ2350.SPI0_IRQ, {
       rx: DREQChannel.DREQ_SPI0_RX,
       tx: DREQChannel.DREQ_SPI0_TX,
     }),
-    new RPSPI(this, 'SPI1', IRQ.SPI1_IRQ, {
+    new RPSPI(this, 'SPI1', IRQ2350.SPI1_IRQ, {
       rx: DREQChannel.DREQ_SPI1_RX,
       tx: DREQChannel.DREQ_SPI1_TX,
     }),
@@ -247,8 +256,8 @@ export class RP2350 implements IRPChip {
     0x40098: this.i2c[1],
     0x400a0: this.adc,
     0x400a8: this.pwm,
-    0x400b0: new RPTimer(this, 'TIMER0_BASE', IRQ.TIMER0_IRQ_0),
-    0x400b8: new RPTimer(this, 'TIMER1_BASE', IRQ.TIMER1_IRQ_0),
+    0x400b0: new RPTimer(this, 'TIMER0_BASE', IRQ2350.TIMER0_IRQ_0),
+    0x400b8: new RPTimer(this, 'TIMER1_BASE', IRQ2350.TIMER1_IRQ_0),
     0x400c0: new UnimplementedPeripheral(this, 'HSTX_CTRL_BASE'),
     0x400c8: new UnimplementedPeripheral(this, 'XIP_CTRL_BASE'),
     0x400d0: new RPXIPQMI(this, 'XIP_QMI_BASE'),
@@ -282,7 +291,8 @@ export class RP2350 implements IRPChip {
 
   constructor(options: RP2350Options = {}) {
     this.coreArch = options.coreArch ?? 'riscv';
-    if (this.coreArch === 'arm') {
+    this.isArmCore = this.coreArch === 'arm';
+    if (this.isArmCore) {
       this.core = [new CortexM33Core(this, 'ARMCore0', 0), new CortexM33Core(this, 'ARMCore1', 1)];
       this.ppb = new RPPPB2350(this, 'PPB');
     } else {
@@ -307,8 +317,8 @@ export class RP2350 implements IRPChip {
     this.flash.fill(0xff);
 
     this.reset();
-    this.core[0].otherCore = this.core[1];
-    this.core[1].otherCore = this.core[0];
+    this.core[0].setOtherCore(this.core[1]);
+    this.core[1].setOtherCore(this.core[0]);
 
     // Set QSPI CSn pull-up (BOOTSEL not pressed). On real hardware, the flash
     // chip's CSn line has a pull-up resistor. Without this, the bootrom thinks
@@ -358,7 +368,7 @@ export class RP2350 implements IRPChip {
    * skip chip init, etc.).
    */
   loadFirmware(path: string, options?: LoadFirmwareOptions): LoadFirmwareResult {
-    return loadFirmwareHelper(this, path, options);
+    return loadFirmware(this, path, options);
   }
 
   /**
@@ -372,7 +382,7 @@ export class RP2350 implements IRPChip {
    * bootrom's own CPACR setup.
    */
   reset(enableCoprocessors = false) {
-    if (this.coreArch === 'arm') {
+    if (this.isArmCore) {
       for (const c of this.core as CortexM33Core[]) c.reset(enableCoprocessors);
     } else {
       for (const c of this.core) c.reset();
@@ -380,7 +390,7 @@ export class RP2350 implements IRPChip {
     this.pwm.reset();
   }
 
-  readUint32(address: number): number {
+  readUint32(address: Uint32): Uint32 {
     address = address >>> 0; // round to 32-bits, unsigned
     if (address & 0x3) {
       // Only LDR/STR singles, LDRH/STRH, and TBH may access unaligned
@@ -397,18 +407,21 @@ export class RP2350 implements IRPChip {
         } (core${this.currentCore})`
       );
     }
+    // Ordered by hit frequency, not address value: SRAM/flash (data/code, the
+    // hottest ranges — every instruction fetch lands here) are checked before
+    // SIO/PPB/peripherals/bootrom/DPRAM, which are comparatively rare per-step.
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       return this.sram32[(address - RAM_START_ADDRESS) >>> 2];
+    } else if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
+      // XIP mirrors flash four times. Also, reads from invalid adresses
+      // don't seem to trigger exceptions (see Micropython)
+      return this.flash32[(address & (FLASH_SIZE - 1)) >>> 2];
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       return this.sio.readUint32(address - SIO_START_ADDRESS, this.currentCore);
-    } else if (this.coreArch === 'arm' && address >= 0xe0020000 && address < 0xe0030000) {
+    } else if (this.isArmCore && address >= 0xe0020000 && address < 0xe0030000) {
       // NS PPB alias (TrustZone). Strip bit 17 to map to secure PPB offset.
       return this.ppb!.readUint32ViaCore(address & 0xfffdffff & 0xffffff, this.currentCore);
-    } else if (
-      this.coreArch === 'arm' &&
-      address >= PPB_START_ADDRESS &&
-      address < PPB_END_ADDRESS
-    ) {
+    } else if (this.isArmCore && address >= PPB_START_ADDRESS && address < PPB_END_ADDRESS) {
       // ARMv8-M PPB (per-core NVIC/SCB/SysTick/MPU/SAU/FP).
       return this.ppb!.readUint32ViaCore(address & 0xffffff, this.currentCore);
     }
@@ -418,11 +431,7 @@ export class RP2350 implements IRPChip {
       return peripheral.readUint32(address & 0x3fff);
     }
 
-    if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
-      // XIP mirrors flash four times. Also, reads from invalid adresses
-      // don't seem to trigger exceptions (see Micropython)
-      return this.flash32[(address & (FLASH_SIZE - 1)) >>> 2];
-    } else if (address < this.bootromBytes) {
+    if (address < this.bootromBytes) {
       return this.bootrom[address >>> 2];
     } else if (
       address >= DPRAM_START_ADDRESS &&
@@ -442,23 +451,24 @@ export class RP2350 implements IRPChip {
     //return 0xffffffff;
   }
 
-  findPeripheral(address: number) {
+  findPeripheral(address: Uint32): Peripheral {
     return this.peripherals[(address >>> 14) << 2];
   }
 
   /** We assume the address is 16-bit aligned */
-  readUint16(address: number) {
-    if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
-      return this.flash16[(address & (FLASH_SIZE - 1)) >>> 1];
-    } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
+  readUint16(address: Uint32): Uint32 {
+    // Same SRAM-before-flash ordering as readUint32, for consistency.
+    if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       return this.sram16[(address - RAM_START_ADDRESS) >>> 1];
+    } else if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
+      return this.flash16[(address & (FLASH_SIZE - 1)) >>> 1];
     }
 
     const value = this.readUint32(address & 0xfffffffc);
     return address & 0x2 ? (value & 0xffff0000) >>> 16 : value & 0xffff;
   }
 
-  readUint8(address: number) {
+  readUint8(address: Uint32): Uint32 {
     if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
       return this.flash[address & (FLASH_SIZE - 1)];
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
@@ -469,7 +479,7 @@ export class RP2350 implements IRPChip {
     return (address & 0x1 ? (value & 0xff00) >>> 8 : value & 0xff) >>> 0;
   }
 
-  writeUint32(address: number, value: number) {
+  writeUint32(address: Uint32, value: Uint32) {
     address = address >>> 0;
     if (address & 0x3) {
       const pc = this.core[this.currentCore]?.PC;
@@ -483,14 +493,10 @@ export class RP2350 implements IRPChip {
       this.sram32[(address - RAM_START_ADDRESS) >>> 2] = value;
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       this.sio.writeUint32(address - SIO_START_ADDRESS, value, this.currentCore);
-    } else if (this.coreArch === 'arm' && address >= 0xe0020000 && address < 0xe0030000) {
+    } else if (this.isArmCore && address >= 0xe0020000 && address < 0xe0030000) {
       // NS PPB alias (TrustZone). Strip bit 17.
       this.ppb!.writeUint32ViaCore(address & 0xfffdffff & 0xffffff, value, this.currentCore);
-    } else if (
-      this.coreArch === 'arm' &&
-      address >= PPB_START_ADDRESS &&
-      address < PPB_END_ADDRESS
-    ) {
+    } else if (this.isArmCore && address >= PPB_START_ADDRESS && address < PPB_END_ADDRESS) {
       // ARMv8-M PPB (per-core NVIC/SCB/SysTick/MPU/SAU/FP).
       this.ppb!.writeUint32ViaCore(address & 0xffffff, value, this.currentCore);
     } else {
@@ -521,7 +527,7 @@ export class RP2350 implements IRPChip {
     }
   }
 
-  writeUint8(address: number, value: number) {
+  writeUint8(address: Uint32, value: Uint32) {
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sram[address - RAM_START_ADDRESS] = value;
       return;
@@ -534,7 +540,7 @@ export class RP2350 implements IRPChip {
     const peripheral = this.findPeripheral(address);
     if (peripheral) {
       const shift = (address & 0x3) << 3;
-      if (peripheral.byteAddressable) {
+      if (peripheral.byteAddressable()) {
         const offset = alignedAddress & 0x3fff;
         const originalValue = peripheral.readUint32(offset);
         peripheral.writeUint32(
@@ -560,7 +566,7 @@ export class RP2350 implements IRPChip {
     );
   }
 
-  writeUint16(address: number, value: number) {
+  writeUint16(address: Uint32, value: Uint32) {
     // we assume that addess is 16-bit aligned.
     // Ideally we should generate a fault if not!
 
@@ -576,7 +582,7 @@ export class RP2350 implements IRPChip {
     const peripheral = this.findPeripheral(address);
     if (peripheral) {
       const shift = (address & 0x3) << 3;
-      if (peripheral.byteAddressable) {
+      if (peripheral.byteAddressable()) {
         const offset = alignedAddress & 0x3fff;
         const originalValue = peripheral.readUint32(offset);
         peripheral.writeUint32(
@@ -607,7 +613,7 @@ export class RP2350 implements IRPChip {
   }
 
   get cycles(): number {
-    return this.core[0].cycles;
+    return this.core[0].getCycles();
   }
 
   gpioValues(start_index: number) {
@@ -679,8 +685,11 @@ export class RP2350 implements IRPChip {
   }
 
   setInterrupt(irq: number, value: boolean) {
-    this.core0.setInterrupt(irq, value);
-    this.core1.setInterrupt(irq, value);
+    // Use `this.core[i]`, not `this.core0`/`this.core1` — those are RISC-V-only
+    // accessors that become dangerous concrete-pointer casts in the C build; on ARM
+    // the array holds CortexM33Core, so calling CPU methods on them would corrupt memory.
+    this.core[0].setInterrupt(irq, value);
+    this.core[1].setInterrupt(irq, value);
   }
 
   setInterruptCore(irq: number, value: boolean, core: number) {
@@ -694,16 +703,31 @@ export class RP2350 implements IRPChip {
         interruptValue = true;
       }
     }
-    this.setInterrupt(IRQ.IO_IRQ_BANK0, interruptValue);
+    this.setInterrupt(IRQ2350.IO_IRQ_BANK0, interruptValue);
   }
 
+  // The hottest function in the emulator: one call per core0 instruction. Both
+  // branches are the same three steps, but written against the concrete core type —
+  // `core[]` is ICpuCore[], and every access through it costs an indirect vtable call
+  // the C compiler can't devirtualize (`cycles` isn't even reachable through the fat
+  // pointer, hence getCycles()). Narrowing once on the construction-fixed `isArmCore`
+  // makes executeInstruction()/executeInstructionsUpTo() direct calls and `cycles` a
+  // plain field read; the branch itself is perfectly predicted.
   stepCores() {
-    this.currentCore = 0;
-    const elapsed = this.core[0].executeInstruction();
-    this.currentCore = 1;
-    while (this.core[1].cycles < this.core[0].cycles) {
-      this.core[1].executeInstruction();
+    if (this.isArmCore) {
+      const core0 = this.armCore0;
+      this.currentCore = 0;
+      const elapsed = core0.executeInstruction();
+      this.currentCore = 1;
+      // core0 doesn't execute again here, so its count is invariant for the catch-up.
+      this.armCore1.executeInstructionsUpTo(core0.cycles);
+      return elapsed;
     }
+    const core0 = this.riscvCore0;
+    this.currentCore = 0;
+    const elapsed = core0.executeInstruction();
+    this.currentCore = 1;
+    this.riscvCore1.executeInstructionsUpTo(core0.cycles);
     return elapsed;
   }
 
@@ -713,7 +737,10 @@ export class RP2350 implements IRPChip {
       this.pio[1].step();
       this.pio[2].step();
     }
-    const cycleNanos = 1e9 / this.clkSys;
+    // Float64, not plain `number`: nanos-per-cycle is fractional for any clkSys that
+    // doesn't divide 1e9 (150MHz → 6.667), and int32_t would truncate it, running the
+    // whole simulated clock fast in the C build only.
+    const cycleNanos: Float64 = 1e9 / this.clkSys;
     this.clock.tick(cycles * cycleNanos);
   }
 

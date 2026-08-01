@@ -1,3 +1,4 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const BOOTLOCK_ST = 0x808;
@@ -7,11 +8,17 @@ const BOOTLOCK7 = 0x828;
 const WRITE_ONCE0 = 0x800;
 const WRITE_ONCE1 = 0x804;
 
-export class RPBootRAM extends BasePeripheral implements Peripheral {
-  readonly byteAddressable = true;
+export class RPBootRAM<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private bootram: number[] = Array(256).fill(0);
   write_once = [0, 0];
   spinLock = 0;
+
+  byteAddressable() {
+    return true;
+  }
 
   readUint32(offset: number) {
     if (offset >= BOOTLOCK0 && offset <= BOOTLOCK7) {

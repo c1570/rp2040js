@@ -1,4 +1,5 @@
-import { IClock } from '../clock/clock';
+import { AlarmCallback } from '../clock/clock';
+import { SimulationClock } from '../clock/simulation-clock';
 import { IRPChip } from '../rpchip';
 import { Timer32, Timer32PeriodicAlarm, TimerMode } from '../utils/timer32';
 import { BasePeripheral, Peripheral } from './peripheral';
@@ -54,18 +55,43 @@ enum PWMDivMode {
   BFallingEdge,
 }
 
+class PWMChannelAAlarmCallback implements AlarmCallback {
+  constructor(private readonly channel: PWMChannel) {}
+  fire() {
+    this.channel.setA(false);
+  }
+}
+
+class PWMChannelBAlarmCallback implements AlarmCallback {
+  constructor(private readonly channel: PWMChannel) {}
+  fire() {
+    this.channel.setB(false);
+  }
+}
+
+class PWMChannelBottomAlarmCallback implements AlarmCallback {
+  constructor(private readonly channel: PWMChannel) {}
+  fire() {
+    this.channel.wrap();
+  }
+}
+
 class PWMChannel {
   readonly timer = new Timer32(`PWM_Ch${this.index}_timer`, this.clock, this.pwm.clockFreq);
-  readonly alarmA = new Timer32PeriodicAlarm(`PWM_Ch${this.index}_alarmA`, this.timer, () => {
-    this.setA(false);
-  });
-  readonly alarmB = new Timer32PeriodicAlarm(`PWM_Ch${this.index}_alarmB`, this.timer, () => {
-    this.setB(false);
-  });
+  readonly alarmA = new Timer32PeriodicAlarm(
+    `PWM_Ch${this.index}_alarmA`,
+    this.timer,
+    new PWMChannelAAlarmCallback(this)
+  );
+  readonly alarmB = new Timer32PeriodicAlarm(
+    `PWM_Ch${this.index}_alarmB`,
+    this.timer,
+    new PWMChannelBAlarmCallback(this)
+  );
   readonly alarmBottom = new Timer32PeriodicAlarm(
     `PWM_Ch${this.index}_alarmBottom`,
     this.timer,
-    () => this.wrap()
+    new PWMChannelBottomAlarmCallback(this)
   );
 
   csr: number = 0;
@@ -85,7 +111,7 @@ class PWMChannel {
   readonly pinA2 = this.index < 7 ? 16 + this.index * 2 : -1;
   readonly pinB2 = this.index < 7 ? 16 + this.index * 2 + 1 : -1;
 
-  constructor(private pwm: RPPWM, readonly clock: IClock, readonly index: number) {
+  constructor(private pwm: RPPWM, readonly clock: SimulationClock, readonly index: number) {
     this.alarmA.enable = true;
     this.alarmB.enable = true;
     this.alarmBottom.enable = true;
@@ -171,7 +197,7 @@ class PWMChannel {
     }
   }
 
-  private wrap() {
+  wrap() {
     this.pwm.channelInterrupt(this.index);
     this.updateDoubleBuffered();
     if (!(this.csr & CSR_PH_CORRECT)) {
@@ -264,16 +290,19 @@ class PWMChannel {
   }
 }
 
-export class RPPWM extends BasePeripheral implements Peripheral {
+export class RPPWM<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   readonly channels = [
-    new PWMChannel(this, this.rp2040.clock, 0),
-    new PWMChannel(this, this.rp2040.clock, 1),
-    new PWMChannel(this, this.rp2040.clock, 2),
-    new PWMChannel(this, this.rp2040.clock, 3),
-    new PWMChannel(this, this.rp2040.clock, 4),
-    new PWMChannel(this, this.rp2040.clock, 5),
-    new PWMChannel(this, this.rp2040.clock, 6),
-    new PWMChannel(this, this.rp2040.clock, 7),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 0),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 1),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 2),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 3),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 4),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 5),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 6),
+    new PWMChannel(this, this.rp2040.clock as SimulationClock, 7),
   ];
   private intRaw = 0;
   private intEnable = 0;
@@ -283,7 +312,7 @@ export class RPPWM extends BasePeripheral implements Peripheral {
   gpioDirection = 0;
 
   constructor(
-    readonly rp2040: IRPChip,
+    readonly rp2040: ChipType,
     name: string,
     readonly pwm_wrap_irq: number,
     readonly pwm_dreq_base: number

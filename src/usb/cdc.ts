@@ -22,10 +22,16 @@ const TX_FIFO_SIZE = 512;
 const ENDPOINT_ZERO = 0;
 const CONFIGURATION_DESCRIPTOR_SIZE = 9;
 
-export function extractEndpointNumbers(descriptors: ArrayLike<number>) {
+/** Result of scanning a USB config descriptor for a CDC data interface's endpoints. */
+interface EndpointNumbers {
+  in: number;
+  out: number;
+}
+
+export function extractEndpointNumbers(descriptors: ArrayLike<number>): EndpointNumbers {
   let index = 0;
   let foundInterface = false;
-  const result = {
+  const result: EndpointNumbers = {
     in: -1,
     out: -1,
   };

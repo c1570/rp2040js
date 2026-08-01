@@ -1,5 +1,6 @@
 import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
+import { AlarmCallback, IAlarm } from '../clock/clock';
 
 export enum DREQChannel {
   DREQ_PIO0_TX0,
@@ -143,7 +144,18 @@ const EN = 1 << 0;
 const CHn_CTRL_TRIG_WRITE_MASK = 0xffffff;
 const CHn_CTRL_TRIG_WC_MASK = READ_ERROR | WRITE_ERROR;
 
-export class RPDMAChannel {
+// Which transfer function fire() uses — resolved once when CTRL is written
+// (matching real hardware, which captures it then rather than re-checking
+// BSWAP on every fire()).
+enum TransferKind {
+  Direct8,
+  Direct16,
+  Swap16,
+  Direct32,
+  Swap32,
+}
+
+export class RPDMAChannel<ChipType extends IRPChip = IRPChip> implements AlarmCallback {
   private ctrl = 0;
   private readAddr = 0;
   private writeAddr = 0;
@@ -153,13 +165,13 @@ export class RPDMAChannel {
   private transMode = 0;
   private treqValue = 0;
   private dataSize = 1;
+  private transferKind = TransferKind.Direct8;
   private chainTo = 0;
   private ringMask = 0;
-  private transferFn: () => void = () => 0;
-  private transferAlarm;
+  private transferAlarm: IAlarm;
 
-  constructor(readonly dma: RPDMA, readonly rp2040: IRPChip, readonly index: number) {
-    this.transferAlarm = rp2040.clock.createAlarm(this.transfer);
+  constructor(readonly dma: RPDMA, readonly rp2040: ChipType, readonly index: number) {
+    this.transferAlarm = rp2040.clock.createAlarm(this);
     this.reset();
   }
 
@@ -182,28 +194,28 @@ export class RPDMAChannel {
     return this.ctrl & EN && this.ctrl & BUSY;
   }
 
-  transfer8 = () => {
+  transfer8() {
     const { rp2040 } = this;
     rp2040.writeUint8(this.writeAddr, rp2040.readUint8(this.readAddr));
-  };
+  }
 
-  transfer16 = () => {
+  transfer16() {
     const { rp2040 } = this;
     rp2040.writeUint16(this.writeAddr, rp2040.readUint16(this.readAddr));
-  };
+  }
 
-  transferSwap16 = () => {
+  transferSwap16() {
     const { rp2040 } = this;
     const input = rp2040.readUint16(this.readAddr);
     rp2040.writeUint16(this.writeAddr, ((input & 0xff) << 8) | (input >> 8));
-  };
+  }
 
-  transfer32 = () => {
+  transfer32() {
     const { rp2040 } = this;
     rp2040.writeUint32(this.writeAddr, rp2040.readUint32(this.readAddr));
-  };
+  }
 
-  transferSwap32 = () => {
+  transferSwap32() {
     const { rp2040 } = this;
     const input = rp2040.readUint32(this.readAddr);
     rp2040.writeUint32(
@@ -213,11 +225,26 @@ export class RPDMAChannel {
         ((input & 0x00ff0000) >> 8) |
         ((input >> 24) & 0xff)
     );
-  };
+  }
 
-  transfer = () => {
+  fire() {
     const { ctrl, dataSize, ringMask } = this;
-    this.transferFn();
+    switch (this.transferKind) {
+      case TransferKind.Direct16:
+        this.transfer16();
+        break;
+      case TransferKind.Swap16:
+        this.transferSwap16();
+        break;
+      case TransferKind.Direct32:
+        this.transfer32();
+        break;
+      case TransferKind.Swap32:
+        this.transferSwap32();
+        break;
+      default:
+        this.transfer8();
+    }
     if (ctrl & INCR_READ) {
       if (ringMask && !(ctrl & RING_SEL)) {
         this.readAddr = (this.readAddr & ~ringMask) | ((this.readAddr + dataSize) & ringMask);
@@ -243,7 +270,10 @@ export class RPDMAChannel {
         this.dma.checkInterrupts();
       }
       if (this.chainTo !== this.index) {
-        this.dma.channels[this.chainTo]?.start();
+        // `chainTo` is masked to CHAIN_TO_MASK (0-15) and `channels` is a full
+        // Array(CHANNEL_COUNT === 16), so this index is always valid — no `?.`
+        // needed (which cts2c can't transpile anyway).
+        this.dma.channels[this.chainTo].start();
       }
       if (this.transMode == 1) {
         this.transCount = this.transCountReload;
@@ -252,7 +282,7 @@ export class RPDMAChannel {
         this.ctrl &= ~BUSY;
       }
     }
-  };
+  }
 
   scheduleTransfer() {
     if (this.dma.dreq[this.treqValue] || this.treqValue === TREQ.Permanent) {
@@ -343,16 +373,16 @@ export class RPDMAChannel {
         switch ((this.ctrl >> DATA_SIZE_SHIFT) & DATA_SIZE_MASK) {
           case 1:
             this.dataSize = 2;
-            this.transferFn = this.ctrl & BSWAP ? this.transferSwap16 : this.transfer16;
+            this.transferKind = this.ctrl & BSWAP ? TransferKind.Swap16 : TransferKind.Direct16;
             break;
           case 2:
             this.dataSize = 4;
-            this.transferFn = this.ctrl & BSWAP ? this.transferSwap32 : this.transfer32;
+            this.transferKind = this.ctrl & BSWAP ? TransferKind.Swap32 : TransferKind.Direct32;
             break;
           case 0:
           default:
-            this.transferFn = this.transfer8;
             this.dataSize = 1;
+            this.transferKind = TransferKind.Direct8;
         }
         if (this.ctrl & EN && this.ctrl & BUSY) {
           this.scheduleTransfer();
@@ -389,7 +419,10 @@ export class RPDMAChannel {
   }
 }
 
-export class RPDMA extends BasePeripheral implements Peripheral {
+export class RPDMA<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   readonly channels: Array<RPDMAChannel> = Array(CHANNEL_COUNT)
     .fill(0)
     .map((v, i) => new RPDMAChannel(this, this.rp2040, i));
@@ -404,7 +437,7 @@ export class RPDMA extends BasePeripheral implements Peripheral {
 
   readonly dreq: boolean[] = Array(DREQChannel.DREQ_MAX);
 
-  constructor(readonly rp2040: IRPChip, name: string, readonly dma_irq_base: number) {
+  constructor(readonly rp2040: ChipType, name: string, readonly dma_irq_base: number) {
     super(rp2040, name);
   }
 
@@ -562,7 +595,7 @@ export class RPDMA extends BasePeripheral implements Peripheral {
         divisor = this.timer2 & 0xffff;
         break;
       case TREQ.Timer3:
-        dividend = this.timer3 >>> 36;
+        dividend = this.timer3 >>> 16;
         divisor = this.timer3 & 0xffff;
         break;
     }

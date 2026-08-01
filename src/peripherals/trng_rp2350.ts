@@ -1,3 +1,4 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const RNG_ISR_OFFSET = 0x104;
@@ -20,7 +21,10 @@ const SEED = 0x2350c0de;
  * that reads as 0.
  * See RP2350 datasheet §12.12
  */
-export class RP2350TRNG extends BasePeripheral implements Peripheral {
+export class RP2350TRNG<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private state = SEED >>> 0;
   private readonly ehr = new Uint32Array(6);
   private valid = false;

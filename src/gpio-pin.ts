@@ -36,7 +36,7 @@ const IRQ_EDGE_LOW = 1 << 2;
 const IRQ_LEVEL_HIGH = 1 << 1;
 const IRQ_LEVEL_LOW = 1 << 0;
 
-export class GPIOPin {
+export class GPIOPin<ChipType extends IRPChip = IRPChip> {
   private rawInputValue = false;
   private lastValue = GPIOPinState.Input;
 
@@ -46,9 +46,16 @@ export class GPIOPin {
   irqForceMask = 0;
   irqStatus = 0;
 
-  private readonly listeners = new Set<GPIOPinListener>();
+  // Tombstoned (rather than compacted) on removal — removeListener() nulls out the
+  // slot at its captured index instead of splicing, so no other listener's index
+  // shifts underneath it.
+  private readonly listeners: (GPIOPinListener | null)[] = [];
 
-  constructor(readonly rp2040: IRPChip, readonly index: number, readonly name = index.toString()) {}
+  constructor(
+    readonly rp2040: ChipType,
+    readonly index: number,
+    readonly name: string = index.toString()
+  ) {}
 
   get rawInterrupt() {
     return !!((this.irqStatus & this.irqEnableMask) | this.irqForceMask);
@@ -171,7 +178,7 @@ export class GPIOPin {
     if (value !== lastValue) {
       this.lastValue = value;
       for (const listener of this.listeners) {
-        listener(value, lastValue);
+        listener?.(value, lastValue);
       }
     }
   }
@@ -192,7 +199,10 @@ export class GPIOPin {
   }
 
   addListener(callback: GPIOPinListener) {
-    this.listeners.add(callback);
-    return () => this.listeners.delete(callback);
+    this.listeners.push(callback);
+    const index = this.listeners.length - 1;
+    return () => {
+      this.listeners[index] = null;
+    };
   }
 }

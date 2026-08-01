@@ -43,7 +43,10 @@ export interface IUARTDMAChannels {
   tx: number;
 }
 
-export class RPUART extends BasePeripheral implements Peripheral {
+export class RPUART<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private ctrlRegister = RXE | TXE;
   private lineCtrlRegister = 0;
   private rxFIFO = new FIFO(32);
@@ -56,7 +59,7 @@ export class RPUART extends BasePeripheral implements Peripheral {
   public onBaudRateChange?: (baudRate: number) => void;
 
   constructor(
-    rp2040: IRPChip,
+    rp2040: ChipType,
     name: string,
     readonly irq: number,
     readonly dreq: IUARTDMAChannels

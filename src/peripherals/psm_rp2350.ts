@@ -1,3 +1,4 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const FRCE_ON = 0x00;
@@ -11,7 +12,10 @@ const PSM_BITS_MASK = 0x0001ffff;
  * RP2350 PSM (Power State Machine) peripheral.
  * Reference: RP2350 datasheet §7.4, base 0x40018000.
  */
-export class RP2350PSM extends BasePeripheral implements Peripheral {
+export class RP2350PSM<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private frceOn = 0;
   private frceOff = 0;
   private wdsel = 0;

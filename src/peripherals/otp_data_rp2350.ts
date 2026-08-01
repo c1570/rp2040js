@@ -9,9 +9,19 @@ const OTP_ROWS = 4096;
  * OTP_DATA read window) is a separate Uint16Array seeded blank.
  * RP2350 datasheet §4.5
  */
-export class RP2350OTP extends BasePeripheral implements Peripheral {
+export class RP2350OTP<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   readonly fuse = new Uint16Array(OTP_ROWS);
   private readonly regs = new Uint32Array(0x200 >> 2);
+
+  // Explicit pass-through constructor: cts2c only synthesizes a `_new()` for a class
+  // with its own declared constructor — a subclass relying on the parent's implicit
+  // constructor would get no allocator at all.
+  constructor(rp2040: ChipType, name: string) {
+    super(rp2040, name);
+  }
 
   readUint32(offset: number) {
     if (offset < this.regs.length * 4) return this.regs[offset >> 2];
@@ -32,8 +42,11 @@ export class RP2350OTP extends BasePeripheral implements Peripheral {
  * byte offset N*4 and returns the 16-bit fuse value from the shared
  * fuse array. Writes are ignored.
  */
-export class RP2350OTPData extends BasePeripheral implements Peripheral {
-  constructor(rp2040: IRPChip, name: string, private readonly otp: RP2350OTP) {
+export class RP2350OTPData<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
+  constructor(rp2040: ChipType, name: string, private readonly otp: RP2350OTP) {
     super(rp2040, name);
   }
 

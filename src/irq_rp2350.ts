@@ -1,4 +1,4 @@
-export enum IRQ {
+export enum IRQ2350 {
   TIMER0_IRQ_0 = 0,
   TIMER0_IRQ_1 = 1,
   TIMER0_IRQ_2 = 2,
@@ -53,4 +53,4 @@ export enum IRQ {
   SPAREIRQ_IRQ_5 = 51,
 }
 
-export const MAX_HARDWARE_IRQ = IRQ.SPAREIRQ_IRQ_5;
+export const MAX_HARDWARE_IRQ = IRQ2350.SPAREIRQ_IRQ_5;

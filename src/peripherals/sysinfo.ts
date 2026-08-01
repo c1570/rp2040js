@@ -1,10 +1,14 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const CHIP_ID = 0;
 const PLATFORM = 0x4;
 const GITREF_RP2040 = 0x40;
 
-export class RP2040SysInfo extends BasePeripheral implements Peripheral {
+export class RP2040SysInfo<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   readUint32(offset: number) {
     // All the values here were verified against the silicon
     switch (offset) {

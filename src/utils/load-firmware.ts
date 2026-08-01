@@ -88,7 +88,11 @@ export interface LoadFirmwareResult {
  *
  * No-op if the chip is not an RP2350 (RP2040 has no vectored boot).
  */
-export function setupVectoredRamBoot(chip: IRPChip, windowBase: number, windowSize: number): void {
+export function setupVectoredRamBoot<ChipType extends IRPChip = IRPChip>(
+  chip: ChipType,
+  windowBase: number,
+  windowSize: number
+): void {
   if (chip.identifier !== 'rp2350') return;
   const w = (i: number) => WATCHDOG_SCRATCH0 + i * 4;
   chip.writeUint32(w(2), windowBase >>> 0);
@@ -99,12 +103,25 @@ export function setupVectoredRamBoot(chip: IRPChip, windowBase: number, windowSi
   chip.writeUint32(w(7), REBOOT_TO_MAGIC_PC);
 }
 
+// Re-declare decodeBlock()'s return type (lives in node_modules, unscanned by cts2c)
+// to enable proper type resolution in the transpiled C build.
+interface DecodedUF2Block {
+  flashAddress: number;
+  payload: Uint8Array;
+}
+
+/** Result of scanning a HEX image's address records (see inspectHex). */
+interface HexInspection {
+  useSram: boolean;
+  loadBase: number;
+}
+
 /**
  * Determine whether a HEX image targets SRAM or flash by scanning the
  * extended-linear-address records. Also returns the lowest absolute data
  * address seen.
  */
-function inspectHex(hex: string): { useSram: boolean; loadBase: number } {
+function inspectHex(hex: string): HexInspection {
   let highAddressBytes = 0;
   let useSram = false;
   let loadBase = Infinity;
@@ -128,8 +145,12 @@ function inspectHex(hex: string): { useSram: boolean; loadBase: number } {
   return { useSram, loadBase };
 }
 
-function tryLoadDisassembly(path: string, chip: IRPChip, ext: 'hex' | 'uf2') {
-  const disPath = path.replace(new RegExp(`\\.${ext}$`, 'i'), '.dis');
+function tryLoadDisassembly<ChipType extends IRPChip = IRPChip>(
+  path: string,
+  chip: ChipType,
+  ext: 'hex' | 'uf2'
+) {
+  const disPath = path.substring(0, path.length - ext.length - 1) + '.dis';
   try {
     chip.loadDisassembly(readFileSync(disPath, 'utf-8'));
   } catch {
@@ -141,7 +162,11 @@ function tryLoadDisassembly(path: string, chip: IRPChip, ext: 'hex' | 'uf2') {
  * Load raw Intel HEX contents into the chip's flash or SRAM (auto-detected
  * from the address records). Returns the load base and which region was used.
  */
-export function loadFirmwareFromHex(chip: IRPChip, hex: string, path?: string): LoadFirmwareResult {
+export function loadFirmwareFromHex<ChipType extends IRPChip = IRPChip>(
+  chip: ChipType,
+  hex: string,
+  path?: string
+): LoadFirmwareResult {
   const { useSram, loadBase } = inspectHex(hex);
   if (useSram) {
     loadHex(hex, chip.sram, RAM_START_ADDRESS);
@@ -156,7 +181,10 @@ export function loadFirmwareFromHex(chip: IRPChip, hex: string, path?: string): 
  * Load a UF2 file into the chip's flash or SRAM (auto-detected from the first
  * block's target address).
  */
-export function loadFirmwareFromUF2(chip: IRPChip, path: string): LoadFirmwareResult {
+export function loadFirmwareFromUF2<ChipType extends IRPChip = IRPChip>(
+  chip: ChipType,
+  path: string
+): LoadFirmwareResult {
   const data = readFileSync(path);
   const buffer = new Uint8Array(512);
   let useSram = false;
@@ -164,7 +192,7 @@ export function loadFirmwareFromUF2(chip: IRPChip, path: string): LoadFirmwareRe
 
   for (let offset = 0; offset + 512 <= data.length; offset += 512) {
     buffer.set(data.subarray(offset, offset + 512));
-    const block = decodeBlock(buffer);
+    const block: DecodedUF2Block = decodeBlock(buffer);
     const { flashAddress, payload } = block;
     if (flashAddress >= RAM_START_ADDRESS) {
       chip.sram.set(payload, flashAddress - RAM_START_ADDRESS);
@@ -201,20 +229,20 @@ export function loadFirmwareFromUF2(chip: IRPChip, path: string): LoadFirmwareRe
  * Adjacent `.dis` files (same basename) are loaded automatically when
  * present.
  */
-export function loadFirmware(
-  chip: IRPChip,
+export function loadFirmware<ChipType extends IRPChip = IRPChip>(
+  chip: ChipType,
   path: string,
   options?: LoadFirmwareOptions
 ): LoadFirmwareResult {
   let result: LoadFirmwareResult;
-  if (/\.uf2$/i.test(path)) {
+  if (path.length >= 4 && path.substring(path.length - 4) === '.uf2') {
     result = loadFirmwareFromUF2(chip, path);
   } else {
     result = loadFirmwareFromHex(chip, readFileSync(path, 'utf-8'), path);
   }
 
-  const initChip = options?.initChip ?? true;
-  const entryPc = options?.entryPc;
+  const initChip = options ? options.initChip ?? true : true;
+  const entryPc = options ? options.entryPc : undefined;
 
   if (!initChip) {
     return result;
@@ -231,7 +259,11 @@ export function loadFirmware(
 
   if (result.useSram && chip.identifier === 'rp2350') {
     // Scratch survives reset, so set up the vectored-boot handshake first.
-    setupVectoredRamBoot(chip, result.loadBase, options?.ramWindowSize ?? 0x40000);
+    setupVectoredRamBoot(
+      chip,
+      result.loadBase,
+      options ? options.ramWindowSize ?? 0x40000 : 0x40000
+    );
   }
 
   // Reset so cores restart at the bootrom vector, which then performs the

@@ -1,4 +1,5 @@
 import { ICpuCore } from './cpu-core';
+import { Int53 } from './utils/types';
 import { MAX_HARDWARE_IRQ } from './irq';
 import { RP2040, APB_START_ADDRESS, SIO_START_ADDRESS } from './rp2040';
 
@@ -27,7 +28,7 @@ export const SYSM_CONTROL = 20;
 // Lowest possible exception priority
 const LOWEST_PRIORITY = 4;
 
-enum ExecutionMode {
+enum ExecutionModeM0 {
   Mode_Thread,
   Mode_Handler,
 }
@@ -51,7 +52,15 @@ enum StackPointerBank {
 export class CortexM0Core implements ICpuCore {
   readonly registers = new Uint32Array(16);
   bankedSP: number = 0;
-  cycles: number = 0;
+  cycles: Int53 = 0; // avoids int32_t overflow past ~2.15B cycles
+
+  getCycles(): Int53 {
+    return this.cycles;
+  }
+
+  addCycles(delta: number) {
+    this.cycles += delta;
+  }
 
   eventRegistered = false;
   waiting = false;
@@ -72,7 +81,7 @@ export class CortexM0Core implements ICpuCore {
   public SPSEL: StackPointerBank = StackPointerBank.SPmain;
   public nPRIV: boolean = false;
 
-  currentMode: ExecutionMode = ExecutionMode.Mode_Thread;
+  currentMode: ExecutionModeM0 = ExecutionModeM0.Mode_Thread;
   public IPSR: number = 0;
   public interruptNMIMask = 0;
   pendingInterrupts: number = 0;
@@ -91,6 +100,10 @@ export class CortexM0Core implements ICpuCore {
 
   // Sibling core for SEV (send-event) inter-core wakeup. Set by the chip.
   otherCore!: CortexM0Core;
+
+  setOtherCore(other: ICpuCore) {
+    this.otherCore = other as unknown as CortexM0Core;
+  }
 
   /** Hook to listen for function calls - branch-link (BL/BLX) instructions */
   blTaken = (core: CortexM0Core, blx: boolean) => {
@@ -269,7 +282,7 @@ export class CortexM0Core implements ICpuCore {
     // PushStack:
     let framePtr = 0;
     let framePtrAlign = 0;
-    if (this.SPSEL && this.currentMode === ExecutionMode.Mode_Thread) {
+    if (this.SPSEL && this.currentMode === ExecutionModeM0.Mode_Thread) {
       framePtrAlign = this.SPprocess & 0b100 ? 1 : 0;
       this.SPprocess = (this.SPprocess - 0x20) & ~0b100;
       framePtr = this.SPprocess;
@@ -287,7 +300,7 @@ export class CortexM0Core implements ICpuCore {
     this.writeUint32(framePtr + 0x14, this.LR);
     this.writeUint32(framePtr + 0x18, this.PC & ~1); // ReturnAddress(ExceptionType);
     this.writeUint32(framePtr + 0x1c, (this.xPSR & ~(1 << 9)) | (framePtrAlign << 9));
-    if (this.currentMode == ExecutionMode.Mode_Handler) {
+    if (this.currentMode == ExecutionModeM0.Mode_Handler) {
       this.LR = 0xfffffff1;
     } else {
       if (!this.SPSEL) {
@@ -297,7 +310,7 @@ export class CortexM0Core implements ICpuCore {
       }
     }
     // ExceptionTaken:
-    this.currentMode = ExecutionMode.Mode_Handler; // Enter Handler Mode, now Privileged
+    this.currentMode = ExecutionModeM0.Mode_Handler; // Enter Handler Mode, now Privileged
     this.IPSR = exceptionNumber;
     this.switchStack(StackPointerBank.SPmain);
     this.eventRegistered = true;
@@ -309,16 +322,16 @@ export class CortexM0Core implements ICpuCore {
     let framePtr = this.SPmain;
     switch (excReturn & 0xf) {
       case 0b0001: // Return to Handler
-        this.currentMode = ExecutionMode.Mode_Handler;
+        this.currentMode = ExecutionModeM0.Mode_Handler;
         this.switchStack(StackPointerBank.SPmain);
         break;
       case 0b1001: // Return to Thread using Main stack
-        this.currentMode = ExecutionMode.Mode_Thread;
+        this.currentMode = ExecutionModeM0.Mode_Thread;
         this.switchStack(StackPointerBank.SPmain);
         break;
       case 0b1101: // Return to Thread using Process stack
         framePtr = this.SPprocess;
-        this.currentMode = ExecutionMode.Mode_Thread;
+        this.currentMode = ExecutionModeM0.Mode_Thread;
         this.switchStack(StackPointerBank.SPprocess);
         break;
       // Assigning CurrentMode to Mode_Thread causes a drop in privilege
@@ -352,7 +365,7 @@ export class CortexM0Core implements ICpuCore {
     }
 
     this.APSR = psr & 0xf0000000;
-    const forceThread = this.currentMode == ExecutionMode.Mode_Thread && this.nPRIV;
+    const forceThread = this.currentMode == ExecutionModeM0.Mode_Thread && this.nPRIV;
     this.IPSR = forceThread ? 0 : psr & 0x3f;
     this.interruptsUpdated = true;
     // Thumb bit should always be one! EPSR<24> = psr<24>; // Load valid EPSR bits from memory
@@ -551,7 +564,7 @@ export class CortexM0Core implements ICpuCore {
 
       case SYSM_CONTROL:
         this.nPRIV = !!(value & 1);
-        if (this.currentMode === ExecutionMode.Mode_Thread) {
+        if (this.currentMode === ExecutionModeM0.Mode_Thread) {
           this.switchStack(value & 2 ? StackPointerBank.SPprocess : StackPointerBank.SPmain);
         }
         break;
@@ -563,7 +576,7 @@ export class CortexM0Core implements ICpuCore {
   }
 
   BXWritePC(address: number) {
-    if (this.currentMode == ExecutionMode.Mode_Handler && address >>> 28 == 0b1111) {
+    if (this.currentMode == ExecutionModeM0.Mode_Handler && address >>> 28 == 0b1111) {
       this.exceptionReturn(address & 0x0fffffff);
     } else {
       this.PC = address & ~1;
@@ -601,6 +614,21 @@ export class CortexM0Core implements ICpuCore {
       return write ? 4 : 3;
     }
     return 1;
+  }
+
+  executeInstructionsUpTo(cycle: Int53) {
+    // Parked in WFI/WFE: executeInstruction() only ticks `cycles` by one per call and
+    // nothing in this window can wake us (the other core isn't executing, peripherals
+    // advance after the caller's catch-up loop), so land on `cycle` directly.
+    if (this.waiting) {
+      if (this.cycles < cycle) {
+        this.cycles = cycle;
+      }
+      return;
+    }
+    while (this.cycles < cycle) {
+      this.executeInstruction();
+    }
   }
 
   executeInstruction(): number {
@@ -733,8 +761,9 @@ export class CortexM0Core implements ICpuCore {
       // test for profiler trace magic
       if (this.readUint16(opcodePC + 2) === 0xabcd && this.readUint16(opcodePC + 4) === 0xffff) {
         let profTag = '';
-        for (let i = opcodePC + 6; 1; i++) {
-          let ch = this.readUint8(i);
+        // no loop condition: the tag is NUL-terminated, so `break` below is the exit
+        for (let i = opcodePC + 6; ; i++) {
+          const ch = this.readUint8(i);
           if (ch == 0) break;
           profTag = profTag + String.fromCharCode(ch);
         }

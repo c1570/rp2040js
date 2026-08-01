@@ -1,5 +1,6 @@
 import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
+import { GPIOPin } from '../gpio-pin';
 
 const VOLTAGE_SELECT = 0;
 const GPIO_FIRST = 0x4;
@@ -10,17 +11,20 @@ const QSPI_LAST = 0x18;
 
 export type IIOBank = 'qspi' | 'bank0';
 
-export class RPPADS extends BasePeripheral implements Peripheral {
+export class RPPADS<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   voltageSelect = 0;
 
   private readonly firstPadRegister = this.bank === 'qspi' ? QSPI_FIRST : GPIO_FIRST;
   private readonly lastPadRegister = this.bank === 'qspi' ? QSPI_LAST : GPIO_LAST;
 
-  constructor(rp2040: IRPChip, name: string, readonly bank: IIOBank) {
+  constructor(rp2040: ChipType, name: string, readonly bank: IIOBank) {
     super(rp2040, name);
   }
 
-  getPinFromOffset(offset: number) {
+  getPinFromOffset(offset: number): GPIOPin {
     const gpioIndex = (offset - this.firstPadRegister) >>> 2;
     if (this.bank === 'qspi') {
       return this.rp2040.qspi[gpioIndex];

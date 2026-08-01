@@ -1,5 +1,8 @@
+import { AlarmCallback } from '../clock/clock';
+import { IRPChip } from '../rpchip';
 import { MAX_HARDWARE_IRQ } from '../irq';
 import { RP2040 } from '../rp2040';
+import { SimulationClock } from '../clock/simulation-clock';
 import { Timer32, Timer32PeriodicAlarm, TimerMode } from '../utils/timer32';
 import { BasePeripheral, Peripheral } from './peripheral';
 
@@ -46,30 +49,39 @@ const VECTACTIVE_SHIFT = 0;
  *
  * Included peripheral: NVIC, SysTick timer
  */
-export class RPPPB extends BasePeripheral implements Peripheral {
+export class RPPPB<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral, AlarmCallback
+{
   // Systick
   systickCountFlag = false;
   systickClkSource = false;
   systickIntEnable = false;
   systickReload = 0;
-  readonly systickTimer = new Timer32('PPB_systick_timer', this.rp2040.clock, this.rp2040.clkSys);
-  readonly systickAlarm = new Timer32PeriodicAlarm('PPB_systick_alarm', this.systickTimer, () => {
-    this.systickCountFlag = true;
-    if (this.systickIntEnable) {
-      const rp2040 = this.rp2040 as RP2040;
-      rp2040.core0.pendingSystick = true;
-      rp2040.core0.interruptsUpdated = true;
-    }
-    this.systickTimer.set(this.systickReload);
-  });
+  readonly systickTimer = new Timer32(
+    'PPB_systick_timer',
+    this.rp2040.clock as SimulationClock,
+    this.rp2040.clkSys
+  );
+  readonly systickAlarm = new Timer32PeriodicAlarm('PPB_systick_alarm', this.systickTimer, this);
 
-  constructor(rp2040: RP2040, name: string) {
+  constructor(rp2040: ChipType, name: string) {
     super(rp2040, name);
     this.systickTimer.top = 0xffffff;
     this.systickTimer.mode = TimerMode.Decrement;
     this.systickAlarm.target = 0;
     this.systickAlarm.enable = true;
     this.reset();
+  }
+
+  fire() {
+    this.systickCountFlag = true;
+    if (this.systickIntEnable) {
+      const rp2040 = this.rp2040 as unknown as RP2040;
+      rp2040.core0.pendingSystick = true;
+      rp2040.core0.interruptsUpdated = true;
+    }
+    this.systickTimer.set(this.systickReload);
   }
 
   reset() {
@@ -79,7 +91,7 @@ export class RPPPB extends BasePeripheral implements Peripheral {
   }
 
   readUint32ViaCore(offset: number, _core: number) {
-    const rp2040 = this.rp2040 as RP2040;
+    const rp2040 = this.rp2040 as unknown as RP2040;
     const core = rp2040.core[_core];
 
     switch (offset) {
@@ -159,7 +171,7 @@ export class RPPPB extends BasePeripheral implements Peripheral {
   }
 
   writeUint32ViaCore(offset: number, value: number, _core: number) {
-    const rp2040 = this.rp2040 as RP2040;
+    const rp2040 = this.rp2040 as unknown as RP2040;
     const core = rp2040.core[_core];
 
     const hardwareInterruptMask = (1 << MAX_HARDWARE_IRQ) - 1;

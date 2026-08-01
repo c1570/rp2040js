@@ -142,7 +142,10 @@ const RESTART = 1 << 10;
 const STOP = 1 << 9;
 const CMD = 1 << 8; // 0 for write, 1 for read
 
-export class RPI2C extends BasePeripheral implements Peripheral {
+export class RPI2C<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private state = I2CState.Idle;
   private busy = false;
   private stop = false;
@@ -192,7 +195,7 @@ export class RPI2C extends BasePeripheral implements Peripheral {
     return this.control & IC_10BITADDR_MASTER ? 10 : 7;
   }
 
-  constructor(rp2040: IRPChip, name: string, readonly irq: number) {
+  constructor(rp2040: ChipType, name: string, readonly irq: number) {
     super(rp2040, name);
   }
 

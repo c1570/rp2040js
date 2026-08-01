@@ -3,6 +3,9 @@
  * See RP2350 datasheet §3.6.
  */
 import { CortexM33Core, Fault } from './core';
+import { M33CoreState } from '../peripherals/ppb_rp2350';
+import { floatToBits, bitsToFloat } from './execute-fpu';
+import { Float64 } from '../utils/types';
 
 const PIN_MASK = 0x3fffffff; // 30 GPIO pins.
 
@@ -76,14 +79,7 @@ function cp0Gpioc(core: CortexM33Core, hw0: number, hw1: number): number {
   const isHi = opc1 >= 4;
   void isHi; // HI bank is RAZ/WI on RP2350.
 
-  const sio = (
-    core.chip as unknown as {
-      sio: {
-        readUint32: (offset: number, core: number) => number;
-        writeUint32: (offset: number, value: number, core: number) => void;
-      };
-    }
-  ).sio;
+  const sio = core.chip.sio;
 
   // SIO GPIO register offsets (RP2350 layout — differs from RP2040).
   const GPIO_OUT = 0x010;
@@ -175,7 +171,7 @@ function cp0Gpioc(core: CortexM33Core, hw0: number, hw1: number): number {
 
 // Saturating f64→i32 cast: NaN→0, out-of-range→MAX/MIN, in-range→truncation
 // toward zero.
-function f64ToI32Sat(d: number): number {
+function f64ToI32Sat(d: Float64): number {
   if (isNaN(d)) return 0;
   if (d >= 2147483647) return 0x7fffffff;
   if (d <= -2147483648) return -2147483648;
@@ -184,10 +180,27 @@ function f64ToI32Sat(d: number): number {
 
 // Saturating f64→u32 cast: NaN→0, negatives→0, out-of-range→MAX, in-range→
 // truncation toward zero.
-function f64ToU32Sat(d: number): number {
+function f64ToU32Sat(d: Float64): number {
   if (isNaN(d) || d < 0) return 0;
   if (d >= 4294967296) return 0xffffffff;
   return Math.trunc(d) >>> 0;
+}
+
+// Reinterprets an f64 as two uint32 halves (low word first) via a shared backing
+// buffer (same idiom as execute-fpu.ts's f32/u32BitsScratch). Module-scope: cts2c
+// replaces readDouble/writeDouble with hand-written C bodies, so this only runs
+// under Node and needs no per-instance state.
+const f64BitsScratch = new Float64Array(1);
+const f64WordsScratch = new Uint32Array(f64BitsScratch.buffer);
+function readDouble(st: M33CoreState, idx: number): Float64 {
+  f64WordsScratch[0] = st.dcpHalves[idx * 2] >>> 0;
+  f64WordsScratch[1] = st.dcpHalves[idx * 2 + 1] >>> 0;
+  return f64BitsScratch[0];
+}
+function writeDouble(st: M33CoreState, idx: number, val: Float64) {
+  f64BitsScratch[0] = val;
+  st.dcpHalves[idx * 2] = f64WordsScratch[0];
+  st.dcpHalves[idx * 2 + 1] = f64WordsScratch[1];
 }
 
 function cp45Dcp(core: CortexM33Core, hw0: number, hw1: number): number {
@@ -219,28 +232,11 @@ function cp45Dcp(core: CortexM33Core, hw0: number, hw1: number): number {
   const Rn = hw0 & 0x7;
   const Rm = hw1 & 0x7;
 
-  const readDouble = (idx: number): number => {
-    const lo = st.dcpHalves[idx * 2] >>> 0;
-    const hi = st.dcpHalves[idx * 2 + 1] >>> 0;
-    const buf = new ArrayBuffer(8);
-    const view = new DataView(buf);
-    view.setUint32(0, lo, true);
-    view.setUint32(4, hi, true);
-    return view.getFloat64(0, true);
-  };
-  const writeDouble = (idx: number, val: number) => {
-    const buf = new ArrayBuffer(8);
-    const view = new DataView(buf);
-    view.setFloat64(0, val, true);
-    st.dcpHalves[idx * 2] = view.getUint32(0, true);
-    st.dcpHalves[idx * 2 + 1] = view.getUint32(4, true);
-  };
-
   switch (opc1) {
     case 0: {
       // Arithmetic
-      const a = readDouble(Rn);
-      const b = readDouble(Rm);
+      const a = readDouble(st, Rn);
+      const b = readDouble(st, Rm);
       let result: number;
       switch (opc2) {
         case 0:
@@ -262,14 +258,14 @@ function cp45Dcp(core: CortexM33Core, hw0: number, hw1: number): number {
         default:
           return 1;
       }
-      writeDouble(Rd, result);
+      writeDouble(st, Rd, result);
       updateDcpStatus(st, result);
       return opc2 === 3 ? 18 : opc2 === 4 ? 28 : opc2 === 2 ? 5 : 4;
     }
     case 1: {
       // Compares
-      const a = readDouble(Rn);
-      const b = readDouble(Rm);
+      const a = readDouble(st, Rn);
+      const b = readDouble(st, Rm);
       let eq = false;
       switch (opc2) {
         case 0:
@@ -299,20 +295,20 @@ function cp45Dcp(core: CortexM33Core, hw0: number, hw1: number): number {
         case 0: {
           // i2d: half A of CRn holds an i32.
           const r = st.dcpHalves[Rn * 2] | 0;
-          writeDouble(Rd, r);
+          writeDouble(st, Rd, r);
           updateDcpStatus(st, r);
           return 4;
         }
         case 1: {
           // u2d: half A of CRn holds a u32.
           const r = st.dcpHalves[Rn * 2] >>> 0;
-          writeDouble(Rd, r);
+          writeDouble(st, Rd, r);
           updateDcpStatus(st, r);
           return 4;
         }
         case 2: {
           // d2i: saturating cast, not JS modular wrap (>>> 0 would silently wrap).
-          const d = readDouble(Rn);
+          const d = readDouble(st, Rn);
           st.dcpHalves[Rd * 2] = f64ToI32Sat(d) >>> 0;
           st.dcpHalves[Rd * 2 + 1] = 0;
           updateDcpStatus(st, d);
@@ -320,29 +316,29 @@ function cp45Dcp(core: CortexM33Core, hw0: number, hw1: number): number {
         }
         case 3: {
           // d2u: saturating cast.
-          const d = readDouble(Rn);
+          const d = readDouble(st, Rn);
           st.dcpHalves[Rd * 2] = f64ToU32Sat(d);
           st.dcpHalves[Rd * 2 + 1] = 0;
           updateDcpStatus(st, d);
           return 4;
         }
         case 4: {
-          // d2f: f64 → f32, stored in half A; half B cleared.
-          const d = readDouble(Rn);
-          const buf = new ArrayBuffer(4);
-          new DataView(buf).setFloat32(0, d, true);
-          const f32bits = new DataView(buf).getUint32(0, true);
+          // d2f: f64 → f32 in half A (half B cleared). Math.fround rounds to float32
+          // precision, then floatToBits reinterprets the bits — keeping all
+          // scratch-field access inside the helpers that cts2c replaces with
+          // hand-written C bodies.
+          const d = readDouble(st, Rn);
+          const f = Math.fround(d);
+          const f32bits = floatToBits(f);
           st.dcpHalves[Rd * 2] = f32bits;
           st.dcpHalves[Rd * 2 + 1] = 0;
-          updateDcpStatus(st, new DataView(buf).getFloat32(0, true));
+          updateDcpStatus(st, f);
           return 4;
         }
         case 5: {
           // f2d: f32 in half A of CRn → f64 in CRd.
-          const buf = new ArrayBuffer(4);
-          new DataView(buf).setUint32(0, st.dcpHalves[Rn * 2], true);
-          const r = new DataView(buf).getFloat32(0, true);
-          writeDouble(Rd, r);
+          const r = bitsToFloat(st.dcpHalves[Rn * 2]);
+          writeDouble(st, Rd, r);
           updateDcpStatus(st, r);
           return 4;
         }
@@ -368,15 +364,14 @@ function cp45Dcp(core: CortexM33Core, hw0: number, hw1: number): number {
 }
 
 // Sign-bit check: true for -0.0 and negative NaN too, where JS `val < 0`
-// returns false.
-const signBuf = new ArrayBuffer(8);
-const signView = new DataView(signBuf);
-function isSignNegative(val: number): boolean {
-  signView.setFloat64(0, val, true);
-  return (signView.getUint32(4, true) & 0x80000000) !== 0;
+// returns false. Same f64BitsScratch/f64WordsScratch bit-reinterpretation technique as
+// readDouble/writeDouble above (see their comment) — module-scope for the same reason.
+function isSignNegative(val: Float64): boolean {
+  f64BitsScratch[0] = val;
+  return (f64WordsScratch[1] & 0x80000000) !== 0;
 }
 
-function updateDcpStatus(st: { dcpStatus: number }, val: number) {
+function updateDcpStatus(st: M33CoreState, val: Float64) {
   let s = 0;
   if (val === 0) s |= 1; // includes +0 and -0
   if (isSignNegative(val)) s |= 2;
@@ -479,11 +474,7 @@ function cp7Rcp(core: CortexM33Core, hw0: number, hw1: number): number {
   }
 }
 
-function cp7McrrMrrc(
-  core: CortexM33Core,
-  hw0: number,
-  hw1: number
-): number {
+function cp7McrrMrrc(core: CortexM33Core, hw0: number, hw1: number): number {
   // L bit (hw0[4]): 0=MCRR (write), 1=MRRC (read). MRRC2 from CP7 is a NOP
   // per the reference (coprocessor.rs:676-679) — must not trigger rcp ops.
   if ((hw0 & 0x10) !== 0) return 1;
@@ -510,14 +501,7 @@ function cp7McrrMrrc(
       // the executing core. Initially the salt is invalid; rcp_salt_coreN
       // writes a 64-bit value (Rt:Rt2) and marks it valid. Writing an
       // already-valid salt is an anomaly that triggers an RCP fault (NMI).
-      const states = (core.chip as unknown as {
-        ppb?: {
-          coreState: [
-            { rcpSalt: number; rcpSaltValid: boolean },
-            { rcpSalt: number; rcpSaltValid: boolean }
-          ];
-        };
-      }).ppb!.coreState;
+      const states: [M33CoreState, M33CoreState] = core.chip.ppb!.coreState;
       const target = states[CRm & 1];
       if (target.rcpSaltValid) {
         core.pendingFault = Fault.Nmi;

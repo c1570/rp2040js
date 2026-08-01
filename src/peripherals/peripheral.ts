@@ -32,14 +32,21 @@ export interface Peripheral {
    * word rather than the usual replicate-across-the-word + atomic-write
    * behavior real APB peripheral registers get (which would clobber
    * neighboring bytes).
+   *
+   * A method rather than a property so cts2c resolves it via its well-tested
+   * method-vtable dispatch; interface property signatures are a less-tested path.
    */
-  readonly byteAddressable?: boolean;
+  byteAddressable(): boolean;
 }
 
-export class BasePeripheral implements Peripheral {
+export class BasePeripheral<ChipType extends IRPChip = IRPChip> implements Peripheral {
   protected rawWriteValue = 0;
 
-  constructor(protected rp2040: IRPChip, readonly name: string) {}
+  constructor(protected rp2040: ChipType, readonly name: string) {}
+
+  byteAddressable() {
+    return false;
+  }
 
   readUint32(offset: number) {
     this.warn(`Unimplemented peripheral read from ${offset.toString(16)}`);

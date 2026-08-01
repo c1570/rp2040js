@@ -1,10 +1,12 @@
 import { ICpuCore } from '../cpu-core';
-import { IRPChip } from '../rpchip';
+import type { RP2350 } from '../rp2350';
 import { M33Registers } from './registers';
 import { conditionPassed } from './conditions';
 import { executeThumb16, advanceItState } from './execute-thumb16';
-import { executeThumb32, isThumb32 } from './execute-thumb32';
+import { executeThumb32, isThumb32, ImmCarry, Mul64Result } from './execute-thumb32';
 import type { M33CoreState } from '../peripherals/ppb_rp2350';
+import { FpResult } from './fpu-helpers';
+import { Int53 } from '../utils/types';
 
 /** Exception numbers per ARMv8-M. */
 export const EXC_RESET = 1;
@@ -37,7 +39,7 @@ export enum Fault {
   Nmi,
 }
 
-enum ExecutionMode {
+enum ExecutionModeM33 {
   Thread,
   Handler,
 }
@@ -49,7 +51,16 @@ enum ExecutionMode {
 export class CortexM33Core implements ICpuCore {
   readonly regs = new M33Registers();
   /** Monotonically increasing per-core cycle count. */
-  cycles = 0;
+  cycles: Int53 = 0; // avoids int32_t overflow past ~2.15B cycles
+
+  getCycles(): Int53 {
+    return this.cycles;
+  }
+
+  addCycles(delta: number) {
+    this.cycles += delta;
+  }
+
   /** True while parked in WFI. */
   waiting = false;
   /** True when a WFE event has been latched but not yet consumed. */
@@ -66,12 +77,21 @@ export class CortexM33Core implements ICpuCore {
   pendingFault: Fault | null = null;
 
   /** Current execution mode (Thread vs Handler). */
-  currentMode: ExecutionMode = ExecutionMode.Thread;
+  currentMode: ExecutionModeM33 = ExecutionModeM33.Thread;
   /** Security state: true=Secure, false=Non-secure. Reset defaults to Secure. */
   secure = true;
 
-  /** Sibling core for SEV (send-event) inter-core wakeup. Set by the chip. */
-  otherCore!: ICpuCore;
+  /** Sibling core for SEV (send-event) inter-core wakeup. Set by the chip.
+   * Stored concretely (not as ICpuCore) — see setOtherCore's own comment. */
+  otherCore!: CortexM33Core;
+
+  // The param stays ICpuCore-typed (callers only see the interface), but the field is
+  // stored concretely: fireSEV() reads/writes `otherCore.waiting`/`.eventRegistered`
+  // as plain property access, which cts2c silently stubs to no-ops through an
+  // interface-typed value (see cpu-core.ts).
+  setOtherCore(other: ICpuCore) {
+    this.otherCore = other as unknown as CortexM33Core;
+  }
 
   /** Hook fired on BKPT / UDF trap. */
   onBreak?: (code: number) => void;
@@ -80,8 +100,26 @@ export class CortexM33Core implements ICpuCore {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   blTaken = (_core: CortexM33Core, _blx: boolean) => {};
 
-  constructor(readonly chip: IRPChip, readonly coreLabel: string, readonly coreIndex: number) {
+  /**
+   * Reusable out-parameter scratch for fpu-helpers.ts's f32 ops (see FpResult) —
+   * owned here because fpuExecute is a free function with no instance of its own.
+   */
+  readonly fpResultScratch: FpResult;
+
+  /** Reusable out-parameter scratch for execute-thumb32.ts's thumbExpandImm/
+   * thumbExpandImmC (see ImmCarry's own comment) — same reasoning/pattern as
+   * fpResultScratch above. */
+  readonly immCarryScratch: ImmCarry;
+
+  /** Reusable out-parameter scratch for execute-thumb32.ts's mul64/mul64Signed (see
+   * Mul64Result's own comment) — same reasoning/pattern as fpResultScratch above. */
+  readonly mul64Scratch: Mul64Result;
+
+  constructor(readonly chip: RP2350, readonly coreLabel: string, readonly coreIndex: number) {
     this.regs.reset();
+    this.fpResultScratch = { value: 0, fpscr: 0 };
+    this.immCarryScratch = { value: 0, carryOut: false };
+    this.mul64Scratch = { hi: 0, lo: 0 };
   }
 
   get logger() {
@@ -127,7 +165,7 @@ export class CortexM33Core implements ICpuCore {
     this.interruptsUpdated = false;
     this.pendingSVCall = false;
     this.pendingFault = null;
-    this.currentMode = ExecutionMode.Thread;
+    this.currentMode = ExecutionModeM33.Thread;
     this.secure = true;
 
     if (enableCoprocessors) {
@@ -351,7 +389,7 @@ export class CortexM33Core implements ICpuCore {
     regs.control &= ~CONTROL_FPCA;
     regs.itState = 0;
     regs.syncSpFromBanked();
-    this.currentMode = ExecutionMode.Handler;
+    this.currentMode = ExecutionModeM33.Handler;
     this.eventRegistered = true;
   }
 
@@ -412,10 +450,10 @@ export class CortexM33Core implements ICpuCore {
     regs.pc = (newPc & ~1) >>> 0;
 
     if (returnToHandler) {
-      this.currentMode = ExecutionMode.Handler;
+      this.currentMode = ExecutionModeM33.Handler;
       regs.control &= ~0x2;
     } else {
-      this.currentMode = ExecutionMode.Thread;
+      this.currentMode = ExecutionModeM33.Thread;
       if (returnToPsp) regs.control |= 0x2;
       else regs.control &= ~0x2;
     }
@@ -540,6 +578,24 @@ export class CortexM33Core implements ICpuCore {
     }
     this.chip.writeUint8(address, value & 0xff);
     this.chip.writeUint8((address + 1) >>> 0, (value >>> 8) & 0xff);
+  }
+
+  executeInstructionsUpTo(cycle: Int53) {
+    // Parked in WFI/WFE: executeInstruction() would just tick `cycles` by one per
+    // call, and nothing in this window can wake us — the other core isn't executing,
+    // and peripherals/the clock only advance after the caller's catch-up loop
+    // returns. So landing on `cycle` directly is exactly what the loop would have
+    // produced, in O(1) instead of O(cycle - cycles). This is the common case for a
+    // core whose firmware never launched it.
+    if (this.waiting) {
+      if (this.cycles < cycle) {
+        this.cycles = cycle;
+      }
+      return;
+    }
+    while (this.cycles < cycle) {
+      this.executeInstruction();
+    }
   }
 
   /**

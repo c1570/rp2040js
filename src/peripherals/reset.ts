@@ -6,13 +6,16 @@ const RESET = 0x0; //Reset control.
 const WDSEL = 0x4; //Watchdog select.
 const RESET_DONE = 0x8; //Reset Done
 
-export class RPReset extends BasePeripheral implements Peripheral {
+export class RPReset<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private reset: number = 0;
   private wdsel: number = 0;
   private reset_done: number = 0x1ffffff;
   private reset_mask: number = 0x1ffffff;
 
-  constructor(protected rp2040: IRPChip, readonly name: string) {
+  constructor(protected rp2040: ChipType, readonly name: string) {
     super(rp2040, name);
     if (rp2040 instanceof RP2350) {
       this.reset_done = this.reset_mask = 0x1fffffff;

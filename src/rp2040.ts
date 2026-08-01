@@ -28,11 +28,7 @@ import { RPSIO } from './sio';
 import { RPWatchdog } from './peripherals/watchdog';
 import { ConsoleLogger, Logger, LogLevel } from './utils/logging';
 import { bootromB1 } from './bootroms';
-import {
-  loadFirmware as loadFirmwareHelper,
-  LoadFirmwareOptions,
-  LoadFirmwareResult,
-} from './utils/load-firmware';
+import { loadFirmware, LoadFirmwareOptions, LoadFirmwareResult } from './utils/load-firmware';
 
 export const FLASH_START_ADDRESS = 0x10000000;
 export const FLASH_END_ADDRESS = 0x14000000;
@@ -183,8 +179,8 @@ export class RP2040 implements IRPChip {
     this.flash.fill(0xff);
 
     this.reset();
-    this.core[0].otherCore = this.core[1];
-    this.core[1].otherCore = this.core[0];
+    this.core[0].setOtherCore(this.core[1]);
+    this.core[1].setOtherCore(this.core[0]);
 
     if (options.loadFirmware) {
       this.loadFirmware(options.loadFirmware);
@@ -208,7 +204,7 @@ export class RP2040 implements IRPChip {
    * `src/utils/load-firmware.ts` for option details.
    */
   loadFirmware(path: string, options?: LoadFirmwareOptions): LoadFirmwareResult {
-    return loadFirmwareHelper(this, path, options);
+    return loadFirmware(this, path, options);
   }
 
   reset() {
@@ -258,7 +254,7 @@ export class RP2040 implements IRPChip {
     return 0xffffffff;
   }
 
-  findPeripheral(address: number) {
+  findPeripheral(address: number): Peripheral {
     return this.peripherals[(address >>> 14) << 2];
   }
 
@@ -387,7 +383,7 @@ export class RP2040 implements IRPChip {
   }
 
   get cycles(): number {
-    return this.core[0].cycles;
+    return this.core[0].getCycles();
   }
 
   gpioValues(start_index: number) {
@@ -473,14 +469,16 @@ export class RP2040 implements IRPChip {
   }
 
   stepCores() {
-    const core0StartCycles = this.core[0].cycles;
+    const core0StartCycles = this.core[0].getCycles();
     this.currentCore = 0;
     this.core[0].executeInstruction();
     this.currentCore = 1;
-    while (this.core[1].cycles < this.core[0].cycles) {
-      this.core[1].executeInstruction();
-    }
-    return this.core[0].cycles - core0StartCycles;
+    // core0 doesn't execute again in this loop, so its cycle count is invariant here.
+    // The catch-up itself lives inside the core so its per-iteration `cycles` read and
+    // executeInstruction() call aren't ICpuCore vtable calls.
+    const core0Cycles = this.core[0].getCycles();
+    this.core[1].executeInstructionsUpTo(core0Cycles);
+    return core0Cycles - core0StartCycles;
   }
 
   stepThings(cycles: number) {

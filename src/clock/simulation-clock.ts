@@ -1,15 +1,14 @@
 import { AlarmCallback, IAlarm, IClock } from './clock.js';
-
-type ClockEventCallback = () => void;
+import { Float64 } from '../utils/types';
 
 export class ClockAlarm implements IAlarm {
   next: ClockAlarm | null = null;
-  nanos: number = 0;
+  nanos: Float64 = 0;
   scheduled = false;
 
   constructor(private readonly clock: SimulationClock, readonly callback: AlarmCallback) {}
 
-  schedule(deltaNanos: number): void {
+  schedule(deltaNanos: Float64): void {
     if (this.scheduled) {
       this.cancel();
     }
@@ -25,23 +24,30 @@ export class ClockAlarm implements IAlarm {
 export class SimulationClock implements IClock {
   private nextAlarm: ClockAlarm | null = null;
 
-  private nanosCounter = 0;
+  // Float64 (not `number`): a nanosecond counter as plain `number` compiles to C
+  // `int32_t`, overflowing after ~2.15s of simulated uptime. Float64 emits
+  // `double`, matching JS's actual runtime type exactly (no truncation).
+  private nanosCounter: Float64 = 0;
 
   constructor(readonly frequency = 125e6) {}
 
-  get nanos() {
+  get nanos(): Float64 {
     return this.nanosCounter;
   }
 
-  get micros() {
+  getNanos(): Float64 {
+    return this.nanosCounter;
+  }
+
+  get micros(): Float64 {
     return this.nanos / 1000;
   }
 
-  createAlarm(callback: ClockEventCallback) {
+  createAlarm(callback: AlarmCallback): IAlarm {
     return new ClockAlarm(this, callback);
   }
 
-  linkAlarm(nanos: number, alarm: ClockAlarm) {
+  linkAlarm(nanos: Float64, alarm: ClockAlarm) {
     alarm.nanos = this.nanos + nanos;
     let alarmListItem = this.nextAlarm;
     let lastItem = null;
@@ -81,19 +87,19 @@ export class SimulationClock implements IClock {
     return false;
   }
 
-  tick(deltaNanos: number) {
-    const targetNanos = this.nanosCounter + deltaNanos;
+  tick(deltaNanos: Float64) {
+    const targetNanos: Float64 = this.nanosCounter + deltaNanos;
     let alarm = this.nextAlarm;
     while (alarm && alarm.nanos <= targetNanos) {
       this.nextAlarm = alarm.next;
       this.nanosCounter = alarm.nanos;
-      alarm.callback();
+      alarm.callback.fire();
       alarm = this.nextAlarm;
     }
     this.nanosCounter = targetNanos;
   }
 
-  get nanosToNextAlarm() {
+  get nanosToNextAlarm(): Float64 {
     if (this.nextAlarm) {
       return this.nextAlarm.nanos - this.nanos;
     }

@@ -16,9 +16,16 @@
  * Reference: RP2350 datasheet §3.7.5; ARMv8-M Architecture Reference Manual.
  */
 
+import { AlarmCallback } from '../clock/clock';
+import { CortexM33Core } from '../cortex-m33/core';
 import { IRPChip } from '../rpchip';
+// Type-only: RPPPB2350 is only ever constructed by RP2350 (see rp2350.ts) — a
+// type-only import doesn't create a real circular dependency (it's erased entirely
+// at compile time), so this is safe despite rp2350.ts importing this file too.
+import type { RP2350 } from '../rp2350';
 import { Timer32, Timer32PeriodicAlarm, TimerMode } from '../utils/timer32';
 import { BasePeripheral } from './peripheral';
+import { SimulationClock } from '../clock/simulation-clock';
 
 // SCS (System Control Space) offsets within PPB.
 // Offsets are address bits [23:0] (mask 0xffffff) — i.e. the full offset
@@ -125,6 +132,12 @@ const NUM_PRIORITY_LEVELS = 16;
 /** Priority stored as 4-bit field per IRQ in two u32 banks of 32. */
 const PRIORITY_MASK = NUM_PRIORITY_LEVELS - 1;
 
+/** A single MPU/SAU region's base + limit/attribute register pair. */
+export interface RegionPair {
+  rbar: number;
+  rlar: number;
+}
+
 /**
  * Per-core PPB state visible to the Cortex-M33Core via the chip's ppb field.
  * Defined here (not on the core itself) to keep the chip-level MMIO routing
@@ -167,12 +180,12 @@ export interface M33CoreState {
   // MPU state (8 regions).
   mpuCtrl: number;
   mpuRnr: number;
-  mpuRegions: { rbar: number; rlar: number }[];
+  mpuRegions: RegionPair[];
   mpuMair: [number, number];
   // SAU state (8 regions).
   sauCtrl: number;
   sauRnr: number;
-  sauRegions: { rbar: number; rlar: number }[];
+  sauRegions: RegionPair[];
   sfsr: number;
   sfar: number;
   // SysTick per-core.
@@ -189,17 +202,45 @@ export interface M33CoreState {
  * existing RP2040 PPB convention; the Cortex-M33Core accesses it via
  * `chip.ppb.coreState[coreIndex]`.
  */
-export class RPPPB2350 extends BasePeripheral {
+/** Fires the per-core SysTick reload/interrupt; a dedicated class (rather than
+ * RPPPB2350 implementing AlarmCallback itself) since there are two per-core
+ * instances, each needing its own coreIndex. */
+class SystickAlarmCallback implements AlarmCallback {
+  constructor(
+    private readonly ppb: RPPPB2350,
+    private readonly rp2040: RP2350,
+    private readonly systickTimer: Timer32,
+    private readonly coreIndex: number
+  ) {}
+
+  fire() {
+    const st = this.ppb.coreState[this.coreIndex];
+    st.systickCountFlag = true;
+    if (st.systickIntEnable) {
+      st.pendingSystick = true;
+      // Notify the core — it will check pendingSystick on each step.
+      const core = this.rp2040.core[this.coreIndex];
+      core.interruptsUpdated = true;
+    }
+    this.systickTimer.set(st.systickReload);
+  }
+}
+
+export class RPPPB2350<ChipType extends IRPChip = IRPChip> extends BasePeripheral<ChipType> {
   /** Per-core state (index 0 = core 0, index 1 = core 1). */
   readonly coreState: [M33CoreState, M33CoreState];
 
-  constructor(rp2350: IRPChip, name: string) {
+  constructor(rp2350: ChipType, name: string) {
     super(rp2350, name);
     this.coreState = [this.makeCoreState(0), this.makeCoreState(1)];
   }
 
   private makeCoreState(coreIndex: number): M33CoreState {
-    const systickTimer = new Timer32('M33_SysTick', this.rp2040.clock, this.rp2040.clkSys);
+    const systickTimer = new Timer32(
+      'M33_SysTick',
+      this.rp2040.clock as SimulationClock,
+      this.rp2040.clkSys
+    );
     systickTimer.top = 0xffffff;
     systickTimer.mode = TimerMode.Decrement;
     // Real SysTick starts disabled (SYST_CSR.ENABLE=0) until firmware writes
@@ -214,17 +255,11 @@ export class RPPPB2350 extends BasePeripheral {
     // first time anything calls `clock.tick()` (e.g. `RP2350.step()`),
     // before any CPU instruction has even run.
     systickTimer.enable = false;
-    const systickAlarm = new Timer32PeriodicAlarm('M33_SysTick_Alarm', systickTimer, () => {
-      const st = this.coreState[coreIndex];
-      st.systickCountFlag = true;
-      if (st.systickIntEnable) {
-        st.pendingSystick = true;
-        // Notify the core — it will check pendingSystick on each step.
-        const core = this.rp2040.core[coreIndex];
-        core.interruptsUpdated = true;
-      }
-      systickTimer.set(st.systickReload);
-    });
+    const systickAlarm = new Timer32PeriodicAlarm(
+      'M33_SysTick_Alarm',
+      systickTimer,
+      new SystickAlarmCallback(this, this.rp2040 as unknown as RP2350, systickTimer, coreIndex)
+    );
     systickAlarm.target = 0;
     systickAlarm.enable = true;
     return {
@@ -395,16 +430,16 @@ export class RPPPB2350 extends BasePeripheral {
     if (offset === SCB_ICSR) {
       if (value & ICSR_NMIPENDSET) {
         st.pendingNMI = true;
-        this.rp2040.core[core].interruptsUpdated = true;
+        this.markInterruptsUpdated(core);
       }
       if (value & ICSR_PENDSVSET) {
         st.pendingPendSV = true;
-        this.rp2040.core[core].interruptsUpdated = true;
+        this.markInterruptsUpdated(core);
       }
       if (value & ICSR_PENDSVCLR) st.pendingPendSV = false;
       if (value & ICSR_PENDSTSET) {
         st.pendingSystick = true;
-        this.rp2040.core[core].interruptsUpdated = true;
+        this.markInterruptsUpdated(core);
       }
       if (value & ICSR_PENDSTCLR) st.pendingSystick = false;
       return;
@@ -519,12 +554,12 @@ export class RPPPB2350 extends BasePeripheral {
     // NVIC enable/clear/pending registers.
     if (offset === NVIC_BASE + NVIC_ISER0) {
       st.nvicEnabled[0] |= value;
-      this.rp2040.core[core].interruptsUpdated = true;
+      this.markInterruptsUpdated(core);
       return;
     }
     if (offset === NVIC_BASE + NVIC_ISER1) {
       st.nvicEnabled[1] |= value & ((1 << (NUM_EXTERNAL_IRQS - 32)) - 1 || 0xffffffff);
-      this.rp2040.core[core].interruptsUpdated = true;
+      this.markInterruptsUpdated(core);
       return;
     }
     if (offset === NVIC_BASE + NVIC_ICER0) {
@@ -537,12 +572,12 @@ export class RPPPB2350 extends BasePeripheral {
     }
     if (offset === NVIC_BASE + NVIC_ISPR0) {
       st.nvicPending[0] |= value;
-      this.rp2040.core[core].interruptsUpdated = true;
+      this.markInterruptsUpdated(core);
       return;
     }
     if (offset === NVIC_BASE + NVIC_ISPR1) {
       st.nvicPending[1] |= value;
-      this.rp2040.core[core].interruptsUpdated = true;
+      this.markInterruptsUpdated(core);
       return;
     }
     if (offset === NVIC_BASE + NVIC_ICPR0) {
@@ -568,7 +603,7 @@ export class RPPPB2350 extends BasePeripheral {
           st.nvicPriority[irq] = newPriority;
         }
       }
-      this.rp2040.core[core].interruptsUpdated = true;
+      this.markInterruptsUpdated(core);
       return;
     }
 
@@ -595,10 +630,17 @@ export class RPPPB2350 extends BasePeripheral {
 
   /** Helper to fetch the M33Registers for a given core index. */
   private coreRegs(core: number) {
-    const coreObj = this.rp2040.core[core] as unknown as {
-      regs: { ipsr: number };
-    };
+    // Cast to CortexM33Core directly (RP2350's cores are always that concrete type)
+    // rather than an anonymous shape — cts2c needs a real, known class to resolve
+    // field access against, not an inline type.
+    const coreObj = this.rp2040.core[core] as unknown as CortexM33Core;
     return coreObj.regs;
+  }
+
+  /** Same reasoning as coreRegs() — ICpuCore has no `interruptsUpdated` property. */
+  private markInterruptsUpdated(core: number) {
+    const coreObj = this.rp2040.core[core] as unknown as CortexM33Core;
+    coreObj.interruptsUpdated = true;
   }
 
   /**

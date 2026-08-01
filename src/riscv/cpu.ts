@@ -1,6 +1,8 @@
 import { ICpuCore } from '../cpu-core';
 import { IRPChip } from '../rpchip';
+import type { RP2350 } from '../rp2350';
 import { executeRv32c } from './rv32c';
+import { Uint32, Int53 } from '../utils/types';
 
 const opcode = (i: number) => i & 0x7f;
 const rd = (i: number) => (i >>> 7) & 0x1f;
@@ -25,17 +27,13 @@ const imm_j = (i: number) =>
   (((i >>> 20) & 1) << 11) |
   (((i >>> 21) & 0x3ff) << 1); // J-type, signed
 
-enum ExecutionMode {
+enum ExecutionModeRiscv {
   Mode_Machine,
   Mode_User,
 }
 
 /** Hazard3/RP2350 hardware reset vector address (fixed, not VTOR-relative). */
 export const RISCV_RESET_VECTOR = 0x7dfc;
-
-class EICAND {
-  constructor(readonly irq_number: number, readonly priority: number) {}
-}
 
 export class CPU implements ICpuCore {
   public waiting = false;
@@ -49,15 +47,32 @@ export class CPU implements ICpuCore {
   csrs = new Uint32Array(0x1000);
   pc = 0;
   next_pc = 0;
-  cycles = 0;
-  currentMode: ExecutionMode = ExecutionMode.Mode_Machine;
+  cycles: Int53 = 0; // avoids int32_t overflow past ~2.15B cycles
+  currentMode: ExecutionModeRiscv = ExecutionModeRiscv.Mode_Machine;
+
+  getCycles(): Int53 {
+    return this.cycles;
+  }
+
+  addCycles(delta: number) {
+    this.cycles += delta;
+  }
 
   interruptsUpdated = false;
   meiea = new Array<number>(512);
   meipa = new Array<number>(512);
   meifa = new Array<number>(512);
   meipra = new Array<number>(512);
-  meicand = new Array<EICAND>();
+  // External-interrupt candidate list: the enabled+pending IRQs, kept sorted by
+  // descending priority/ascending irq_number (see updateMEINEXT). Stored as two
+  // fixed-capacity parallel Int32Arrays + a manual count, not a growable array —
+  // cts2c has no `.sort()`/`.filter()` support, and `new Array<E>()` isn't the `[]`
+  // literal shape its `.push()`-only growable support requires. 512 slots matches
+  // meiea/meipa/meifa/meipra and is Hazard3's external-IRQ bound (can't overflow).
+  // insertCandidate/removeCandidate below replace push+sort / filter.
+  private candidateIrq = new Array<number>(512);
+  private candidatePriority = new Array<number>(512);
+  private candidateCount = 0;
 
   did_just_jump = false;
 
@@ -69,6 +84,10 @@ export class CPU implements ICpuCore {
   // is kept so otherCore.invalidateLrReservation(...) stays callable, since
   // LR/SC reservation invalidation is a RISC-V-specific concern.
   otherCore!: CPU;
+
+  setOtherCore(other: ICpuCore) {
+    this.otherCore = other as unknown as CPU;
+  }
 
   invalidateLrReservation(addr: number) {
     if (this.lr_addr === (addr & ~0xf)) this.lr_addr = -1;
@@ -89,7 +108,7 @@ export class CPU implements ICpuCore {
     }
   }
 
-  constructor(readonly chip: IRPChip, readonly coreLabel: string, readonly mhartid: number) {
+  constructor(readonly chip: RP2350, readonly coreLabel: string, readonly mhartid: number) {
     this.reset();
   }
 
@@ -123,7 +142,7 @@ export class CPU implements ICpuCore {
     this.meipa.fill(0);
     this.meifa.fill(0);
     this.meipra.fill(0);
-    this.meicand = new Array<EICAND>();
+    this.candidateCount = 0;
     this.interruptsUpdated = false;
 
     this.csrs.fill(0);
@@ -179,7 +198,7 @@ export class CPU implements ICpuCore {
   }
 
   printDisassembly() {
-    let pc = this.pc;
+    const pc = this.pc;
     if (this.chip.disassembly) {
       const search = (this.pc.toString(16) + ':').replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
       const re = new RegExp(search + '(.*)');
@@ -207,6 +226,26 @@ export class CPU implements ICpuCore {
     }
     this.cycles++;
     return this.cycles - before;
+  }
+
+  executeInstructionsUpTo(cycle: Int53) {
+    // Parked in WFI: executeInstruction() would just tick `cycles` by one per call,
+    // and nothing in this window can wake us — the other core isn't executing, and
+    // peripherals/the clock only advance after the caller's catch-up loop returns.
+    // So landing on `cycle` directly is exactly what the loop would have produced.
+    // checkForInterrupts() still has to run once (executeInstruction() calls it
+    // before testing `waiting`); it early-returns on `!interruptsUpdated` and clears
+    // the flag, so the repeat calls the loop would have made were all no-ops anyway.
+    this.checkForInterrupts();
+    if (this.waiting) {
+      if (this.cycles < cycle) {
+        this.cycles = cycle;
+      }
+      return;
+    }
+    while (this.cycles < cycle) {
+      this.executeInstruction();
+    }
   }
 
   step(instruction: number) {
@@ -289,22 +328,59 @@ export class CPU implements ICpuCore {
     this.meiea[irq] = +value;
   }
 
+  // Insertion-sort step: maintain descending-priority/ascending-irq_number order by
+  // shifting lower-priority (or equal-priority/higher-irq_number) entries right, then
+  // drop the new entry into the gap. setInterrupt only calls this for an irq not
+  // already present (guarded by `!this.meipa[irq]` at the call site, cleared before
+  // re-insert), so no duplicate handling is needed.
+  private insertCandidate(irq: number, priority: number) {
+    let i = this.candidateCount;
+    while (
+      i > 0 &&
+      (this.candidatePriority[i - 1] < priority ||
+        (this.candidatePriority[i - 1] === priority && this.candidateIrq[i - 1] > irq))
+    ) {
+      this.candidatePriority[i] = this.candidatePriority[i - 1];
+      this.candidateIrq[i] = this.candidateIrq[i - 1];
+      i--;
+    }
+    this.candidatePriority[i] = priority;
+    this.candidateIrq[i] = irq;
+    this.candidateCount++;
+  }
+
+  // Remove `irq` if present, preserving the order of the rest (in-place tail shift,
+  // like `.filter(...)` without allocating). At most one entry can match — the meipa
+  // flag guarantees an irq is never in the list twice (see insertCandidate).
+  private removeCandidate(irq: number) {
+    let at = -1;
+    for (let i = 0; i < this.candidateCount; i++) {
+      if (this.candidateIrq[i] === irq) {
+        at = i;
+        break;
+      }
+    }
+    if (at === -1) return;
+    for (let i = at; i < this.candidateCount - 1; i++) {
+      this.candidatePriority[i] = this.candidatePriority[i + 1];
+      this.candidateIrq[i] = this.candidateIrq[i + 1];
+    }
+    this.candidateCount--;
+  }
+
   setInterrupt(irq: number, value: boolean) {
     //this.logger.warn(this.coreLabel, `New interrupt: ${irq} = ${value}`);
     if (value && !this.meipa[irq]) {
       this.meipa[irq] = 1; // Spec: meipa = irq_r | meifa, unconditional on meiea
       if (this.meiea[irq]) {
         // Only add to candidate list if the IRQ is enabled
-        this.meicand.push(new EICAND(irq, this.meipra[irq]));
-        this.meicand.sort(
-          (a, b) => ((b.priority - a.priority) << 9) + (a.irq_number - b.irq_number)
-        );
+        this.insertCandidate(irq, this.meipra[irq]);
         this.updateMEINEXT();
         this.interruptsUpdated = true;
       }
     } else if (!value && this.meipa[irq]) {
       this.meipa[irq] = 0;
-      this.meicand = this.meicand.filter((icand) => icand.irq_number != irq);
+      this.removeCandidate(irq);
       this.updateMEINEXT();
     }
   }
@@ -312,10 +388,10 @@ export class CPU implements ICpuCore {
   updateMEINEXT() {
     // updates MEINEXT and MIE.MEIP
     const meicontext_ppreempt = (this.csrs[0xbe5] >>> 24) & 0b1111;
-    if (this.meicand.length > 0 && this.meicand[0].priority >= meicontext_ppreempt) {
+    if (this.candidateCount > 0 && this.candidatePriority[0] >= meicontext_ppreempt) {
       // note that we're looking at *PP*REEMPT here - interrupts with equal or higher priority than that ARE visible in MEINEXT
       // but might still NOT trigger a trap in case their priority is lower than *P*REEMPT.
-      this.csrs[0xbe4] = this.meicand[0].irq_number << 2;
+      this.csrs[0xbe4] = this.candidateIrq[0] << 2;
       this.csrs[0x344] |= 1 << 11;
     } else {
       this.csrs[0xbe4] = (1 << 31) >>> 0;
@@ -480,6 +556,8 @@ export class CPU implements ICpuCore {
     switch (csr) {
       case 0x300: // MSTATUS
         if (value & ~this.csrs[csr] & 0b1000) this.interruptsUpdated = true; // MSTATUS.MIE has been set
+        this.csrs[csr] = value;
+        return;
       case 0x305: // MTVEC
         this.csrs[csr] = value;
         return;
@@ -605,6 +683,17 @@ export class CPU implements ICpuCore {
     this.csrs[csr] = value;
   }
 
+  // Packs `count` consecutive elements from `base` into one word, MSB-first from
+  // the END — i.e. `arr.slice(base, base+count).reduceRight((a,v) => (a<<bits)|v, 0)`,
+  // but without `.slice()`/`.reduceRight()` (unsupported by the C transpile).
+  private packReverse(arr: number[], base: number, count: number, bits: number): number {
+    let acc = 0;
+    for (let i = count - 1; i >= 0; i--) {
+      acc = (acc << bits) | arr[base + i];
+    }
+    return acc;
+  }
+
   getCSR(csr: number, raw_write: number): number {
     raw_write >>>= 0;
     // raw_write: instruction raw write value, used for Xh3irq interrupt array indices
@@ -626,38 +715,14 @@ export class CPU implements ICpuCore {
       case 0xbf0:
         return this.csrs[csr];
       case 0xbe0:
-        return (
-          (this.meiea
-            .slice((raw_write & 0b11111) * 16, (raw_write & 0b11111) * 16 + 16)
-            .reduceRight((acc, val) => (acc << 1) | val, 0) <<
-            16) >>>
-          0
-        );
+        return (this.packReverse(this.meiea, (raw_write & 0b11111) * 16, 16, 1) << 16) >>> 0;
       case 0xbe1:
-        return (
-          (this.meipa
-            .slice((raw_write & 0b11111) * 16, (raw_write & 0b11111) * 16 + 16)
-            .reduceRight((acc, val) => (acc << 1) | val, 0) <<
-            16) >>>
-          0
-        );
+        return (this.packReverse(this.meipa, (raw_write & 0b11111) * 16, 16, 1) << 16) >>> 0;
       case 0xbe2:
-        return (
-          (this.meifa
-            .slice((raw_write & 0b11111) * 16, (raw_write & 0b11111) * 16 + 16)
-            .reduceRight((acc, val) => (acc << 1) | val, 0) <<
-            16) >>>
-          0
-        );
+        return (this.packReverse(this.meifa, (raw_write & 0b11111) * 16, 16, 1) << 16) >>> 0;
       case 0xbe3:
-        return (
-          (this.meipra
-            .slice((raw_write & 0b11111) * 4, (raw_write & 0b11111) * 4 + 4)
-            .reduceRight((acc, val) => (acc << 4) | val, 0) <<
-            16) >>>
-          0
-        );
-      case 0xbe4:
+        return (this.packReverse(this.meipra, (raw_write & 0b11111) * 4, 4, 4) << 16) >>> 0;
+      case 0xbe4: {
         const meinext = this.csrs[csr] >>> 0;
         if (!(meinext >> 31)) {
           // reading MEINEXT clears MEIFA bits
@@ -668,7 +733,8 @@ export class CPU implements ICpuCore {
           //TODO deassert lower irqs as well?
         }
         return meinext;
-      case 0xbe5:
+      }
+      case 0xbe5: {
         let meicontext = this.csrs[0xbe5];
         if (raw_write & 0b0010) {
           // write to CLEARTS
@@ -681,6 +747,7 @@ export class CPU implements ICpuCore {
           if (raw_write & 0b0100) this.csrs[0x304] |= 1 << 3; // write to MSIESAVE: set MIE.MSIE
         }
         return meicontext;
+      }
     }
     this.logger.info(this.coreLabel, `Unknown CSR get: 0x${csr.toString(16)}`);
     return this.csrs[csr];
@@ -690,10 +757,12 @@ export class CPU implements ICpuCore {
 // High 32 bits of the product of two UNSIGNED 32-bit values, computed via
 // 16-bit partial products so no intermediate exceeds 2^53 (float-exact).
 function umulh(a: number, b: number): number {
-  const aL = a & 0xffff,
-    aH = a >>> 16,
-    bL = b & 0xffff,
-    bH = b >>> 16;
+  // Typed as Uint32 to avoid C signed overflow: int32_t multiplication past 2.147B
+  // is undefined behavior, but these products can reach ~4.29B.
+  const aL: Uint32 = a & 0xffff,
+    aH: Uint32 = a >>> 16,
+    bL: Uint32 = b & 0xffff,
+    bH: Uint32 = b >>> 16;
   const ll = aL * bL;
   const lh = aL * bH;
   const hl = aH * bL;
@@ -721,7 +790,7 @@ export class RegisterSet {
     return this.regs[index];
   }
 
-  getRegisterU(index: number): number {
+  getRegisterU(index: number): Uint32 {
     return this.regs[index] >>> 0;
   }
 
@@ -954,43 +1023,43 @@ function executeAmo(inst: number, cpu: CPU) {
   const mem = chip.readUint32(addr);
   rs.setRegisterU(r, mem);
   // AMO store + invalidate other hart's reservation
-  const store = (val: number) => {
+  const amoStore = (val: number): void => {
     chip.writeUint32(addr, val);
     cpu.otherCore.invalidateLrReservation(addr);
   };
   switch (funct5) {
     case 0x00:
-      store((mem + v) >>> 0);
+      amoStore((mem + v) >>> 0);
       break; // amoadd.w
     case 0x01:
-      store(v);
+      amoStore(v);
       break; // amoswap.w
     case 0x04:
-      store(mem ^ v);
+      amoStore(mem ^ v);
       break; // amoxor.w
     case 0x08:
-      store(mem | v);
+      amoStore(mem | v);
       break; // amoor.w
     case 0x0c:
-      store(mem & v);
+      amoStore(mem & v);
       break; // amoand.w
     case 0x10: {
       const ms = mem | 0,
         vs = v | 0;
-      store(ms < vs ? mem : v);
+      amoStore(ms < vs ? mem : v);
       break; // amomin.w (signed)
     }
     case 0x14: {
       const ms = mem | 0,
         vs = v | 0;
-      store(ms > vs ? mem : v);
+      amoStore(ms > vs ? mem : v);
       break; // amomax.w (signed)
     }
     case 0x18:
-      store(mem < v ? mem : v);
+      amoStore(mem < v ? mem : v);
       break; // amominu.w (unsigned)
     case 0x1c:
-      store(mem > v ? mem : v);
+      amoStore(mem > v ? mem : v);
       break; // amomaxu.w (unsigned)
     default:
       throw Error(`Unknown AMO funct5: 0x${funct5.toString(16)}`);
@@ -1029,8 +1098,7 @@ function executeOp(inst: number, cpu: CPU) {
         if (a < 0) hi = (hi - (bs >>> 0)) | 0;
         if (bs < 0) hi = (hi - (a >>> 0)) | 0;
         rs.setRegister(r, hi);
-      }
-      else if (f7 === 0x14) rs.setRegister(r, a | (1 << (b & 31))); // bset (Zbs)
+      } else if (f7 === 0x14) rs.setRegister(r, a | (1 << (b & 31))); // bset (Zbs)
       else if (f7 === 0x24) rs.setRegister(r, a & ~(1 << (b & 31))); // bclr (Zbs)
       else if (f7 === 0x30) {
         // rol (Zbb)
@@ -1361,11 +1429,11 @@ function executeCustom0(inst: number, cpu: CPU) {
   if (c_ident === 0b00000000000000000000000000001011) {
     // h3.bextm - shift amount from rs2 register
     const sh = cpu.registerSet.getRegisterU(rs2(inst));
-    let v = cpu.registerSet.getRegisterU(rs1(inst)) >>> sh;
+    const v = cpu.registerSet.getRegisterU(rs1(inst)) >>> sh;
     cpu.registerSet.setRegisterU(rd(inst), v & ((2 << size) - 1));
   } else if (c_ident === 0b00000000000000000100000000001011) {
     // h3.bextmi - shift amount is the immediate rs2 field
-    let v = cpu.registerSet.getRegisterU(rs1(inst)) >>> rs2(inst);
+    const v = cpu.registerSet.getRegisterU(rs1(inst)) >>> rs2(inst);
     cpu.registerSet.setRegisterU(rd(inst), v & ((2 << size) - 1));
   } else {
     throw Error(`Invalid CUSTOM0 instruction 0x${inst.toString(16)}`);

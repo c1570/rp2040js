@@ -1,4 +1,6 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
+import { Float64 } from '../utils/types';
 
 const BADPASSWD = 0x00;
 const SET_TIME_63TO48 = 0x60;
@@ -23,9 +25,12 @@ const REG_WORDS = 0x100 >> 2;
  * Models the AON millisecond timer and write-password gate.
  * See RP2350 datasheet §6.4
  */
-export class RP2350POWMAN extends BasePeripheral implements Peripheral {
+export class RP2350POWMAN<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private baseMs = 0;
-  private runStartNanos = 0;
+  private runStartNanos: Float64 = 0;
   private running = false;
   private badPasswd = false;
   private readonly setWords = new Uint16Array(4);
@@ -33,7 +38,7 @@ export class RP2350POWMAN extends BasePeripheral implements Peripheral {
 
   private nowMs(): number {
     if (!this.running) return this.baseMs;
-    return this.baseMs + (this.rp2040.clock.nanos - this.runStartNanos) / 1e6;
+    return this.baseMs + (this.rp2040.clock.getNanos() - this.runStartNanos) / 1e6;
   }
 
   readUint32(offset: number) {
@@ -77,12 +82,12 @@ export class RP2350POWMAN extends BasePeripheral implements Peripheral {
         if (data & TIMER_CLEAR) {
           this.baseMs = 0;
           this.setWords.fill(0);
-          this.runStartNanos = this.rp2040.clock.nanos;
+          this.runStartNanos = this.rp2040.clock.getNanos();
         }
         if (data & TIMER_RUN) {
           if (!this.running) {
             this.baseMs = this.nowMs();
-            this.runStartNanos = this.rp2040.clock.nanos;
+            this.runStartNanos = this.rp2040.clock.getNanos();
             this.running = true;
           }
         } else if (this.running) {
@@ -100,6 +105,6 @@ export class RP2350POWMAN extends BasePeripheral implements Peripheral {
     const lo = (this.setWords[0] | (this.setWords[1] << 16)) >>> 0;
     const hi = (this.setWords[2] | (this.setWords[3] << 16)) >>> 0;
     this.baseMs = hi * TWO32 + lo;
-    if (this.running) this.runStartNanos = this.rp2040.clock.nanos;
+    if (this.running) this.runStartNanos = this.rp2040.clock.getNanos();
   }
 }

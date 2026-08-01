@@ -63,7 +63,10 @@ export interface ISPIDMAChannels {
   tx: number;
 }
 
-export class RPSPI extends BasePeripheral implements Peripheral {
+export class RPSPI<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   readonly rxFIFO = new FIFO(8);
   readonly txFIFO = new FIFO(8);
 
@@ -126,7 +129,12 @@ export class RPSPI extends BasePeripheral implements Peripheral {
     }
   }
 
-  constructor(rp2040: IRPChip, name: string, readonly irq: number, readonly dreq: ISPIDMAChannels) {
+  constructor(
+    rp2040: ChipType,
+    name: string,
+    readonly irq: number,
+    readonly dreq: ISPIDMAChannels
+  ) {
     super(rp2040, name);
     this.updateDMATx();
     this.updateDMARx();

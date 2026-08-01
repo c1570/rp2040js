@@ -7,7 +7,7 @@ const CTRL = 0x000;
 const FSTAT = 0x004;
 const FDEBUG = 0x008;
 const FLEVEL = 0x00c;
-const IRQ = 0x030;
+const IRQ_REG = 0x030;
 const IRQ_FORCE = 0x034;
 const INPUT_SYNC_BYPASS = 0x038;
 const DBG_PADOUT = 0x03c;
@@ -88,6 +88,11 @@ export enum WaitType {
   Out, // Out instruction
 }
 
+interface IrqTarget {
+  targetPio: RPPIO;
+  irqBit: number;
+}
+
 function bitReverse(x: number) {
   x = ((x & 0x55555555) << 1) | ((x & 0xaaaaaaaa) >>> 1);
   x = ((x & 0x33333333) << 2) | ((x & 0xcccccccc) >>> 2);
@@ -97,7 +102,7 @@ function bitReverse(x: number) {
   return x >>> 0;
 }
 
-export class StateMachine {
+export class StateMachine<ChipType extends IRPChip = IRPChip> {
   private _enabled = false;
 
   // State machine registers
@@ -136,7 +141,13 @@ export class StateMachine {
   readonly dreqRx = this.pio.dreqRx_base + this.index;
   readonly dreqTx = this.pio.dreqTx_base + this.index;
 
-  constructor(readonly rp2040: IRPChip, readonly pio: RPPIO, readonly index: number) {
+  // Reused scratch output for resolveIrqTarget() (see its own comment) — no inline
+  // initializer (would run before the `pio` param property is assigned); set from
+  // the constructor's `pio` parameter instead.
+  private readonly irqTargetScratch: IrqTarget;
+
+  constructor(readonly rp2040: ChipType, readonly pio: RPPIO, readonly index: number) {
+    this.irqTargetScratch = { targetPio: pio, irqBit: 0 };
     this.updateDMARx();
     this.updateDMATx();
   }
@@ -466,8 +477,13 @@ export class StateMachine {
 
           // IRQ:
           case 0b10: {
-            const { targetPio, irqBit } = this.resolveIrqTarget(index);
-            this.wait(WaitType.IRQ, polarity, irqBit, targetPio);
+            this.resolveIrqTarget(index, this.irqTargetScratch);
+            this.wait(
+              WaitType.IRQ,
+              polarity,
+              this.irqTargetScratch.irqBit,
+              this.irqTargetScratch.targetPio
+            );
             break;
           }
         }
@@ -609,7 +625,8 @@ export class StateMachine {
         }
         const clear = !!(arg & 0x40);
         const wait = !!(arg & 0x20);
-        const { targetPio, irqBit } = this.resolveIrqTarget(arg & 0x1f);
+        this.resolveIrqTarget(arg & 0x1f, this.irqTargetScratch);
+        const { targetPio, irqBit } = this.irqTargetScratch;
         if (clear) {
           targetPio.irq &= ~(1 << irqBit);
           targetPio.irqUpdated();
@@ -669,33 +686,48 @@ export class StateMachine {
     }
   }
 
-  resolveIrqTarget(irqField: number) {
+  // Writes the resolved target into `out` (the caller's own IrqTarget, e.g.
+  // irqTargetScratch below) instead of returning a fresh object — an object-literal
+  // return heap-allocates in C, and this is called on every IRQ-related PIO
+  // instruction (WAIT-on-IRQ, SET/CLEAR-IRQ). An out-param needs no allocation.
+  resolveIrqTarget(irqField: number, out: IrqTarget): void {
     const pio = this.pio;
     if (pio.isRp2040) {
       const rel = !!(irqField & 0x10);
       const irqBit = rel
         ? (irqField & 0x4) | (((irqField & 0x3) + this.index) & 0x3)
         : irqField & 0x7;
-      return { targetPio: pio, irqBit };
+      out.targetPio = pio;
+      out.irqBit = irqBit;
+      return;
     }
     const idxMode = (irqField >> 3) & 3;
     const irqNum = irqField & 7;
     switch (idxMode) {
       case 0:
-        return { targetPio: pio, irqBit: irqNum };
+        out.targetPio = pio;
+        out.irqBit = irqNum;
+        return;
       case 1: {
         const pioCount = this.rp2040.pio.length;
         const prevPio = this.rp2040.pio[(pio.index + pioCount - 1) % pioCount];
-        return { targetPio: prevPio, irqBit: irqNum };
+        out.targetPio = prevPio;
+        out.irqBit = irqNum;
+        return;
       }
       case 2:
-        return { targetPio: pio, irqBit: (irqNum & 4) | ((irqNum + this.index) & 3) };
+        out.targetPio = pio;
+        out.irqBit = (irqNum & 4) | ((irqNum + this.index) & 3);
+        return;
       case 3: {
         const nextPio = this.rp2040.pio[(pio.index + 1) % this.rp2040.pio.length];
-        return { targetPio: nextPio, irqBit: irqNum };
+        out.targetPio = nextPio;
+        out.irqBit = irqNum;
+        return;
       }
       default:
-        return { targetPio: pio, irqBit: irqNum };
+        out.targetPio = pio;
+        out.irqBit = irqNum;
     }
   }
 
@@ -976,7 +1008,10 @@ export class StateMachine {
   }
 }
 
-export class RPPIO extends BasePeripheral implements Peripheral {
+export class RPPIO<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   readonly instructions = new Uint32Array(32);
   readonly machines = [
     new StateMachine(this.rp2040, this, 0),
@@ -1005,7 +1040,7 @@ export class RPPIO extends BasePeripheral implements Peripheral {
   irq1IntForce = 0;
 
   constructor(
-    rp2040: IRPChip,
+    rp2040: ChipType,
     name: string,
     readonly firstIrq: number,
     readonly index: number,
@@ -1096,7 +1131,7 @@ export class RPPIO extends BasePeripheral implements Peripheral {
         return this.machines[2].readFIFO();
       case RXF3:
         return this.machines[3].readFIFO();
-      case IRQ:
+      case IRQ_REG:
         return this.irq;
       case IRQ_FORCE:
         return 0;
@@ -1203,7 +1238,7 @@ export class RPPIO extends BasePeripheral implements Peripheral {
       case TXF3:
         this.machines[3].writeFIFO(value);
         break;
-      case IRQ:
+      case IRQ_REG:
         this.irq &= ~this.rawWriteValue;
         this.irqUpdated();
         break;
@@ -1231,10 +1266,13 @@ export class RPPIO extends BasePeripheral implements Peripheral {
         this.checkInterrupts();
         break;
       case RP2350_GPIOBASE:
+        // rp2040 has no GPIOBASE register, so it takes the same path as an unknown offset.
         if (this.rp2040.identifier != 'rp2040') {
           this.gpiobase = value & 16;
-          break;
+        } else {
+          super.writeUint32(offset, value);
         }
+        break;
       default:
         super.writeUint32(offset, value);
     }
@@ -1304,8 +1342,14 @@ export class RPPIO extends BasePeripheral implements Peripheral {
     if (this.stopped) {
       return;
     }
-    for (const machine of this.machines) {
-      machine.step();
+    // `machinesRunning` (synced with each machine's `enabled` setter) skips disabled
+    // machines without calling StateMachine.step() — this runs every cycle for every
+    // PIO, so otherwise each disabled machine would pay a full call just to bail out
+    // immediately.
+    for (let i = 0; i < this.machines.length; i++) {
+      if (this.machinesRunning & (1 << i)) {
+        this.machines[i].step();
+      }
     }
     this.checkChangedPins();
   }

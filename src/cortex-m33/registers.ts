@@ -55,6 +55,11 @@ export class M33Registers {
   /** FP status/control register. */
   fpscr = 0;
 
+  // Explicit no-op constructor: cts2c only synthesizes a `_new()` for a class with its
+  // own declared constructor — relying on the implicit default one (real, valid JS/TS)
+  // got none at all ("implicit declaration of function ... _new").
+  constructor() {}
+
   /** Reset to a fresh post-power-on state. T bit set (Thumb always). */
   reset() {
     this.r.fill(0);

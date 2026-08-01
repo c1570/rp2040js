@@ -1,8 +1,12 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const FREF = 12000000;
 
-export class RP2350PLL extends BasePeripheral implements Peripheral {
+export class RP2350PLL<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   reg = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, (1 << 12) + (1 << 16), 0];
   foutpostdiv = 1;
 

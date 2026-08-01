@@ -1,6 +1,6 @@
 import { IRPChip } from '../rpchip';
 import { BasePeripheral } from './peripheral';
-import { IAlarm } from '../clock/clock.js';
+import { AlarmCallback, IAlarm } from '../clock/clock.js';
 
 const ENDPOINT_COUNT = 16;
 
@@ -91,18 +91,56 @@ const SIE_WRITECLEAR_MASK =
   SIE_SETUP_REC |
   SIE_RESUME;
 
-class USBEndpointAlarm {
-  buffers: Uint8Array[] = [];
+// Fixed capacity for USBEndpointAlarm's pending-buffer queue. In practice at
+// most 1-2 buffers are ever pending between a schedule() and the alarm firing;
+// this is a generous ceiling, not a real expected depth.
+const MAX_PENDING_BUFFERS = 8;
 
-  constructor(readonly alarm: IAlarm) {}
+class USBEndpointAlarm implements AlarmCallback {
+  // Fixed-capacity array + manual count/shift (mirroring cpu.ts's
+  // candidateIrq/candidateCount pattern) instead of a growable JS array:
+  // cts2c's growable-array support only covers a field's own `.push()`/for-of,
+  // not reassigning it to `[]` (to clear) or building a fresh local array (to
+  // dequeue) — both silently no-op in the C build.
+  private readonly buffers: Uint8Array[] = new Array(MAX_PENDING_BUFFERS);
+  private bufferCount = 0;
+  clockAlarm!: IAlarm;
+
+  constructor(
+    private readonly usb: RPUSBController,
+    private readonly endpoint: number,
+    private readonly isWrite: boolean
+  ) {}
 
   schedule(buffer: Uint8Array, delayNanos: number) {
-    this.buffers.push(buffer);
-    this.alarm.schedule(delayNanos);
+    if (this.bufferCount >= MAX_PENDING_BUFFERS) {
+      throw new Error(`USBEndpointAlarm: pending buffer queue full (> ${MAX_PENDING_BUFFERS})`);
+    }
+    this.buffers[this.bufferCount++] = buffer;
+    this.clockAlarm.schedule(delayNanos);
+  }
+
+  fire() {
+    if (this.isWrite) {
+      for (let i = 0; i < this.bufferCount; i++) {
+        this.usb.onEndpointWrite?.(this.endpoint, this.buffers[i]);
+      }
+      this.bufferCount = 0;
+    } else if (this.bufferCount > 0) {
+      const buffer = this.buffers[0];
+      for (let i = 0; i < this.bufferCount - 1; i++) {
+        this.buffers[i] = this.buffers[i + 1];
+      }
+      this.bufferCount--;
+      this.usb.finishRead(this.endpoint, buffer);
+    }
   }
 }
 
-export class RPUSBController extends BasePeripheral {
+export class RPUSBController<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements AlarmCallback
+{
   private mainCtrl = 0;
   private intRaw = 0;
   private intEnable = 0;
@@ -110,9 +148,9 @@ export class RPUSBController extends BasePeripheral {
   private sieStatus = 0;
   private buffStatus = 0;
 
-  private readonly endpointReadAlarms: USBEndpointAlarm[];
-  private readonly endpointWriteAlarms: USBEndpointAlarm[];
-  private readonly resetAlarm;
+  private readonly endpointReadAlarms = new Array<USBEndpointAlarm>(ENDPOINT_COUNT);
+  private readonly endpointWriteAlarms = new Array<USBEndpointAlarm>(ENDPOINT_COUNT);
+  private readonly resetAlarm: IAlarm;
 
   onUSBEnabled?: () => void;
   onResetReceived?: () => void;
@@ -126,37 +164,24 @@ export class RPUSBController extends BasePeripheral {
     return (this.intRaw & this.intEnable) | this.intForce;
   }
 
-  constructor(readonly rp2040: IRPChip, name: string, readonly usbctrl_irq: number) {
+  constructor(readonly rp2040: ChipType, name: string, readonly usbctrl_irq: number) {
     super(rp2040, name);
     const clock = rp2040.clock;
-    this.endpointReadAlarms = [];
-    this.endpointWriteAlarms = [];
     for (let i = 0; i < ENDPOINT_COUNT; ++i) {
-      this.endpointReadAlarms.push(
-        new USBEndpointAlarm(
-          clock.createAlarm(() => {
-            const buffer = this.endpointReadAlarms[i].buffers.shift();
-            if (buffer) {
-              this.finishRead(i, buffer);
-            }
-          })
-        )
-      );
-      this.endpointWriteAlarms.push(
-        new USBEndpointAlarm(
-          clock.createAlarm(() => {
-            for (const buffer of this.endpointWriteAlarms[i].buffers) {
-              this.onEndpointWrite?.(i, buffer);
-            }
-            this.endpointWriteAlarms[i].buffers = [];
-          })
-        )
-      );
+      const readAlarm = new USBEndpointAlarm(this, i, false);
+      readAlarm.clockAlarm = clock.createAlarm(readAlarm);
+      this.endpointReadAlarms[i] = readAlarm;
+
+      const writeAlarm = new USBEndpointAlarm(this, i, true);
+      writeAlarm.clockAlarm = clock.createAlarm(writeAlarm);
+      this.endpointWriteAlarms[i] = writeAlarm;
     }
-    this.resetAlarm = clock.createAlarm(() => {
-      this.sieStatus |= SIE_BUS_RESET;
-      this.sieStatusUpdated();
-    });
+    this.resetAlarm = clock.createAlarm(this);
+  }
+
+  fire() {
+    this.sieStatus |= SIE_BUS_RESET;
+    this.sieStatusUpdated();
   }
 
   readUint32(offset: number) {
@@ -298,7 +323,7 @@ export class RPUSBController extends BasePeripheral {
     this.endpointReadAlarms[endpoint].schedule(buffer, delay * 1000);
   }
 
-  private finishRead(endpoint: number, buffer: Uint8Array) {
+  finishRead(endpoint: number, buffer: Uint8Array) {
     const bufferOffset = this.getEndpointBufferOffset(endpoint, true);
     const bufControlReg = EP0_OUT_BUFFER_CONTROL + endpoint * 8;
     let bufControl = this.rp2040.usbDPRAMView.getUint32(bufControlReg, true);

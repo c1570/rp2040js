@@ -1,6 +1,8 @@
 import { IRPChip } from '../rpchip';
 import { Timer32, Timer32PeriodicAlarm, TimerMode } from '../utils/timer32';
 import { BasePeripheral, Peripheral } from './peripheral';
+import { SimulationClock } from '../clock/simulation-clock';
+import { AlarmCallback } from '../clock/clock';
 
 const CTRL = 0x00; // Control register
 const LOAD = 0x04; // Load the watchdog timer.
@@ -42,7 +44,10 @@ const CYCLES_SHIFT = 0;
 
 const TICK_FREQUENCY = 2_000_000; // Actually 1 MHz, but due to errata RP2040-E1, the timer is decremented twice per tick
 
-export class RPWatchdog extends BasePeripheral implements Peripheral {
+export class RPWatchdog<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral, AlarmCallback
+{
   readonly timer;
   readonly alarm;
   readonly scratchData = new Uint32Array(8);
@@ -60,20 +65,22 @@ export class RPWatchdog extends BasePeripheral implements Peripheral {
   };
 
   // User provided
-  constructor(rp2040: IRPChip, name: string) {
+  constructor(rp2040: ChipType, name: string) {
     super(rp2040, name);
-    this.timer = new Timer32('RPWatchdog_timer', rp2040.clock, TICK_FREQUENCY);
+    this.timer = new Timer32('RPWatchdog_timer', rp2040.clock as SimulationClock, TICK_FREQUENCY);
     this.timer.mode = TimerMode.Decrement;
     this.timer.enable = false;
     // 24-bit down-counter, not Timer32's 32-bit default (same as SysTick in
     // ppb.ts) — needed for the alarm's modulo-wrap math to schedule correctly.
     this.timer.top = TIME_MASK;
-    this.alarm = new Timer32PeriodicAlarm('RPWatchdog_alarm', this.timer, () => {
-      this.reason = TIMER;
-      this.onWatchdogTrigger?.();
-    });
+    this.alarm = new Timer32PeriodicAlarm('RPWatchdog_alarm', this.timer, this);
     this.alarm.target = 0;
     this.alarm.enable = false;
+  }
+
+  fire() {
+    this.reason = TIMER;
+    this.onWatchdogTrigger?.();
   }
 
   /**

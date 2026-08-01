@@ -1,4 +1,6 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
+import { Float64 } from '../utils/types';
 
 const RTC_SETUP0 = 0x04;
 const RTC_SETUP1 = 0x08;
@@ -43,18 +45,21 @@ const RTC_1_MIN_MASK = 0x3f;
 const RTC_1_SEC_SHIFT = 0;
 const RTC_1_SEC_MASK = 0x3f;
 
-export class RP2040RTC extends BasePeripheral implements Peripheral {
+export class RP2040RTC<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   setup0 = 0;
   setup1 = 0;
   rtc1 = 0;
   rtc0 = 0;
   ctrl = 0;
   baseline = new Date(2021, 0, 1);
-  baselineNanos = 0;
+  baselineNanos: Float64 = 0;
 
   readUint32(offset: number) {
     const date = new Date(
-      this.baseline.getTime() + (this.rp2040.clock.nanos - this.baselineNanos) / 1_000_000
+      this.baseline.getTime() + (this.rp2040.clock.getNanos() - this.baselineNanos) / 1_000_000
     );
     switch (offset) {
       case RTC_SETUP0:
@@ -110,7 +115,7 @@ export class RP2040RTC extends BasePeripheral implements Peripheral {
             const min = (this.setup1 >> SETUP_1_MIN_SHIFT) & SETUP_1_MIN_MASK;
             const sec = (this.setup1 >> SETUP_1_SEC_SHIFT) & SETUP_1_SEC_MASK;
             this.baseline = new Date(year, month - 1, day, hour, min, sec);
-            this.baselineNanos = this.rp2040.clock.nanos;
+            this.baselineNanos = this.rp2040.clock.getNanos();
             this.ctrl &= ~RTC_LOAD_BITS;
           }
         } else {

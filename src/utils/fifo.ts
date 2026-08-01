@@ -4,12 +4,17 @@ export class FIFO {
   private start = 0;
   private used = 0;
 
+  // Track capacity separately since typed array `.length` is erased when
+  // transpiled to C.
+  private readonly capacity: number;
+
   constructor(size: number) {
     this.buffer = new Uint32Array(size);
+    this.capacity = size;
   }
 
   get size() {
-    return this.buffer.length;
+    return this.capacity;
   }
 
   get itemCount() {
@@ -17,19 +22,18 @@ export class FIFO {
   }
 
   push(value: number) {
-    const { length } = this.buffer;
+    const { capacity } = this;
     const { start, used } = this;
-    if (this.used < length) {
-      this.buffer[(start + used) % length] = value;
+    if (this.used < capacity) {
+      this.buffer[(start + used) % capacity] = value;
       this.used++;
     }
   }
 
   pull() {
-    const { start, used } = this;
-    const { length } = this.buffer;
+    const { start, used, capacity } = this;
     if (used) {
-      this.start = (start + 1) % length;
+      this.start = (start + 1) % capacity;
       this.used--;
       return this.buffer[start];
     }
@@ -49,15 +53,14 @@ export class FIFO {
   }
 
   get full() {
-    return this.used === this.buffer.length;
+    return this.used === this.capacity;
   }
 
   get items() {
-    const { start, used, buffer } = this;
-    const { length } = buffer;
+    const { start, used, buffer, capacity } = this;
     const result = [];
     for (let i = 0; i < used; i++) {
-      result[i] = buffer[(start + i) % length];
+      result[i] = buffer[(start + i) % capacity];
     }
     return result;
   }

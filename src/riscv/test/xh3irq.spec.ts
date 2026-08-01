@@ -341,6 +341,82 @@ describe('Xh3irq interrupt controller', () => {
   });
 
   // =====================================================================
+  // Candidate list ordering and removal
+  //
+  // Tests the internal candidate list (candidateIrq/candidatePriority/
+  // candidateCount) via MEINEXT/MIP CSRs, with 3+ simultaneous candidates.
+  // =====================================================================
+
+  describe('candidate list ordering and removal', () => {
+    test('three simultaneous candidates: highest priority wins, ties broken by lowest irq', () => {
+      enableIrqs(0, 1, 2);
+      // irq1 and irq2 tie at the top priority; irq0 is strictly lower.
+      setPriorities([0, 3], [1, 7], [2, 7]);
+      forceIrq(0);
+      forceIrq(1);
+      forceIrq(2);
+      setupInterrupts({ mstatus_mie: false });
+
+      // irq1 must win: highest priority, and of the tied pair (1, 2) the lower
+      // irq number wins.
+      expect((csrRead(MEINEXT) >> 2) & 0x1ff).toBe(1);
+    });
+
+    test('removing the current-best candidate promotes the next-highest', () => {
+      // Different meifa windows (46/16=2, 48/16=3) so a later clearForceIrq on one
+      // can't also clobber the other's force bit.
+      enableIrqs(46, 48);
+      setPriorities([46, 5], [48, 9]);
+      forceIrq(46);
+      forceIrq(48);
+      setupInterrupts({ mstatus_mie: false });
+
+      // irq48 (priority 9) is currently best. Reading MEINEXT confirms it and
+      // removes it from the candidate list (same path real firmware uses to
+      // drain the interrupt queue).
+      expect((csrRead(MEINEXT) >> 2) & 0x1ff).toBe(48);
+
+      // irq46 must now be the new best.
+      expect((csrRead(MEINEXT) >> 2) & 0x1ff).toBe(46);
+    });
+
+    test('removing a middle-priority candidate preserves the order of the rest', () => {
+      // Three distinct windows (46/16=2, 63/16=3, 80/16=5) so each can be cleared
+      // independently.
+      enableIrqs(46, 63, 80);
+      setPriorities([46, 5], [63, 9], [80, 2]);
+      forceIrq(46);
+      forceIrq(63);
+      forceIrq(80);
+      setupInterrupts({ mstatus_mie: false });
+
+      // Remove the middle-priority entry (irq46, prio 5) via clearForceIrq
+      // BEFORE reading MEINEXT, since reading MEINEXT itself removes the best
+      // IRQ and would corrupt this test.
+      clearForceIrq(46);
+
+      // Order should now be irq63 (prio 9) > irq80 (prio 2). Draining both via
+      // sequential reads proves removeCandidate()'s shift-compaction didn't corrupt
+      // the relative order of the surviving entries.
+      expect((csrRead(MEINEXT) >> 2) & 0x1ff).toBe(63);
+      expect((csrRead(MEINEXT) >> 2) & 0x1ff).toBe(80);
+    });
+
+    test('removing the last remaining candidate sets noirq', () => {
+      enableIrqs(46);
+      setPriorities([46, 0]);
+      forceIrq(46);
+      setupInterrupts({ mstatus_mie: false });
+
+      // Remove directly via clearForceIrq without reading MEINEXT first,
+      // since reading MEINEXT itself would remove irq46 and make this test
+      // pass even if removeCandidate() were never called.
+      clearForceIrq(46);
+      expect(csrRead(MEINEXT) & (1 << 31)).not.toBe(0); // noirq set, list empty
+    });
+  });
+
+  // =====================================================================
   // MEICONTEXT
   // =====================================================================
 

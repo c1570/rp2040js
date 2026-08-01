@@ -573,7 +573,8 @@ export class EmulatorController {
 
       // Step whichever core has fewer cycles. Only core0 advances wall-clock
       // time for peripherals; core1 is catching up.
-      this.chip.currentCore = this.chip.core[0].cycles <= this.chip.core[1].cycles ? 0 : 1;
+      this.chip.currentCore =
+        this.chip.core[0].getCycles() <= this.chip.core[1].getCycles() ? 0 : 1;
       const cpu = this.chip.core[this.chip.currentCore];
       const wasWaiting = cpu.waiting;
       const elapsed = cpu.executeInstruction();

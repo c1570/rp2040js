@@ -67,7 +67,7 @@ describe('Xh3power block/unblock', () => {
     expect(cpu.waitingOnBlock).toBe(true);
   });
 
-  test('h3.unblock latches the executing core\'s own event (self-loopback)', () => {
+  test("h3.unblock latches the executing core's own event (self-loopback)", () => {
     exec(H3_UNBLOCK);
     expect(cpu.eventRegistered).toBe(true);
 
@@ -82,7 +82,7 @@ describe('Xh3power block/unblock', () => {
     expect(cpu.waiting).toBe(true);
   });
 
-  test('h3.unblock ends the other core\'s block sleep', () => {
+  test("h3.unblock ends the other core's block sleep", () => {
     chip.core1.waitingOnBlock = true;
     exec(H3_UNBLOCK);
     expect(chip.core1.waiting).toBe(false);

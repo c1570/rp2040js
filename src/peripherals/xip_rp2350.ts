@@ -1,3 +1,4 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const QMI_DIRECT_CSR = 0x00;
@@ -19,7 +20,10 @@ const DIRECT_CSR_EN = 1 << 0;
  * so the bootrom's polling loops complete. The memory-mapped XIP
  * window (0x10000000+) is handled by the chip's flash array directly.
  */
-export class RPXIPQMI extends BasePeripheral implements Peripheral {
+export class RPXIPQMI<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private directCsr = DIRECT_CSR_RESET;
   private directCsrEn = false;
 
@@ -57,7 +61,10 @@ export class RPXIPQMI extends BasePeripheral implements Peripheral {
 }
 
 /** Legacy XIP peripheral (kept for any existing imports). */
-export class RPXIP extends BasePeripheral implements Peripheral {
+export class RPXIP<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   protected regs = new Uint32Array(1024);
 
   readUint32(offset: number) {

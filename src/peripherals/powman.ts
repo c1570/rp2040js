@@ -1,6 +1,10 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
-export class RPPOWMAN extends BasePeripheral implements Peripheral {
+export class RPPOWMAN<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   readUint32(offset: number) {
     if (offset === 0xc) return 0;
     return super.readUint32(offset);

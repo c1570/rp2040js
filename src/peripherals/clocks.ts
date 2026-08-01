@@ -6,26 +6,28 @@ const CLK_REF_SELECTED = 0x38;
 const CLK_SYS_CTRL = 0x3c;
 const CLK_SYS_SELECTED = 0x44;
 
-export class RPClocks extends BasePeripheral implements Peripheral {
+export class RPClocks<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   refCtrl = 0;
   sysCtrl = 0;
-  clk_fc0_status = 0;
+  clkFc0StatusOffset = 0;
 
-  constructor(rp2040: IRPChip, name: string) {
+  constructor(rp2040: ChipType, name: string) {
     super(rp2040, name);
-    switch (rp2040.identifier) {
-      case 'rp2040':
-        this.clk_fc0_status = 0x98;
-        break;
-      case 'rp2350':
-        this.clk_fc0_status = 0xa4;
-        break;
-      default:
-        throw new Error('Unknown chip id');
+    // Dynamic switch case offset — use if/else instead for C compatibility
+    if (rp2040.identifier === 'rp2350') {
+      this.clkFc0StatusOffset = 0xa4;
+    } else {
+      this.clkFc0StatusOffset = 0x98;
     }
   }
 
   readUint32(offset: number) {
+    if (offset === this.clkFc0StatusOffset) {
+      return 0b10001; // done, passed
+    }
     switch (offset) {
       case CLK_REF_CTRL:
         return this.refCtrl;
@@ -35,8 +37,6 @@ export class RPClocks extends BasePeripheral implements Peripheral {
         return this.sysCtrl;
       case CLK_SYS_SELECTED:
         return 1 << (this.sysCtrl & 0x01);
-      case this.clk_fc0_status:
-        return 0b10001; // done, passed
     }
     return super.readUint32(offset);
   }

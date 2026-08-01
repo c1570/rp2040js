@@ -55,7 +55,7 @@ const FIFO_ST = 0x50;
 const FIFO_WR = 0x54;
 const FIFO_RD = 0x58;
 
-export class RPSIOCore {
+export class RPSIOCore<ChipType extends IRPChip = IRPChip> {
   divDividend = 0;
   divDivisor = 1;
   divQuotient = 0;
@@ -69,7 +69,7 @@ export class RPSIOCore {
   WOF = false;
 
   constructor(
-    private readonly rp2040: IRPChip,
+    private readonly rp2040: ChipType,
     private readonly rxFIFO: FIFO,
     private readonly txFIFO: FIFO,
     private readonly sio_interrupt: number,
@@ -350,6 +350,6 @@ export class RPSIOCore {
       }
     }
     this.divCSR = 0b11;
-    this.rp2040.core[this.cpuCore].cycles += 8;
+    this.rp2040.core[this.cpuCore].addCycles(8);
   }
 }

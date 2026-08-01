@@ -1,3 +1,4 @@
+import { IRPChip } from '../rpchip';
 import { BasePeripheral, Peripheral } from './peripheral';
 
 const CSR_OFFSET = 0x00;
@@ -87,7 +88,10 @@ function sha256Compress(state: Uint32Array, block: Uint32Array): void {
  * SUM0-7 hold the 256-bit digest. BSWAP (CSR bit 12, default 1)
  * byte-swaps each WDATA word before it enters the message schedule.
  */
-export class RP2350SHA256 extends BasePeripheral implements Peripheral {
+export class RP2350SHA256<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   private state = new Uint32Array(SHA256_IV);
   private wordCount = 0;
   private block = new Uint32Array(16);

@@ -1,45 +1,41 @@
-/**
- * Shared execution/scheduling surface for the two CPU cores modelled in this
- * project: the RP2040's Cortex-M0 core (CortexM0Core) and the RP2350's
- * Hazard3 RISC-V core (CPU).
- *
- * This interface intentionally captures ONLY the execution/scheduling
- * boundary -- not the register model. The ARM r0-15/xPSR/M-system registers
- * and the RISC-V x0-31/CSR sets are genuinely irreconcilable and remain
- * per-architecture (each architecture needs its own target.xml). Consumers
- * that need the register model should be typed to the concrete core class.
- */
+import { Int53 } from './utils/types';
+
+/** Shared execution/scheduling surface for Cortex-M0, RISC-V (Hazard3), and Cortex-M33 cores. */
 export interface ICpuCore {
-  /** Core index (0/1); unifies coreNumber (ARM) and mhartid (RISC-V). */
+  /** Core index (0/1). */
   readonly coreIndex: number;
-  /** Cycle counter; written by peripherals (e.g. sio-core divider penalty). */
-  cycles: number;
-  /** Program counter -- readable AND writable. */
+  cycles: Int53; // avoids int32_t overflow past ~2.15B cycles
   PC: number;
-  /** True while parked in a WFI/WFE-style wait. */
   waiting: boolean;
-  /** True when a WFE event has been latched but not yet consumed. */
   eventRegistered: boolean;
-  /**
-   * Set by interrupt sources (NVIC, SysTick, peripheral IRQs) when pending
-   * state changes; consumed and cleared by the core's exception-arbitration
-   * path on the next instruction. Both the RISC-V CPU and the ARM cores
-   * (CortexM0Core, CortexM33Core) own this field.
-   */
   interruptsUpdated: boolean;
-  /** Sibling core, used for SEV (send-event) inter-core wakeup. */
   otherCore: ICpuCore;
-  /** Advance the core by one instruction; returns the elapsed cycle count. */
-  executeInstruction(): number;
-  /** Reset the core to its post-boot state. */
-  reset(): void;
-  /** Send-event: wake the sibling if it's sleeping, else latch a pending event. */
-  fireSEV(): void;
   /**
-   * Assert or deassert a hardware interrupt on this core. Architecture-neutral:
-   * ARM cores route into NVIC pending bits; RISC-V cores route into meifa/meipa.
-   * Already implemented by CortexM0Core and the RISC-V CPU; formalized on the
-   * interface so chip-level code (RP2350.setInterrupt) can call it uniformly.
+   * Accessor methods for `cycles`, used only by cross-core reads/writes through an
+   * ICpuCore-typed value — own-field access (`this.cycles++`) still transpiles as a
+   * plain struct field; only the interface-typed case needs a dispatchable method,
+   * since cts2c can't read/write a field through an opaque interface fat pointer
+   * (same reasoning as `Peripheral.byteAddressable()`).
    */
+  getCycles(): Int53;
+  addCycles(delta: number): void;
+  /**
+   * Setter for `otherCore`, used only for cross-core wiring through an ICpuCore-typed
+   * value — same reasoning as getCycles()/addCycles(): an interface property assignment
+   * through an opaque fat pointer has no C equivalent, so it needs a dispatchable
+   * method. Each class's own `otherCore` field keeps its concrete type for internal use.
+   */
+  setOtherCore(other: ICpuCore): void;
+  executeInstruction(): number;
+  /**
+   * Runs instructions until `cycles >= cycle`. Keeping the catch-up loop inside the
+   * core turns each iteration's `cycles` read and `executeInstruction()` call into a
+   * plain field access and a direct (inlinable) call, instead of two indirect
+   * ICpuCore vtable calls. It also lets a core that's parked in WFI/WFE jump its
+   * counter straight to the target in O(1) rather than ticking one cycle at a time.
+   */
+  executeInstructionsUpTo(cycle: Int53): void;
+  reset(): void;
+  fireSEV(): void;
   setInterrupt(irq: number, value: boolean): void;
 }

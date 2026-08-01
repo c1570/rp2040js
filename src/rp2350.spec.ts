@@ -5,7 +5,7 @@ import { RP2350 } from './rp2350';
 import { bootrom_rp2350_A2 } from './bootroms';
 import { loadHex } from './utils/load-hex';
 import { GPIOPinState } from '../src/gpio-pin';
-import { IRQ } from './irq_rp2350';
+import { IRQ2350 } from './irq_rp2350';
 
 describe('RP2350', () => {
   describe('IO Register Writes', () => {
@@ -141,9 +141,9 @@ describe('RP2350', () => {
       const rp2350 = new RP2350();
       rp2350.currentCore = 0;
       rp2350.writeUint32(SIO_MTIMECMP, 100);
-      expect(rp2350.core0.meipa[IRQ.SIO_IRQ_MTIMECMP]).toBeFalsy();
+      expect(rp2350.core0.meipa[IRQ2350.SIO_IRQ_MTIMECMP]).toBeFalsy();
       rp2350.clock.tick(100_000); // 100 ticks at the 1MHz mtime rate
-      expect(rp2350.core0.meipa[IRQ.SIO_IRQ_MTIMECMP]).toBeTruthy();
+      expect(rp2350.core0.meipa[IRQ2350.SIO_IRQ_MTIMECMP]).toBeTruthy();
     });
 
     it('mtimecmp is core-local: each core gets an independent target and interrupt', () => {
@@ -160,8 +160,8 @@ describe('RP2350', () => {
 
       // Past core0's target, before core1's.
       rp2350.clock.tick(150_000);
-      expect(rp2350.core0.meipa[IRQ.SIO_IRQ_MTIMECMP]).toBeTruthy();
-      expect(rp2350.core1.meipa[IRQ.SIO_IRQ_MTIMECMP]).toBeFalsy();
+      expect(rp2350.core0.meipa[IRQ2350.SIO_IRQ_MTIMECMP]).toBeTruthy();
+      expect(rp2350.core1.meipa[IRQ2350.SIO_IRQ_MTIMECMP]).toBeFalsy();
     });
 
     it('writing a new (future) mtimecmp clears the pending interrupt', () => {
@@ -169,10 +169,10 @@ describe('RP2350', () => {
       rp2350.currentCore = 0;
       rp2350.writeUint32(SIO_MTIMECMP, 100);
       rp2350.clock.tick(100_000);
-      expect(rp2350.core0.meipa[IRQ.SIO_IRQ_MTIMECMP]).toBeTruthy();
+      expect(rp2350.core0.meipa[IRQ2350.SIO_IRQ_MTIMECMP]).toBeTruthy();
 
       rp2350.writeUint32(SIO_MTIMECMP, 100_000_000);
-      expect(rp2350.core0.meipa[IRQ.SIO_IRQ_MTIMECMP]).toBeFalsy();
+      expect(rp2350.core0.meipa[IRQ2350.SIO_IRQ_MTIMECMP]).toBeFalsy();
     });
   });
 });

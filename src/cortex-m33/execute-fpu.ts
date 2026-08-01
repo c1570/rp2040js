@@ -7,6 +7,7 @@
 
 import { CortexM33Core } from './core';
 import * as fpu from './fpu-helpers';
+import { Float32 } from '../utils/types';
 
 function getSd(hw0: number, hw1: number): number {
   return (((hw1 >>> 12) & 0xf) << 1) | ((hw0 >>> 6) & 1);
@@ -16,6 +17,21 @@ function getSn(hw0: number, hw1: number): number {
 }
 function getSm(hw0: number, hw1: number): number {
   return ((hw1 & 0xf) << 1) | ((hw1 >>> 5) & 1);
+}
+
+// Reinterprets an f32 as its raw uint32 bits (and back) via a shared backing buffer —
+// every VMOV/VLDR/VSTR/VCVT below needs this. Module-scope: cts2c replaces
+// floatToBits/bitsToFloat with hand-written C bodies, so this only runs under Node and
+// needs no per-instance state.
+const f32BitsScratch = new Float32Array(1);
+const u32BitsScratch = new Uint32Array(f32BitsScratch.buffer);
+export function floatToBits(f: Float32): number {
+  f32BitsScratch[0] = f;
+  return u32BitsScratch[0];
+}
+export function bitsToFloat(bits: number): Float32 {
+  u32BitsScratch[0] = bits;
+  return f32BitsScratch[0];
 }
 
 export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): number {
@@ -44,20 +60,27 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     const sm = getSm(hw0, hw1);
     const a = regs.s[sn];
     const b = regs.s[sm];
-    let result: number;
+    let result: Float32;
     if (opc1 === 0x3) {
       // VADD (hw1[6]=0) or VSUB (hw1[6]=1).
       const sub = (hw1 & 0x40) !== 0;
-      [result, fpscr] = sub ? fpu.f32sub(fpscr, a, b) : fpu.f32add(fpscr, a, b);
+      if (sub) fpu.f32sub(fpscr, a, b, core.fpResultScratch);
+      else fpu.f32add(fpscr, a, b, core.fpResultScratch);
+      result = core.fpResultScratch.value;
+      fpscr = core.fpResultScratch.fpscr;
     } else if (opc1 === 0x2) {
       // VMUL (hw1[6]=0) or VNMUL (hw1[6]=1). The negate is a pure sign flip
       // applied after the multiply (no exception-flag change), per FPNeg §A2.2.6.
       const negate = (hw1 & 0x40) !== 0;
-      [result, fpscr] = fpu.f32mul(fpscr, a, b);
+      fpu.f32mul(fpscr, a, b, core.fpResultScratch);
+      result = core.fpResultScratch.value;
+      fpscr = core.fpResultScratch.fpscr;
       if (negate) result = -result;
     } else {
       // VDIV.
-      [result, fpscr] = fpu.f32div(fpscr, a, b);
+      fpu.f32div(fpscr, a, b, core.fpResultScratch);
+      result = core.fpResultScratch.value;
+      fpscr = core.fpResultScratch.fpscr;
     }
     regs.s[sd] = Math.fround(result);
     regs.fpscr = fpscr;
@@ -81,15 +104,17 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     const sm = getSm(hw0, hw1);
     const negateAddend = opc1 === 0x9; // VFNMA/VFNMS
     const negateProduct = (hw1 & 0x40) !== 0; // VFMS/VFNMA (hw1[6]=1 in both families)
-    [regs.s[sd], fpscr] = fpu.f32fma(
+    fpu.f32fma(
       fpscr,
       regs.s[sd],
       regs.s[sn],
       regs.s[sm],
       negateAddend,
-      negateProduct
+      negateProduct,
+      core.fpResultScratch
     );
-    regs.fpscr = fpscr;
+    regs.s[sd] = core.fpResultScratch.value;
+    regs.fpscr = core.fpResultScratch.fpscr;
     return 1;
   }
 
@@ -115,21 +140,21 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
       const repB = b ? 0x1f : 0;
       const payload = imm8 & 0x3f;
       const bits = ((sign << 31) | (notB << 30) | (repB << 25) | (payload << 19)) >>> 0;
-      const buf = new ArrayBuffer(4);
-      new DataView(buf).setUint32(0, bits, true);
-      regs.s[sd] = new DataView(buf).getFloat32(0, true);
+      regs.s[sd] = bitsToFloat(bits);
       return 1;
     }
 
     // Unary/misc: opcode = (hw0[3:0], hw1[7]).
     const opc3 = hw0 & 0xf;
     const nBit = (hw1 >>> 7) & 1;
-    let result: number;
+    let result: Float32;
     if (opc3 === 0 && nBit === 1) {
       result = Math.fround(Math.abs(regs.s[sm]));
       regs.s[sd] = result;
     } else if (opc3 === 1 && nBit === 1) {
-      [result, fpscr] = fpu.f32sqrt(fpscr, regs.s[sm]);
+      fpu.f32sqrt(fpscr, regs.s[sm], core.fpResultScratch);
+      result = core.fpResultScratch.value;
+      fpscr = core.fpResultScratch.fpscr;
       regs.s[sd] = result;
     } else if (opc3 === 1 && nBit === 0) {
       result = Math.fround(-regs.s[sm]);
@@ -140,7 +165,7 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
       // signaling-NaN VCMPE form in both cases; not modeled — same
       // simplification the existing register-register VCMP already made
       // (f32cmp treats every NaN as invalid regardless of E).
-      const operand2 = opc3 === 5 ? 0 : regs.s[sm];
+      const operand2: Float32 = opc3 === 5 ? 0 : regs.s[sm];
       fpscr = fpu.f32cmp(fpscr, regs.s[sd], operand2);
     } else if (opc3 === 0 && nBit === 0) {
       regs.s[sd] = regs.s[sm];
@@ -152,10 +177,7 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
       // wrongly treat the bit pattern as if it were already a float.
       // hw1[7]: 1 = signed (S32), 0 = unsigned (U32).
       const signed = (hw1 >>> 7) & 1;
-      const buf = new ArrayBuffer(4);
-      const dv = new DataView(buf);
-      dv.setFloat32(0, regs.s[sm], true);
-      const bits = dv.getUint32(0, true);
+      const bits = floatToBits(regs.s[sm]);
       regs.s[sd] = Math.fround(signed ? bits | 0 : bits >>> 0);
     } else if (opc3 === 0xa) {
       // VCVT.F32.{S32,U32} Sd, Sm, #fbits — fixed-point-to-float (the
@@ -167,10 +189,7 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
       const esc = 2 * (hw1 & 0xf) + ((hw1 >>> 5) & 1);
       const fbits = 32 - esc;
       const src = regs.s[sd];
-      const buf = new ArrayBuffer(4);
-      const dv = new DataView(buf);
-      dv.setFloat32(0, src, true);
-      const bits = dv.getUint32(0, true);
+      const bits = floatToBits(src);
       const intVal = signed ? bits | 0 : bits >>> 0;
       const scale = Math.pow(2, fbits);
       regs.s[sd] = Math.fround(intVal / scale);
@@ -192,7 +211,8 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
         fpscr |= fpu.FPSCR_IOC;
       } else {
         const truncated = Math.trunc(src);
-        const [min, max] = signed ? [-0x80000000, 0x7fffffff] : [0, 0xffffffff];
+        const min = signed ? -0x80000000 : 0;
+        const max = signed ? 0x7fffffff : 0xffffffff;
         if (truncated < min) {
           intVal = min;
           fpscr |= fpu.FPSCR_IOC;
@@ -203,13 +223,10 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
           intVal = truncated;
         }
       }
-      const buf = new ArrayBuffer(4);
-      const dv = new DataView(buf);
-      dv.setUint32(0, intVal >>> 0, true);
       // Sd stores the integer result bit-reinterpreted as a float, matching
       // the same convention `regs.s[]` already uses elsewhere in this file
       // (e.g. VMOV Sn,Rt) — a later `VMOV Rt, Sd` reads it back out.
-      regs.s[sd] = dv.getFloat32(0, true);
+      regs.s[sd] = bitsToFloat(intVal >>> 0);
     } else {
       return -1;
     }
@@ -227,20 +244,14 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     const crm = hw1 & 0xf;
     const sn = ((crm & 1) << 4) | ((crm >>> 1) << 1);
     const sm = sn + 1;
-    const buf = new ArrayBuffer(4);
-    const dv = new DataView(buf);
     if (isLoad) {
       // MRRC: FP → ARM
-      dv.setFloat32(0, regs.s[sn], true);
-      regs.r[rt] = dv.getUint32(0, true);
-      dv.setFloat32(0, regs.s[sm], true);
-      regs.r[rt2] = dv.getUint32(0, true);
+      regs.r[rt] = floatToBits(regs.s[sn]);
+      regs.r[rt2] = floatToBits(regs.s[sm]);
     } else {
       // MCRR: ARM → FP
-      dv.setUint32(0, regs.r[rt] >>> 0, true);
-      regs.s[sn] = dv.getFloat32(0, true);
-      dv.setUint32(0, regs.r[rt2] >>> 0, true);
-      regs.s[sm] = dv.getFloat32(0, true);
+      regs.s[sn] = bitsToFloat(regs.r[rt] >>> 0);
+      regs.s[sm] = bitsToFloat(regs.r[rt2] >>> 0);
     }
     return 1;
   }
@@ -256,14 +267,10 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
       // VMRS (L=1) / VMSR (L=0).
       if (l === 1) {
         if (rt === 15) {
-          // VMRS APSR_nzcv, FPSCR — copy FPSCR NZCV into APSR.
-          const f = fpu.getFpscrNzcv(fpscr);
-          regs.xpsr =
-            (regs.xpsr & ~0xf0000000) |
-            (f.N ? 0x80000000 : 0) |
-            (f.Z ? 0x40000000 : 0) |
-            (f.C ? 0x20000000 : 0) |
-            (f.V ? 0x10000000 : 0);
+          // VMRS APSR_nzcv, FPSCR — copy FPSCR NZCV into APSR. Inlined rather than
+          // calling getFpscrNzcv(), which would heap-allocate a struct (cts2c
+          // interface promotion) on this hot dispatch path for just these 4 bits.
+          regs.xpsr = (regs.xpsr & ~0xf0000000) | (fpscr & 0xf0000000);
         } else {
           regs.r[rt] = fpscr;
         }
@@ -274,13 +281,10 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     }
     // VMOV Sn, Rt (L=0) / VMOV Rt, Sn (L=1). Sn is independent of Rt.
     const sn = getSn(hw0, hw1);
-    const buf = new ArrayBuffer(4);
     if (l === 0) {
-      new DataView(buf).setUint32(0, regs.r[rt], true);
-      regs.s[sn] = new DataView(buf).getFloat32(0, true);
+      regs.s[sn] = bitsToFloat(regs.r[rt]);
     } else {
-      new DataView(buf).setFloat32(0, regs.s[sn], true);
-      regs.r[rt] = new DataView(buf).getUint32(0, true);
+      regs.r[rt] = floatToBits(regs.s[sn]);
     }
     return 1;
   }
@@ -298,13 +302,10 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     // PC-relative uses Align(PC,4); regs.pc already reads as opcodePC+4.
     const base = rn === 15 ? (regs.pc & ~0x3) >>> 0 : regs.r[rn];
     const addr = (u ? base + offset : base - offset) >>> 0;
-    const buf = new ArrayBuffer(4);
     if (isLoad) {
-      new DataView(buf).setUint32(0, core.chip.readUint32(addr), true);
-      regs.s[sd] = new DataView(buf).getFloat32(0, true);
+      regs.s[sd] = bitsToFloat(core.chip.readUint32(addr));
     } else {
-      new DataView(buf).setFloat32(0, regs.s[sd], true);
-      core.chip.writeUint32(addr, new DataView(buf).getUint32(0, true));
+      core.chip.writeUint32(addr, floatToBits(regs.s[sd]));
     }
     return 2;
   }
@@ -328,15 +329,11 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     const sd = getSd(hw0, hw1);
     const count = hw1 & 0xff;
     let addr = u ? regs.r[rn] >>> 0 : (regs.r[rn] - count * 4) >>> 0;
-    const buf = new ArrayBuffer(4);
-    const dv = new DataView(buf);
     for (let i = 0; i < count; i++) {
       if (isLoad) {
-        dv.setUint32(0, core.chip.readUint32(addr), true);
-        regs.s[sd + i] = dv.getFloat32(0, true);
+        regs.s[sd + i] = bitsToFloat(core.chip.readUint32(addr));
       } else {
-        dv.setFloat32(0, regs.s[sd + i], true);
-        core.chip.writeUint32(addr, dv.getUint32(0, true));
+        core.chip.writeUint32(addr, floatToBits(regs.s[sd + i]));
       }
       addr = (addr + 4) >>> 0;
     }
@@ -351,10 +348,8 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     const sd = getSd(hw0, hw1);
     const imm8 = hw1 & 0xff;
     let addr = (regs.sp - imm8 * 4) >>> 0;
-    const buf = new ArrayBuffer(4);
     for (let i = 0; i < imm8; i++) {
-      new DataView(buf).setFloat32(0, regs.s[sd + i], true);
-      core.chip.writeUint32(addr, new DataView(buf).getUint32(0, true));
+      core.chip.writeUint32(addr, floatToBits(regs.s[sd + i]));
       addr = (addr + 4) >>> 0;
     }
     regs.sp = (regs.sp - imm8 * 4) >>> 0;
@@ -364,10 +359,8 @@ export function fpuExecute(core: CortexM33Core, hw0: number, hw1: number): numbe
     const sd = getSd(hw0, hw1);
     const imm8 = hw1 & 0xff;
     let addr = regs.sp;
-    const buf = new ArrayBuffer(4);
     for (let i = 0; i < imm8; i++) {
-      new DataView(buf).setUint32(0, core.chip.readUint32(addr), true);
-      regs.s[sd + i] = new DataView(buf).getFloat32(0, true);
+      regs.s[sd + i] = bitsToFloat(core.chip.readUint32(addr));
       addr = (addr + 4) >>> 0;
     }
     regs.sp = (regs.sp + imm8 * 4) >>> 0;

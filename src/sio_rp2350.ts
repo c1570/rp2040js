@@ -1,4 +1,5 @@
-import { IRPChip } from './rpchip';
+import type { RP2350 } from './rp2350';
+import { AlarmCallback } from './clock/clock';
 import { RPSIOCore } from './sio-core';
 import { FIFO } from './utils/fifo';
 import { Timer32, Timer32PeriodicAlarm, TimerMode } from './utils/timer32';
@@ -47,6 +48,20 @@ const SPINLOCK_ST = 0x5c;
 const SPINLOCK0 = 0x100;
 const SPINLOCK31 = 0x17c;
 
+/** Fires the per-core mtimecmp interrupt; a dedicated class (rather than RPSIO
+ * implementing AlarmCallback itself) since there are two per-core alarms. */
+class MtimecmpAlarmCallback implements AlarmCallback {
+  constructor(
+    private readonly rp2040: RP2350,
+    private readonly sio_mtimecmp_irq: number,
+    private readonly core: number
+  ) {}
+
+  fire() {
+    this.rp2040.setInterruptCore(this.sio_mtimecmp_irq, true, this.core);
+  }
+}
+
 export class RPSIO {
   gpioValue = 0;
   gpioOutputEnable = 0;
@@ -64,7 +79,7 @@ export class RPSIO {
   private readonly mtimecmpHigh: [number, number] = [0, 0];
 
   constructor(
-    private readonly rp2040: IRPChip,
+    private readonly rp2040: RP2350,
     readonly sio_proc0_irq: number,
     readonly sio_proc1_irq: number,
     readonly sio_mtimecmp_irq: number = sio_proc0_irq
@@ -78,14 +93,21 @@ export class RPSIO {
 
     this.mtimeTimer = new Timer32('SIO_mtime', rp2040.clock, MTIME_FREQUENCY);
     this.mtimeTimer.mode = TimerMode.Increment;
-    this.mtimecmpAlarm = [0, 1].map((core) => {
-      const alarm = new Timer32PeriodicAlarm(`SIO_mtimecmp_core${core}`, this.mtimeTimer, () => {
-        this.rp2040.setInterruptCore(sio_mtimecmp_irq, true, core);
-      });
-      alarm.target = 0xffffffff; // matches MTIMECMP reset value
-      alarm.enable = true;
-      return alarm;
-    }) as [Timer32PeriodicAlarm, Timer32PeriodicAlarm];
+    this.mtimecmpAlarm = [
+      this.createMtimecmpAlarm(rp2040, sio_mtimecmp_irq, 0),
+      this.createMtimecmpAlarm(rp2040, sio_mtimecmp_irq, 1),
+    ];
+  }
+
+  private createMtimecmpAlarm(rp2040: RP2350, sio_mtimecmp_irq: number, core: number) {
+    const alarm = new Timer32PeriodicAlarm(
+      `SIO_mtimecmp_core${core}`,
+      this.mtimeTimer,
+      new MtimecmpAlarmCallback(rp2040, sio_mtimecmp_irq, core)
+    );
+    alarm.target = 0xffffffff; // matches MTIMECMP reset value
+    alarm.enable = true;
+    return alarm;
   }
 
   readUint32(offset: number, cpuCore: number): number {

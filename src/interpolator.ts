@@ -15,7 +15,17 @@ export class InterpolatorConfig {
   overf1 = false;
   overf = false;
 
-  constructor(value: number) {
+  // Explicit no-op constructor: cts2c only synthesizes a `_new()` allocator for a
+  // class with a declared constructor — without it, `new InterpolatorConfig()` has
+  // nothing to call.
+  constructor() {}
+
+  // Decodes `value`'s bitfields into `this`. Not a constructor: Interpolator reuses
+  // one persistent InterpolatorConfig scratch per ctrl register (ctrl0Config/
+  // ctrl1Config) rather than `new`-ing on every update()/writeback()/setBase01() —
+  // those run on nearly every register write, so a real `new` would leak per-call
+  // in the C build.
+  decode(value: number): void {
     this.shift = (value >>> 0) & 0b11111;
     this.maskLSB = (value >>> 5) & 0b11111;
     this.maskMSB = (value >>> 10) & 0b11111;
@@ -64,14 +74,21 @@ export class Interpolator {
   smresult0 = 0;
   smresult1 = 0;
 
+  // Reused across update()/writeback()/setBase01() instead of `new InterpolatorConfig(...)`
+  // per call — see InterpolatorConfig.decode()'s comment.
+  private readonly ctrl0Config = new InterpolatorConfig();
+  private readonly ctrl1Config = new InterpolatorConfig();
+
   constructor(private readonly index: number) {
     this.update();
   }
 
   update() {
     const N = this.index;
-    const ctrl0 = new InterpolatorConfig(this.ctrl0);
-    const ctrl1 = new InterpolatorConfig(this.ctrl1);
+    this.ctrl0Config.decode(this.ctrl0);
+    this.ctrl1Config.decode(this.ctrl1);
+    const ctrl0 = this.ctrl0Config;
+    const ctrl1 = this.ctrl1Config;
 
     const do_clamp = ctrl0.clamp && N == 1;
     const do_blend = ctrl0.blend && N == 0;
@@ -149,8 +166,10 @@ export class Interpolator {
   }
 
   writeback() {
-    const ctrl0 = new InterpolatorConfig(this.ctrl0);
-    const ctrl1 = new InterpolatorConfig(this.ctrl1);
+    this.ctrl0Config.decode(this.ctrl0);
+    this.ctrl1Config.decode(this.ctrl1);
+    const ctrl0 = this.ctrl0Config;
+    const ctrl1 = this.ctrl1Config;
 
     this.accum0 = u32(ctrl0.crossResult ? this.result1 : this.result0);
     this.accum1 = u32(ctrl1.crossResult ? this.result0 : this.result1);
@@ -160,8 +179,10 @@ export class Interpolator {
 
   setBase01(value: number) {
     const N = this.index;
-    const ctrl0 = new InterpolatorConfig(this.ctrl0);
-    const ctrl1 = new InterpolatorConfig(this.ctrl1);
+    this.ctrl0Config.decode(this.ctrl0);
+    this.ctrl1Config.decode(this.ctrl1);
+    const ctrl0 = this.ctrl0Config;
+    const ctrl1 = this.ctrl1Config;
 
     const do_blend = ctrl0.blend && N == 0;
 

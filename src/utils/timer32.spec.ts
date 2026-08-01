@@ -6,7 +6,10 @@ import { Timer32, Timer32PeriodicAlarm, TimerMode } from './timer32';
 const FREQ = 1e6;
 const US = 1000; // nanos
 
-const FULL_PERIOD = 0x100000000; // top+1 cycles for a full-width timer
+// top+1 cycles for a full-width timer — mathematically 0x100000000, but schedule()'s
+// "already at target" bump uses 0xffffffff (one short) since 2**32 doesn't fit a 32-bit
+// type in the C transpile. See schedule()'s comment.
+const FULL_PERIOD = 0xffffffff;
 
 function setup(mode: TimerMode, top = 0xffffffff) {
   const clock = new SimulationClock();
@@ -14,7 +17,7 @@ function setup(mode: TimerMode, top = 0xffffffff) {
   timer.mode = mode;
   timer.top = top;
   let fires = 0;
-  const alarm = new Timer32PeriodicAlarm('test_alarm', timer, () => fires++);
+  const alarm = new Timer32PeriodicAlarm('test_alarm', timer, { fire: () => fires++ });
   return { clock, timer, alarm, fireCount: () => fires };
 }
 
@@ -47,11 +50,13 @@ describe('Timer32PeriodicAlarm.schedule', () => {
     timer.set(1234);
     alarm.target = 1234;
     alarm.enable = true;
-    clock.tick(1 * US);
+    clock.tick(1);
     expect(fireCount()).toBe(0); // a 0ns-refire bug would have fired instantly
-    clock.tick((FULL_PERIOD - 2) * US);
+    // "already at target" waits FULL_PERIOD cycles (one short of 2**32).
+    const periodNanos = FULL_PERIOD * US;
+    clock.tick(periodNanos - 1 - 2);
     expect(fireCount()).toBe(0);
-    clock.tick(2 * US);
+    clock.tick(2);
     expect(fireCount()).toBe(1);
   });
 

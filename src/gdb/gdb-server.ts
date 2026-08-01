@@ -107,7 +107,7 @@ export abstract class GDBServer {
   // core0 cycle delta only (core1 is catching up, not advancing wall-clock).
   protected stepLowestCycleCore(): boolean {
     const [core0, core1] = this.chip.core;
-    this.chip.currentCore = core0.cycles <= core1.cycles ? 0 : 1;
+    this.chip.currentCore = core0.getCycles() <= core1.getCycles() ? 0 : 1;
     const core = this.chip.core[this.chip.currentCore];
     const elapsed = core.executeInstruction();
     if (this.chip.currentCore === 0) this.chip.stepThings(elapsed);

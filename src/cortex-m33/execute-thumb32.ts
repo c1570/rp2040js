@@ -20,6 +20,28 @@ import { conditionPassed } from './conditions';
 import { fpuExecute } from './execute-fpu';
 import { coprocessorExecute } from './coprocessor';
 
+/**
+ * Out-parameter for thumbExpandImm/thumbExpandImmC. Same out-param pattern as
+ * fpu-helpers.ts's FpResult, but for a sharper reason: a DECLARATION-form
+ * destructure (`const [a, b] = f()`) compiles each variable to `f()[i]`, indexing
+ * the stubbed integer return value — a null deref in the C build. Caller-owned and
+ * reused across calls.
+ */
+export interface ImmCarry {
+  value: number;
+  carryOut: boolean;
+}
+
+/**
+ * Out-parameter for mul64/mul64Signed's 64-bit {hi32, lo32} product. Same
+ * reasoning as ImmCarry above — a `const [hi, lo] = mul64(...)` destructure
+ * would crash the C build the same way.
+ */
+export interface Mul64Result {
+  hi: number;
+  lo: number;
+}
+
 /** Coprocessor dispatch: CP10/CP11 → FPU, CP0/4/5/7 → RP2350 coprocs. */
 function dispatchCoprocessor(core: CortexM33Core, hw0: number, hw1: number): number {
   const coproc = (hw1 >>> 8) & 0xf;
@@ -53,19 +75,20 @@ export function isThumb32(hw0: number): boolean {
 
 /**
  * ThumbExpandImm: expand a 12-bit modified-immediate to a 32-bit value per
- * ARMv7-M §A6.3.2.
+ * ARMv7-M §A6.3.2. `out` is scratch, discarded — see {@link thumbExpandImmC}.
  */
-export function thumbExpandImm(imm12: number): number {
-  return thumbExpandImmC(imm12, false)[0];
+export function thumbExpandImm(imm12: number, out: ImmCarry): number {
+  thumbExpandImmC(imm12, false, out);
+  return out.value;
 }
 
 /**
  * ThumbExpandImm_C: like {@link thumbExpandImm} but also returns the carry-out
- * (ARMv7-M §A6.3.2). For the byte-replication forms (imm12[11:10]=00) the carry
- * is unchanged (`carryIn`); for the rotated form the carry is bit[31] of the
- * result.
+ * (ARMv7-M §A6.3.2) via `out.carryOut`. For the byte-replication forms
+ * (imm12[11:10]=00) the carry is unchanged (`carryIn`); for the rotated form
+ * the carry is bit[31] of the result.
  */
-export function thumbExpandImmC(imm12: number, carryIn: boolean): [number, boolean] {
+export function thumbExpandImmC(imm12: number, carryIn: boolean, out: ImmCarry): void {
   if ((imm12 & 0xc00) === 0) {
     const imm8 = imm12 & 0xff;
     let val: number;
@@ -83,12 +106,15 @@ export function thumbExpandImmC(imm12: number, carryIn: boolean): [number, boole
         val = (imm8 << 24) | (imm8 << 16) | (imm8 << 8) | imm8;
         break;
     }
-    return [val >>> 0, carryIn];
+    out.value = val >>> 0;
+    out.carryOut = carryIn;
+    return;
   }
   const unrotated = 0x80 | (imm12 & 0x7f);
   const ror = (imm12 >>> 7) & 0x1f;
   const val = ((unrotated >>> ror) | (unrotated << (32 - ror))) >>> 0;
-  return [val, (val & 0x80000000) !== 0];
+  out.value = val;
+  out.carryOut = (val & 0x80000000) !== 0;
 }
 
 /** Sign-extend the low `bits` bits of `value` to a signed 32-bit integer. */
@@ -97,8 +123,8 @@ function signExtend(value: number, bits: number): number {
   return (value << shift) >> shift;
 }
 
-/** 64-bit unsigned multiply helper that returns [hi32, lo32]. */
-function mul64(a: number, b: number): [number, number] {
+/** 64-bit unsigned multiply helper; writes {hi32, lo32} into `out` (see Mul64Result). */
+function mul64(a: number, b: number, out: Mul64Result): void {
   // Split each 32-bit value into two 16-bit halves to avoid JS Number precision.
   const aLo = a & 0xffff;
   const aHi = a >>> 16;
@@ -112,24 +138,30 @@ function mul64(a: number, b: number): [number, number] {
   const mid = (ll >>> 16) + (lh & 0xffff) + (hl & 0xffff);
   const lo = (ll & 0xffff) | (mid << 16);
   const hi = hh + (lh >>> 16) + (hl >>> 16) + (mid >>> 16);
-  return [hi >>> 0, lo >>> 0];
+  out.hi = hi >>> 0;
+  out.lo = lo >>> 0;
 }
 
 /**
- * Signed 64-bit multiply of two 32-bit values, returning [hi32, lo32]. Computes
- * the product of the magnitudes via {@link mul64} and applies two's-complement
- * negation when exactly one input is negative.
+ * Signed 64-bit multiply of two 32-bit values; writes {hi32, lo32} into `out`. Computes
+ * the product of the magnitudes via {@link mul64} (reusing `out` as its own scratch —
+ * safe since the result is read back into locals immediately below before being
+ * overwritten again) and applies two's-complement negation when exactly one input is
+ * negative.
  */
-function mul64Signed(a: number, b: number): [number, number] {
+function mul64Signed(a: number, b: number, out: Mul64Result): void {
   const sa = a | 0;
   const sb = b | 0;
   const negate = sa < 0 !== sb < 0;
-  const [hi, lo] = mul64(sa < 0 ? -sa : sa, sb < 0 ? -sb : sb);
-  if (!negate) return [hi, lo];
+  mul64(sa < 0 ? -sa : sa, sb < 0 ? -sb : sb, out);
+  if (!negate) return;
+  const hi = out.hi;
+  const lo = out.lo;
   // Two's-complement negation of the 64-bit (hi:lo) pair: ~hi:~lo + 1.
   const nlo = (~lo + 1) >>> 0;
   const nhi = ((~hi >>> 0) + (lo === 0 ? 1 : 0)) >>> 0;
-  return [nhi, nlo];
+  out.hi = nhi;
+  out.lo = nlo;
 }
 
 /**
@@ -168,15 +200,17 @@ export function executeThumb32(
     return 1;
   }
 
-  // Add/sub helpers with flags.
+  // Add/sub helpers with flags. Carry/overflow via 32-bit bit tricks — see
+  // execute-thumb16.ts's addFlags for why the exact-sum-comparison approach
+  // fails in the C build.
   const addWithFlags = (a: number, b: number): number => {
-    const usum = (a + b) >>> 0;
-    const ssum = (a | 0) + (b | 0);
-    const r = a + b;
+    const au = a >>> 0;
+    const bu = b >>> 0;
+    const r = (a + b) | 0;
     regs.N = (r & 0x80000000) !== 0;
     regs.Z = (r & 0xffffffff) === 0;
-    regs.C = r !== usum;
-    regs.V = (r | 0) !== ssum;
+    regs.C = au > 0xffffffff - bu;
+    regs.V = (~(a ^ b) & (a ^ r)) < 0;
     return r & 0xffffffff;
   };
   const subWithFlags = (a: number, b: number): number => {
@@ -504,7 +538,9 @@ function dispatchDpModifiedImm(core: CortexM33Core, hw0: number, hw1: number): n
   const imm3 = (hw1 >>> 12) & 0x7;
   const imm8 = hw1 & 0xff;
   const imm12 = (i << 11) | (imm3 << 8) | imm8;
-  const [imm, teCarry] = thumbExpandImmC(imm12, regs.C);
+  thumbExpandImmC(imm12, regs.C, core.immCarryScratch);
+  const imm = core.immCarryScratch.value;
+  const teCarry = core.immCarryScratch.carryOut;
   const rnVal = rn === 15 ? regs.pc : regs.r[rn];
 
   // Logical ops set N/Z from the result and C from the ThumbExpandImm carry-out
@@ -535,24 +571,24 @@ function dispatchDpModifiedImm(core: CortexM33Core, hw0: number, hw1: number): n
       return 1;
     case 0b1000: {
       // ADD / CMN (S=1, Rd=15 → flags only)
-      const result = addSubFlags(core, rnVal, imm, true, sBit);
+      const result = addSubFlags(core, rnVal, imm, true, 0, sBit);
       if (!(sBit && rd === 15)) writeDpResult(core, rd, result);
       return 1;
     }
     case 0b1010: // ADC
-      writeDpResult(core, rd, addSubFlags(core, rnVal, imm + (regs.C ? 1 : 0), true, sBit));
+      writeDpResult(core, rd, addSubFlags(core, rnVal, imm, true, regs.C ? 1 : 0, sBit));
       return 1;
     case 0b1011: // SBC
-      writeDpResult(core, rd, addSubFlags(core, rnVal, imm + (regs.C ? 0 : 1), false, sBit));
+      writeDpResult(core, rd, addSubFlags(core, rnVal, imm + (regs.C ? 0 : 1), false, 0, sBit));
       return 1;
     case 0b1101: {
       // SUB / CMP (S=1, Rd=15 → flags only)
-      const result = addSubFlags(core, rnVal, imm, false, sBit);
+      const result = addSubFlags(core, rnVal, imm, false, 0, sBit);
       if (!(sBit && rd === 15)) writeDpResult(core, rd, result);
       return 1;
     }
     case 0b1110: // RSB
-      writeDpResult(core, rd, addSubFlags(core, imm, rnVal, false, sBit));
+      writeDpResult(core, rd, addSubFlags(core, imm, rnVal, false, 0, sBit));
       return 1;
     default:
       return -1;
@@ -652,7 +688,7 @@ function dispatchDpPlainImm(core: CortexM33Core, hw0: number, hw1: number): numb
     const shiftAmt = (imm3 << 2) | imm2sat;
     let val = regs.r[rmReg] | 0;
     if (shiftAmt > 0) {
-      val = isAsr ? (val >> shiftAmt) : (val << shiftAmt);
+      val = isAsr ? val >> shiftAmt : val << shiftAmt;
     }
     if (isUnsigned) {
       // USAT: clamp to [0, 2^satWidth - 1]
@@ -660,7 +696,7 @@ function dispatchDpPlainImm(core: CortexM33Core, hw0: number, hw1: number): numb
       if (val < 0) {
         regs.r[rdSat] = 0;
         regs.setQ();
-      } else if ((val >>> 0) > max) {
+      } else if (val >>> 0 > max) {
         regs.r[rdSat] = max;
         regs.setQ();
       } else {
@@ -830,28 +866,28 @@ function dispatchDpShiftedReg(core: CortexM33Core, hw0: number, hw1: number): nu
       return 1;
     case 0b1000: {
       // ADD / CMN (S=1, Rd=15 → flags only)
-      const result = addSubFlags(core, rnVal, shifted, true, setFlags);
+      const result = addSubFlags(core, rnVal, shifted, true, 0, setFlags);
       if (!(setFlags && rd === 15)) writeDpResult(core, rd, result);
       return 1;
     }
     case 0b1010: // ADC
-      writeDpResult(core, rd, addSubFlags(core, rnVal, shifted + (regs.C ? 1 : 0), true, setFlags));
+      writeDpResult(core, rd, addSubFlags(core, rnVal, shifted, true, regs.C ? 1 : 0, setFlags));
       return 1;
     case 0b1011: // SBC
       writeDpResult(
         core,
         rd,
-        addSubFlags(core, rnVal, shifted + (regs.C ? 0 : 1), false, setFlags)
+        addSubFlags(core, rnVal, shifted + (regs.C ? 0 : 1), false, 0, setFlags)
       );
       return 1;
     case 0b1101: {
       // SUB / CMP (S=1, Rd=15 → flags only)
-      const result = addSubFlags(core, rnVal, shifted, false, setFlags);
+      const result = addSubFlags(core, rnVal, shifted, false, 0, setFlags);
       if (!(setFlags && rd === 15)) writeDpResult(core, rd, result);
       return 1;
     }
     case 0b1110: // RSB
-      writeDpResult(core, rd, addSubFlags(core, shifted, rnVal, false, setFlags));
+      writeDpResult(core, rd, addSubFlags(core, shifted, rnVal, false, 0, setFlags));
       return 1;
     default:
       return -1;
@@ -871,18 +907,24 @@ function addSubFlags(
   a: number,
   b: number,
   isAdd: boolean,
+  carryIn = 0,
   setFlags = true
 ): number {
   const regs = core.regs;
   if (isAdd) {
-    const usum = (a + b) >>> 0;
-    const ssum = (a | 0) + (b | 0);
-    const r = a + b;
+    // Carry/overflow via 32-bit bit tricks; `carryIn` kept separate from `b` —
+    // both for the same reasons as execute-thumb16.ts's addFlags (see there).
+    const au = a >>> 0;
+    const bu = b >>> 0;
+    const step1 = (au + bu) >>> 0;
+    const carryOut1 = au > 0xffffffff - bu;
+    const r = (step1 + carryIn) | 0;
+    const carryOut2 = carryIn !== 0 && step1 === 0xffffffff;
     if (setFlags) {
       regs.N = (r & 0x80000000) !== 0;
       regs.Z = (r & 0xffffffff) === 0;
-      regs.C = r !== usum;
-      regs.V = (r | 0) !== ssum;
+      regs.C = carryOut1 || carryOut2;
+      regs.V = (~(a ^ b) & (a ^ r)) < 0;
     }
     return r & 0xffffffff;
   }
@@ -1255,12 +1297,14 @@ function dispatchMultiply(core: CortexM33Core, hw0: number, hw1: number): number
     // Ra = 0b1111 selects the non-accumulating SMMUL form. Verified against
     // `arm-none-eabi-as` / capstone decodes.
     const round = (hw1 >>> 4) & 1;
-    const [hi, lo] = mul64Signed(regs.r[rn], regs.r[rm]);
+    mul64Signed(regs.r[rn], regs.r[rm], core.mul64Scratch);
+    const hi = core.mul64Scratch.hi;
+    const lo = core.mul64Scratch.lo;
     // Add 2^31 before taking the high word when rounding: this increments the
     // high word exactly when the low word is >= 0x80000000.
     let prodHi = hi | 0; // signed high word of the 64-bit product
-    if (round && (lo >>> 0) >= 0x80000000) prodHi = (prodHi + 1) | 0;
-    const acc = ra === 0xf ? 0 : (regs.r[ra] | 0);
+    if (round && lo >>> 0 >= 0x80000000) prodHi = (prodHi + 1) | 0;
+    const acc = ra === 0xf ? 0 : regs.r[ra] | 0;
     regs.r[rd] = (prodHi + acc) >>> 0;
     return 1;
   }
@@ -1303,14 +1347,18 @@ function dispatchMultiply(core: CortexM33Core, hw0: number, hw1: number): number
   const rdHi = rd;
   if (op === 0b1000) {
     // SMULL: signed Rn * Rm → RdHi:RdLo
-    const [hi, lo] = mul64Signed(regs.r[rn], regs.r[rm]);
+    mul64Signed(regs.r[rn], regs.r[rm], core.mul64Scratch);
+    const hi = core.mul64Scratch.hi;
+    const lo = core.mul64Scratch.lo;
     regs.r[rdLo] = lo;
     regs.r[rdHi] = hi;
     return 2;
   }
   if (op === 0b1010) {
     // UMULL: unsigned Rn * Rm → RdHi:RdLo
-    const [hi, lo] = mul64(regs.r[rn] >>> 0, regs.r[rm] >>> 0);
+    mul64(regs.r[rn] >>> 0, regs.r[rm] >>> 0, core.mul64Scratch);
+    const hi = core.mul64Scratch.hi;
+    const lo = core.mul64Scratch.lo;
     regs.r[rdLo] = lo;
     regs.r[rdHi] = hi;
     return 2;
@@ -1318,7 +1366,9 @@ function dispatchMultiply(core: CortexM33Core, hw0: number, hw1: number): number
   if (op === 0b1100) {
     // SMLAL: signed Rn*Rm + RdHi:RdLo → RdHi:RdLo
     const acc = (regs.r[rdHi] >>> 0) * 0x100000000 + (regs.r[rdLo] >>> 0);
-    const [hi, lo] = mul64Signed(regs.r[rn], regs.r[rm]);
+    mul64Signed(regs.r[rn], regs.r[rm], core.mul64Scratch);
+    const hi = core.mul64Scratch.hi;
+    const lo = core.mul64Scratch.lo;
     const product = (hi >>> 0) * 0x100000000 + (lo >>> 0);
     const signedAcc = acc > 0x7fffffffffffffff ? acc - 0x10000000000000000 : acc;
     const signedProd = product > 0x7fffffffffffffff ? product - 0x10000000000000000 : product;
@@ -1331,7 +1381,9 @@ function dispatchMultiply(core: CortexM33Core, hw0: number, hw1: number): number
   if (op === 0b1110) {
     // UMLAL: unsigned Rn*Rm + RdHi:RdLo → RdHi:RdLo
     const acc = (regs.r[rdHi] >>> 0) * 0x100000000 + (regs.r[rdLo] >>> 0);
-    const [hi, lo] = mul64(regs.r[rn] >>> 0, regs.r[rm] >>> 0);
+    mul64(regs.r[rn] >>> 0, regs.r[rm] >>> 0, core.mul64Scratch);
+    const hi = core.mul64Scratch.hi;
+    const lo = core.mul64Scratch.lo;
     const product = (hi >>> 0) * 0x100000000 + (lo >>> 0);
     const sum = acc + product;
     regs.r[rdLo] = sum & 0xffffffff;

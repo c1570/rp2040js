@@ -1,3 +1,4 @@
+import { IRPChip } from '../rpchip';
 import { RP2040 } from '../rp2040';
 import { BasePeripheral, Peripheral } from './peripheral';
 
@@ -24,12 +25,15 @@ const PERFCTR3 = 0x020;
 /** Bus fabric performance event select for PERFCTR3 */
 const PERFSEL3 = 0x024;
 
-export class RPBUSCTRL extends BasePeripheral implements Peripheral {
+export class RPBUSCTRL<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   voltageSelect = 0;
   readonly perfCtr = [0, 0, 0, 0];
   readonly perfSel = [0x1f, 0x1f, 0x1f, 0x1f];
 
-  constructor(rp2040: RP2040, name: string) {
+  constructor(rp2040: ChipType, name: string) {
     super(rp2040, name);
   }
 

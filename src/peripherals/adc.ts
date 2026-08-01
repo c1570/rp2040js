@@ -1,3 +1,4 @@
+import { AlarmCallback, IAlarm } from '../clock/clock';
 import { IRPChip } from '../rpchip';
 import { FIFO } from '../utils/fifo';
 import { BasePeripheral, Peripheral } from './peripheral';
@@ -60,7 +61,26 @@ const DIV_FRAC_SHIFT = 0;
 // Interrupt bits
 const FIFO_INT = 1 << 0;
 
-export class RPADC extends BasePeripheral implements Peripheral {
+class ADCSampleAlarm implements AlarmCallback {
+  constructor(private readonly adc: RPADC) {}
+  fire() {
+    this.adc.completeADCRead(this.adc.channelValues[this.adc.currentChannel], false);
+  }
+}
+
+class ADCMultiShotAlarm implements AlarmCallback {
+  constructor(private readonly adc: RPADC) {}
+  fire() {
+    if (this.adc.cs & CS_START_MANY) {
+      this.adc.startADCRead();
+    }
+  }
+}
+
+export class RPADC<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
   /* Number of ADC channels */
   readonly numChannels = 5;
 
@@ -109,10 +129,10 @@ export class RPADC extends BasePeripheral implements Peripheral {
 
   currentChannel = 0;
   /** Used to simulate ADC sample time */
-  sampleAlarm;
+  sampleAlarm: IAlarm;
 
   /** For scheduling multi-shot ADC capture */
-  multiShotAlarm;
+  multiShotAlarm: IAlarm;
 
   get temperatueEnable() {
     return this.cs & CS_TS_EN;
@@ -149,20 +169,14 @@ export class RPADC extends BasePeripheral implements Peripheral {
   }
 
   constructor(
-    rp2040: IRPChip,
+    rp2040: ChipType,
     name: string,
     readonly adc_interrupt: number,
     readonly adc_dreq: number
   ) {
     super(rp2040, name);
-    this.sampleAlarm = this.rp2040.clock.createAlarm(() =>
-      this.completeADCRead(this.channelValues[this.currentChannel], false)
-    );
-    this.multiShotAlarm = this.rp2040.clock.createAlarm(() => {
-      if (this.cs & CS_START_MANY) {
-        this.startADCRead();
-      }
-    });
+    this.sampleAlarm = this.rp2040.clock.createAlarm(new ADCSampleAlarm(this));
+    this.multiShotAlarm = this.rp2040.clock.createAlarm(new ADCMultiShotAlarm(this));
   }
 
   checkInterrupts() {

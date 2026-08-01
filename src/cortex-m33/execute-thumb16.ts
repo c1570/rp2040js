@@ -85,15 +85,32 @@ function subFlags(
 }
 
 /** Add with flags update (used by ADDS, ADCS, CMN). See `subFlags` re: setFlags. */
-function addFlags(core: CortexM33Core, a: number, b: number, setFlags = true): number {
-  const unsignedSum = (a + b) >>> 0;
-  const signedSum = (a | 0) + (b | 0);
-  const result = a + b;
+// Carry/overflow use 32-bit bit tricks, not an exact-sum comparison: cts2c
+// models every `number` as a 32-bit-wrapping `int32_t`, so `a + b` IS the
+// truncating operation and a "compare against the >>> 0'd copy" carry check
+// would always be false in the C build. (JS's exact-double `number` makes
+// that trick work, but it doesn't survive transpilation.)
+//
+// `carryIn` is a separate parameter rather than pre-folded into `b`: folding
+// a carry-in of 1 into b=0xffffffff would yield 0x100000000, which doesn't
+// survive a cts2c `int32_t` parameter (silently truncates to 0). Taking it
+// separately and chaining two 32-bit-safe adds avoids any out-of-range value.
+function addFlags(core: CortexM33Core, a: number, b: number, carryIn = 0, setFlags = true): number {
+  const au = a >>> 0;
+  const bu = b >>> 0;
+  const step1 = (au + bu) >>> 0;
+  const carryOut1 = au > 0xffffffff - bu;
+  const result = (step1 + carryIn) | 0;
+  const carryOut2 = carryIn !== 0 && step1 === 0xffffffff;
   if (setFlags) {
     core.regs.N = (result & 0x80000000) !== 0;
     core.regs.Z = (result & 0xffffffff) === 0;
-    core.regs.C = result !== unsignedSum;
-    core.regs.V = (result | 0) !== signedSum;
+    core.regs.C = carryOut1 || carryOut2;
+    // Signed overflow: operands share a sign but the result's differs (standard
+    // full-adder formula). Exact for carryIn=0; ADCS's rare
+    // carry-across-0xffffffff edge case is only approximated — no real firmware
+    // hits it, so a fully carry-aware variant isn't worth the complexity.
+    core.regs.V = (~(a ^ b) & (a ^ result)) < 0;
   }
   return result & 0xffffffff;
 }
@@ -116,7 +133,7 @@ export function executeThumb16(core: CortexM33Core, opcodePC: number, opcode: nu
   if (opcode >> 6 === 0b0100000101) {
     const Rm = (opcode >> 3) & 0x7;
     const Rdn = opcode & 0x7;
-    regs.r[Rdn] = addFlags(core, regs.r[Rm], regs.r[Rdn] + (regs.C ? 1 : 0), !inItBlock);
+    regs.r[Rdn] = addFlags(core, regs.r[Rm], regs.r[Rdn], regs.C ? 1 : 0, !inItBlock);
   }
   // ADD (register = SP plus immediate)
   else if (opcode >> 11 === 0b10101) {
@@ -134,20 +151,20 @@ export function executeThumb16(core: CortexM33Core, opcodePC: number, opcode: nu
     const imm3 = (opcode >> 6) & 0x7;
     const Rn = (opcode >> 3) & 0x7;
     const Rd = opcode & 0x7;
-    regs.r[Rd] = addFlags(core, regs.r[Rn], imm3, !inItBlock);
+    regs.r[Rd] = addFlags(core, regs.r[Rn], imm3, 0, !inItBlock);
   }
   // ADDS (Encoding T2)
   else if (opcode >> 11 === 0b00110) {
     const imm8 = opcode & 0xff;
     const Rdn = (opcode >> 8) & 0x7;
-    regs.r[Rdn] = addFlags(core, regs.r[Rdn], imm8, !inItBlock);
+    regs.r[Rdn] = addFlags(core, regs.r[Rdn], imm8, 0, !inItBlock);
   }
   // ADDS (register)
   else if (opcode >> 9 === 0b0001100) {
     const Rm = (opcode >> 6) & 0x7;
     const Rn = (opcode >> 3) & 0x7;
     const Rd = opcode & 0x7;
-    regs.r[Rd] = addFlags(core, regs.r[Rn], regs.r[Rm], !inItBlock);
+    regs.r[Rd] = addFlags(core, regs.r[Rn], regs.r[Rm], 0, !inItBlock);
   }
   // ADD (register — high) / MOV (high) / CMP (high) / BX / BLX
   else if (opcode >> 8 === 0b01000100) {

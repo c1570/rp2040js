@@ -8,22 +8,20 @@ const PROC0_INTF0 = 0x260;
 const PROC0_INTS0 = 0x278;
 const PROC0_INTS5 = 0x280;
 
-export class RPIO extends BasePeripheral implements Peripheral {
-  constructor(rp2040: IRPChip, name: string) {
+export class RPIO<ChipType extends IRPChip = IRPChip>
+  extends BasePeripheral<ChipType>
+  implements Peripheral
+{
+  constructor(rp2040: ChipType, name: string) {
     super(rp2040, name);
-  }
-
-  getPinFromOffset(offset: number) {
-    const gpioIndex = offset >>> 3;
-    return {
-      gpio: this.rp2040.gpio[gpioIndex],
-      isCtrl: !!(offset & 0x4),
-    };
   }
 
   readUint32(offset: number) {
     if (offset <= GPIO_CTRL_LAST) {
-      const { gpio, isCtrl } = this.getPinFromOffset(offset);
+      // Inlined (not a getPinFromOffset() helper): cts2c would heap-allocate the
+      // returned object per call, and this is a hot path (every GPIO register access).
+      const gpio = this.rp2040.gpio[offset >>> 3];
+      const isCtrl = !!(offset & 0x4);
       return isCtrl ? gpio.ctrl : gpio.status;
     }
     if (offset >= INTR0 && offset <= PROC0_INTS5) {
@@ -59,7 +57,8 @@ export class RPIO extends BasePeripheral implements Peripheral {
 
   writeUint32(offset: number, value: number) {
     if (offset <= GPIO_CTRL_LAST) {
-      const { gpio, isCtrl } = this.getPinFromOffset(offset);
+      const gpio = this.rp2040.gpio[offset >>> 3];
+      const isCtrl = !!(offset & 0x4);
       if (isCtrl) {
         gpio.ctrl = value;
         gpio.checkForUpdates();
