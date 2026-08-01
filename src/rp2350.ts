@@ -45,7 +45,7 @@ import { CortexM33Core } from './cortex-m33/core';
 import { RPPPB2350 } from './peripherals/ppb_rp2350';
 import { bootrom_rp2350_A2 } from './bootroms';
 import { loadFirmware, LoadFirmwareOptions, LoadFirmwareResult } from './utils/load-firmware';
-import { Uint32, Float64 } from './utils/types';
+import { Uint32, Float64, Int53 } from './utils/types';
 
 export const FLASH_START_ADDRESS = 0x10000000;
 export const RAM_START_ADDRESS = 0x20000000;
@@ -612,7 +612,7 @@ export class RP2350 implements IRPChip {
     this.dma.setDREQ(dreq);
   }
 
-  get cycles(): number {
+  get cycles(): Int53 {
     return this.core[0].getCycles();
   }
 
