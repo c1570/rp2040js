@@ -72,6 +72,7 @@
     "prepare": "husky install || exit 0",
     "format:check": "prettier --check **/*.{ts,js} !**/dist/** !**/node_modules/**",
     "lint": "eslint . --ext .ts",
+    "cts2c:full": "node cts2c/transpile-check.mjs full",
     "start:demo": "ts-node demo/emulator-run.ts",
     "start": "ts-node demo/ntc-run.ts",
     "start:debug": "node --inspect-brk -r ts-node/register demo/emulator-run.ts",
@@ -85,6 +86,7 @@
     "bin:dev": "ts-node src/rp2-emu-cli/rp2-emu.ts"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.8",
     "@skyra/gifenc": "^1.0.1",
     "@types/minimist": "^1.2.2",
     "@types/node": "^18.19.0",
@@ -99,6 +101,7 @@
     "rimraf": "^3.0.2",
     "ts-node": "^10.0.1",
     "ts-node-dev": "^1.1.8",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.3",
     "vitest": "^0.34.5"
   },
