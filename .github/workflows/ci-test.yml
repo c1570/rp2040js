@@ -7,6 +7,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    # For the rolling release step below; the rest of the job only needs read access.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
@@ -22,3 +25,24 @@ jobs:
         run: npx vitest run cts2c
         env:
           CTS2C_PARITY: '1'
+      # Publishes the transpiled emulator and its example driver, so the C build can be
+      # used without a Node toolchain. Last step in the job, so nothing is published
+      # unless the tests and the parity check above passed; cts2c:full also exits non-zero
+      # on any gcc error, so a header that does not compile is never released.
+      - name: Publish rolling release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm run cts2c:full
+          # Recreated rather than edited in place so the `rolling` tag always points at the
+          # commit the published files were generated from. The download URLs are fixed:
+          # .../releases/download/rolling/<file>
+          gh release delete rolling --cleanup-tag --yes || true
+          gh release create rolling \
+            --target "$GITHUB_SHA" \
+            --title 'rp2350js-c (rolling)' \
+            --notes "Transpiled C build of rp2350js, generated from $GITHUB_SHA." \
+            --prerelease \
+            build/transpile/rp2350js-c.h \
+            demo/emulator-run.c

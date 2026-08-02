@@ -12,6 +12,9 @@ The C version achieves 2-4x the speed of the Node/TS version.
     helper-cts2c-ensure-parity.c C harness the parity check drives
     helper-bitpun-check.c        standalone check of the hand-written C bodies
 
+`demo/emulator-run.c` is a C port of `demo/emulator-run.ts` showing how to drive the
+generated emulator: UART output, GPIO listeners, stepping.
+
 ## Verifying a change
 
     npm run cts2c:full                              # transpiles + gcc; expect 0 errors

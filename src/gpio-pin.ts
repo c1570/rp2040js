@@ -46,10 +46,7 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
   irqForceMask = 0;
   irqStatus = 0;
 
-  // Tombstoned (rather than compacted) on removal — removeListener() nulls out the
-  // slot at its captured index instead of splicing, so no other listener's index
-  // shifts underneath it.
-  private readonly listeners: (GPIOPinListener | null)[] = [];
+  private readonly listeners: GPIOPinListener[] = [];
 
   constructor(
     readonly rp2040: ChipType,
@@ -178,7 +175,7 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
     if (value !== lastValue) {
       this.lastValue = value;
       for (const listener of this.listeners) {
-        listener?.(value, lastValue);
+        listener(value, lastValue);
       }
     }
   }
@@ -198,11 +195,9 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
     }
   }
 
+  // Returns nothing: the unsubscribe closure this used to return was unused by every
+  // caller, and both it and the nullable slots it needed were untranslatable to C.
   addListener(callback: GPIOPinListener) {
     this.listeners.push(callback);
-    const index = this.listeners.length - 1;
-    return () => {
-      this.listeners[index] = null;
-    };
   }
 }

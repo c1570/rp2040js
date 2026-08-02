@@ -13,7 +13,7 @@
 //                   For "arm", the dump format still reports 32 "x" registers to match
 //                   the existing side-by-side dump layout, but only x0-x15 are real
 //                   (ARM's r0-r12/SP/LR/PC); x16-x31 are always 0.
-#include "../build/transpile/full.c"
+#include "../build/transpile/rp2350js-c.h"
 #include <time.h>
 
 static uint32_t crc32_table[256];

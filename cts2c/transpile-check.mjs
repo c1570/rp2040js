@@ -94,7 +94,8 @@ if (explicitFiles) {
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
-const cFile = join(OUT_DIR, `${label}.c`);
+// .h, not .c: every emitted function is `static`, so consumers #include it, not link it.
+const cFile = join(OUT_DIR, 'rp2350js-c.h');
 const oFile = join(OUT_DIR, `${label}.o`);
 const manifestFile = join(OUT_DIR, `${label}.manifest.txt`);
 const gccLogFile = join(OUT_DIR, `${label}.gcc.log`);
@@ -202,8 +203,11 @@ function summarizeTodos(hits) {
 }
 const todoGroups = summarizeTodos(todoHits);
 
-console.log(`── gcc ${gccArgs.join(' ')} -c ${relative(ROOT, cFile)} ──`);
-const gcc = spawnSync('gcc', [...gccArgs, '-c', cFile, '-o', oFile], { encoding: 'utf8' });
+console.log(`── gcc ${gccArgs.join(' ')} -x c -c ${relative(ROOT, cFile)} ──`);
+// -x c: gcc would treat a .h input as a header and emit a precompiled header, not an object.
+const gcc = spawnSync('gcc', [...gccArgs, '-x', 'c', '-c', cFile, '-o', oFile], {
+  encoding: 'utf8',
+});
 const gccOutput = (gcc.stdout || '') + (gcc.stderr || '');
 writeFileSync(gccLogFile, gccOutput);
 

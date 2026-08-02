@@ -5,7 +5,7 @@
 // parity tests, which is exactly how the pre-fix bug (wrong C parameter/return types
 // causing numeric, not bit-for-bit, conversion) went undetected. Exits non-zero and
 // prints a diagnostic on the first mismatch.
-#include "../build/transpile/full.c"
+#include "../build/transpile/rp2350js-c.h"
 #include <stdio.h>
 
 static int failures = 0;
