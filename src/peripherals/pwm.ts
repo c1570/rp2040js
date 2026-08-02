@@ -3,6 +3,7 @@ import { SimulationClock } from '../clock/simulation-clock';
 import { IRPChip } from '../rpchip';
 import { Timer32, Timer32PeriodicAlarm, TimerMode } from '../utils/timer32';
 import { BasePeripheral, Peripheral } from './peripheral';
+import { Uint32 } from '../utils/types';
 
 /** Control and status register */
 const CHn_CSR = 0x00;
@@ -309,7 +310,7 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
   private intForce = 0;
 
   gpioValue = 0;
-  gpioDirection = 0;
+  gpioDirection: Uint32 = 0;
 
   constructor(
     readonly rp2040: ChipType,
@@ -414,7 +415,10 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
 
   gpioSetDir(index: number, output: boolean) {
     const bit = 1 << index;
-    const newGpioDirection = output ? this.gpioDirection | bit : this.gpioDirection & ~bit;
+    // `>>> 0`: the bitwise ops yield a signed int32, so without it the reset value
+    // 0xffffffff never compares equal to its own unchanged result.
+    const newGpioDirection: Uint32 =
+      (output ? this.gpioDirection | bit : this.gpioDirection & ~bit) >>> 0;
     if (this.gpioDirection != newGpioDirection) {
       this.gpioDirection = newGpioDirection;
       this.rp2040.gpio[index].checkForUpdates();
@@ -426,7 +430,10 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
   }
 
   gpioOnInput(index: number) {
-    if (this.gpioDirection && 1 << index) {
+    // `&`, not `&&`: this skips pins configured as outputs. With `&&` the whole check was
+    // just "is gpioDirection non-zero", which after reset is always true, so B-pin input
+    // changes never reached the channels and the B-gated/edge div modes never counted.
+    if (this.gpioDirection & (1 << index)) {
       return;
     }
     for (const channel of this.channels) {
