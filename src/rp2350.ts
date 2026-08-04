@@ -25,7 +25,7 @@ import { RPI2C } from './peripherals/i2c';
 import { RPIO } from './peripherals/io_rp2350';
 import { RPPADS } from './peripherals/pads_rp2350';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
-import { RPPIO, WaitType } from './peripherals/pio';
+import { RPPIO, StateMachine, WaitType } from './peripherals/pio';
 import { RPPWM } from './peripherals/pwm';
 import { RP2350PLL } from './peripherals/pll_rp2350';
 import { RPReset } from './peripherals/reset';
@@ -731,11 +731,47 @@ export class RP2350 implements IRPChip {
     return elapsed;
   }
 
-  stepThings(cycles: number) {
+  // Exactly the enabled state machines, and the PIOs owning them; rebuilt by
+  // updatePioActiveLists() on every enable/disable.
+  readonly pioActiveSms = new Array<StateMachine>(12);
+  pioActiveSmCount = 0;
+  readonly pioActivePios = new Array<RPPIO>(3);
+  pioActivePioCount = 0;
+
+  updatePioActiveLists() {
+    let smCount = 0;
+    let pioCount = 0;
+    for (const pio of this.pio) {
+      if (pio.machinesRunning) {
+        this.pioActivePios[pioCount] = pio;
+        pioCount++;
+        for (let i = 0; i < 4; i++) {
+          if (pio.machinesRunning & (1 << i)) {
+            this.pioActiveSms[smCount] = pio.machines[i];
+            smCount++;
+          }
+        }
+      }
+    }
+    this.pioActiveSmCount = smCount;
+    this.pioActivePioCount = pioCount;
+  }
+
+  // Split from stepThings to keep the "no PIO running" path cheap.
+  stepPios(cycles: number) {
     for (let cycle = 0; cycle < cycles; cycle++) {
-      this.pio[0].step();
-      this.pio[1].step();
-      this.pio[2].step();
+      for (let i = 0; i < this.pioActiveSmCount; i++) {
+        this.pioActiveSms[i].stepUnchecked();
+      }
+      for (let i = 0; i < this.pioActivePioCount; i++) {
+        this.pioActivePios[i].checkChangedPins();
+      }
+    }
+  }
+
+  stepThings(cycles: number) {
+    if (this.pioActiveSmCount) {
+      this.stepPios(cycles);
     }
     // Float64, not plain `number`: nanos-per-cycle is fractional for any clkSys that
     // doesn't divide 1e9 (150MHz → 6.667), and int32_t would truncate it, running the

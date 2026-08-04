@@ -211,6 +211,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
     } else {
       this.pio.machinesRunning &= ~(1 << this.index);
     }
+    this.rp2040.updatePioActiveLists();
   }
 
   get enabled() {
@@ -741,10 +742,13 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
   }
 
   step() {
-    if (!this._enabled) {
-      return;
+    if (this._enabled) {
+      this.stepUnchecked();
     }
+  }
 
+  /** Steps the machine, assuming the caller has already checked `enabled`. */
+  stepUnchecked() {
     // Fractional clock divider via phase accumulator: advance by 256 each
     // sys_clk cycle, execute when phase >= INT*256+FRAC.
     this.curClockPhase += 256;
@@ -1348,7 +1352,7 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
     // immediately.
     for (let i = 0; i < this.machines.length; i++) {
       if (this.machinesRunning & (1 << i)) {
-        this.machines[i].step();
+        this.machines[i].stepUnchecked();
       }
     }
     this.checkChangedPins();

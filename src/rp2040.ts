@@ -11,7 +11,7 @@ import { RPI2C } from './peripherals/i2c';
 import { RPIO } from './peripherals/io';
 import { RPPADS } from './peripherals/pads';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
-import { RPPIO, WaitType } from './peripherals/pio';
+import { RPPIO, StateMachine, WaitType } from './peripherals/pio';
 import { RPPPB } from './peripherals/ppb';
 import { RPPWM } from './peripherals/pwm';
 import { RPReset } from './peripherals/reset';
@@ -481,10 +481,46 @@ export class RP2040 implements IRPChip {
     return core0Cycles - core0StartCycles;
   }
 
-  stepThings(cycles: number) {
+  // Same active-machine lists as RP2350; see its updatePioActiveLists().
+  readonly pioActiveSms = new Array<StateMachine>(8);
+  pioActiveSmCount = 0;
+  readonly pioActivePios = new Array<RPPIO>(2);
+  pioActivePioCount = 0;
+
+  updatePioActiveLists() {
+    let smCount = 0;
+    let pioCount = 0;
+    for (const pio of this.pio) {
+      if (pio.machinesRunning) {
+        this.pioActivePios[pioCount] = pio;
+        pioCount++;
+        for (let i = 0; i < 4; i++) {
+          if (pio.machinesRunning & (1 << i)) {
+            this.pioActiveSms[smCount] = pio.machines[i];
+            smCount++;
+          }
+        }
+      }
+    }
+    this.pioActiveSmCount = smCount;
+    this.pioActivePioCount = pioCount;
+  }
+
+  // Split out for the same reason as RP2350's; see there.
+  stepPios(cycles: number) {
     for (let cycle = 0; cycle < cycles; cycle++) {
-      this.pio[0].step();
-      this.pio[1].step();
+      for (let i = 0; i < this.pioActiveSmCount; i++) {
+        this.pioActiveSms[i].stepUnchecked();
+      }
+      for (let i = 0; i < this.pioActivePioCount; i++) {
+        this.pioActivePios[i].checkChangedPins();
+      }
+    }
+  }
+
+  stepThings(cycles: number) {
+    if (this.pioActiveSmCount) {
+      this.stepPios(cycles);
     }
     const cycleNanos = 1e9 / this.clkSys;
     this.clock.tick(cycles * cycleNanos);

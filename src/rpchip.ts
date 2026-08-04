@@ -24,6 +24,8 @@ export interface IRPChip {
   gpioRawOutputValue(index: number): boolean;
   gpioRawOutputEnable(index: number): boolean;
   gpioInputValueHasBeenSet(index: number): void;
+  /** Called when a PIO state machine is enabled or disabled. */
+  updatePioActiveLists(): void;
 
   readonly pio: Array<RPPIO>;
 
