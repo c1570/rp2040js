@@ -14,6 +14,11 @@ const ALARM3 = 0x1c;
 const ARMED = 0x20;
 const PAUSE = 0x30;
 
+const INTR = 0x0;
+const INTE = 0x4;
+const INTF = 0x8;
+const INTS = 0xc;
+
 const ALARM_0 = 1 << 0;
 const ALARM_1 = 1 << 1;
 const ALARM_2 = 1 << 2;
@@ -42,26 +47,17 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
   private intEnable = 0;
   private intForce = 0;
   private paused = false;
-  private INTR = 0;
-  private INTE = 0;
-  private INTF = 0;
-  private INTS = 0;
+  private intRegBase = 0;
 
   constructor(rp2040: ChipType, name: string, readonly timer_irq_base: number) {
     super(rp2040, name);
     this.clock = rp2040.clock;
     switch (rp2040.identifier) {
       case 'rp2040':
-        this.INTR = 0x34;
-        this.INTE = 0x38;
-        this.INTF = 0x3c;
-        this.INTS = 0x40;
+        this.intRegBase = 0x34;
         break;
       case 'rp2350':
-        this.INTR = 0x3c;
-        this.INTE = 0x40;
-        this.INTF = 0x44;
-        this.INTS = 0x48;
+        this.intRegBase = 0x3c;
         break;
       default:
         throw Error('Unknown rpchip identifier');
@@ -118,15 +114,6 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
       case PAUSE:
         return this.paused ? 1 : 0;
 
-      case this.INTR:
-        return this.intRaw;
-      case this.INTE:
-        return this.intEnable;
-      case this.INTF:
-        return this.intForce;
-      case this.INTS:
-        return this.intStatus;
-
       case ARMED:
         return (
           (this.alarms[0].armed ? this.alarms[0].bitValue : 0) |
@@ -134,6 +121,16 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
           (this.alarms[2].armed ? this.alarms[2].bitValue : 0) |
           (this.alarms[3].armed ? this.alarms[3].bitValue : 0)
         );
+    }
+    switch (offset - this.intRegBase) {
+      case INTR:
+        return this.intRaw;
+      case INTE:
+        return this.intEnable;
+      case INTF:
+        return this.intForce;
+      case INTS:
+        return this.intStatus;
     }
     return super.readUint32(offset);
   }
@@ -150,7 +147,7 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
         alarm.armed = true;
         alarm.targetMicros = value;
         alarm.clockAlarm.schedule(deltaMicros * 1000);
-        break;
+        return;
       }
       case ARMED:
         for (const alarm of this.alarms) {
@@ -158,29 +155,30 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
             this.disarmAlarm(alarm);
           }
         }
-        break;
+        return;
       case PAUSE:
         this.paused = !!(value & 1);
         if (this.paused) {
           this.warn('Unimplemented Timer Pause');
         }
         // TODO actually pause the timer
-        break;
-      case this.INTR:
+        return;
+    }
+    switch (offset - this.intRegBase) {
+      case INTR:
         this.intRaw &= ~this.rawWriteValue;
         this.checkInterrupts();
-        break;
-      case this.INTE:
+        return;
+      case INTE:
         this.intEnable = value & 0xf;
         this.checkInterrupts();
-        break;
-      case this.INTF:
+        return;
+      case INTF:
         this.intForce = value & 0xf;
         this.checkInterrupts();
-        break;
-      default:
-        super.writeUint32(offset, value);
+        return;
     }
+    super.writeUint32(offset, value);
   }
 
   fireAlarm(index: number) {
