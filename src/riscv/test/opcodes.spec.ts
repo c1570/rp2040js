@@ -54,7 +54,7 @@ describe('RISC-V opcode regression', () => {
   ) {
     const label = `${description}: `;
     for (const idx in inputRegs) {
-      cpu.registerSet.setRegisterU(+idx, inputRegs[idx] >>> 0);
+      cpu.setRegisterU(+idx, inputRegs[idx] >>> 0);
     }
     cpu.chip.writeUint32(SCRATCH, encoding);
     cpu.chip.writeUint32(SCRATCH + 4, 0);
@@ -62,7 +62,7 @@ describe('RISC-V opcode regression', () => {
     cpu.next_pc = 0;
     cpu.executeInstruction();
     for (const idx in expectedRegs) {
-      expect(cpu.registerSet.getRegisterU(+idx), `${label}x${idx}`).toBe(expectedRegs[idx] >>> 0);
+      expect(cpu.getRegisterU(+idx), `${label}x${idx}`).toBe(expectedRegs[idx] >>> 0);
     }
     expect(cpu.pc - SCRATCH, `${label}pc`).toBe(expectedPcInc);
   }
@@ -456,7 +456,7 @@ describe('RISC-V opcode regression', () => {
     expect(cpu.lr_addr).toBe(DATA & ~0xf);
     // core1 does lr.w to the same granule
     chip.core1.waiting = false;
-    chip.core1.registerSet.setRegister(7, DATA);
+    chip.core1.setRegister(7, DATA);
     chip.writeUint32(SCRATCH, 0x1003a32f); // lr.w x0, (x7)
     chip.core1.pc = SCRATCH;
     chip.core1.executeInstruction();

@@ -99,7 +99,7 @@ export class RISCVGDBServer extends GDBServer {
   }
 
   protected readRegister(index: number): number {
-    if (index < NUM_GPRS) return this.cpu.registerSet.getRegisterU(index);
+    if (index < NUM_GPRS) return this.cpu.getRegisterU(index);
     if (index === REG_PC) return this.cpu.pc;
     const csrIdx = index - REG_CSR_BASE;
     if (csrIdx >= 0 && csrIdx < CSR_MAP.length) {
@@ -110,7 +110,7 @@ export class RISCVGDBServer extends GDBServer {
 
   protected writeRegister(index: number, value: number) {
     if (index < NUM_GPRS) {
-      this.cpu.registerSet.setRegisterU(index, value);
+      this.cpu.setRegisterU(index, value);
     } else if (index === REG_PC) {
       this.cpu.pc = value;
     } else {

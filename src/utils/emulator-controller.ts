@@ -409,7 +409,7 @@ export class EmulatorController {
     const cpu = this.cpu(core);
     const regs: Record<string, string> = {};
     for (let i = 0; i < 32; i++) {
-      regs[GPR_NAMES[i]] = hex(cpu.registerSet.getRegisterU(i));
+      regs[GPR_NAMES[i]] = hex(cpu.getRegisterU(i));
     }
     regs.pc = hex(cpu.pc);
     for (const [csrName, csrAddr] of Object.entries(CSR_MAP)) {
@@ -448,7 +448,7 @@ export class EmulatorController {
     const gprIdx = GPR_NAMES.indexOf(register);
     if (gprIdx >= 0 || /^x\d+$/i.test(register)) {
       const idx = gprIdx >= 0 ? gprIdx : parseInt(register.substring(1));
-      cpu.registerSet.setRegisterU(idx, v);
+      cpu.setRegisterU(idx, v);
       return this.json({ ok: true });
     }
     if (register in CSR_MAP) {

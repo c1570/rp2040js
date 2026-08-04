@@ -1,1 +1,1 @@
-export { CPU, RegisterSet } from './cpu';
+export { CPU } from './cpu';

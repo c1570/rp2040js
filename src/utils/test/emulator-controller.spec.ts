@@ -80,7 +80,7 @@ describe('EmulatorController', () => {
 
   describe('registers', () => {
     test('read all registers', () => {
-      chip.core0.registerSet.setRegisterU(1, 0xdeadbeef);
+      chip.core0.setRegisterU(1, 0xdeadbeef);
       chip.core0.pc = 0x20000100;
       const data = json(server.handleToolCall('read_registers', { core: 0 }));
       expect(data.ra).toBe(hex(0xdeadbeef));
@@ -91,19 +91,19 @@ describe('EmulatorController', () => {
     });
 
     test('read registers for core 1', () => {
-      chip.core1.registerSet.setRegisterU(5, 0x42);
+      chip.core1.setRegisterU(5, 0x42);
       const data = json(server.handleToolCall('read_registers', { core: 1 }));
       expect(data.t0).toBe(hex(0x42));
     });
 
     test('write register by ABI name', () => {
       server.handleToolCall('write_register', { core: 0, register: 'ra', value: 0x12345678 });
-      expect(chip.core0.registerSet.getRegisterU(1)).toBe(0x12345678);
+      expect(chip.core0.getRegisterU(1)).toBe(0x12345678);
     });
 
     test('write register by numeric name', () => {
       server.handleToolCall('write_register', { core: 0, register: 'x5', value: 0xabc });
-      expect(chip.core0.registerSet.getRegisterU(5)).toBe(0xabc);
+      expect(chip.core0.getRegisterU(5)).toBe(0xabc);
     });
 
     test('write pc', () => {
@@ -118,8 +118,8 @@ describe('EmulatorController', () => {
 
     test('write to core 1', () => {
       server.handleToolCall('write_register', { core: 1, register: 'sp', value: 0x20010000 });
-      expect(chip.core1.registerSet.getRegisterU(2)).toBe(0x20010000);
-      expect(chip.core0.registerSet.getRegisterU(2)).toBe(0);
+      expect(chip.core1.getRegisterU(2)).toBe(0x20010000);
+      expect(chip.core0.getRegisterU(2)).toBe(0);
     });
 
     test('unknown register returns error', () => {
@@ -722,7 +722,7 @@ describe('EmulatorController', () => {
         register: 'ra',
         value: '0xdeadbeef',
       });
-      expect(chip.core0.registerSet.getRegisterU(1)).toBe(0xdeadbeef);
+      expect(chip.core0.getRegisterU(1)).toBe(0xdeadbeef);
     });
 
     test('write_register accepts hex string core', () => {
@@ -731,7 +731,7 @@ describe('EmulatorController', () => {
         register: 't0',
         value: '0x42',
       });
-      expect(chip.core1.registerSet.getRegisterU(5)).toBe(0x42);
+      expect(chip.core1.getRegisterU(5)).toBe(0x42);
     });
 
     test('write_register still accepts numeric JSON value', () => {
@@ -740,7 +740,7 @@ describe('EmulatorController', () => {
         register: 'sp',
         value: 0x20010000,
       });
-      expect(chip.core0.registerSet.getRegisterU(2)).toBe(0x20010000);
+      expect(chip.core0.getRegisterU(2)).toBe(0x20010000);
     });
 
     test('read_memory accepts hex string address and length', () => {
@@ -831,8 +831,8 @@ describe('EmulatorController', () => {
         register: 'sp',
         value: 0x20000000,
       });
-      expect(chip.core0.registerSet.getRegisterU(1)).toBe(0xcafef00d);
-      expect(chip.core0.registerSet.getRegisterU(2)).toBe(0x20000000);
+      expect(chip.core0.getRegisterU(1)).toBe(0xcafef00d);
+      expect(chip.core0.getRegisterU(2)).toBe(0x20000000);
     });
 
     test('uppercase 0X prefix works', () => {
@@ -841,7 +841,7 @@ describe('EmulatorController', () => {
         register: 'ra',
         value: '0XDEADBEEF',
       });
-      expect(chip.core0.registerSet.getRegisterU(1)).toBe(0xdeadbeef);
+      expect(chip.core0.getRegisterU(1)).toBe(0xdeadbeef);
     });
 
     test('malformed value throws error', () => {

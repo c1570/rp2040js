@@ -43,12 +43,30 @@ export class CPU implements ICpuCore {
   public waitingOnBlock = false;
   public eventRegistered = false;
 
-  registerSet: RegisterSet = new RegisterSet(32);
-  csrs = new Uint32Array(0x1000);
+  readonly regs = new Int32Array(32);
+  readonly csrs = new Uint32Array(0x1000);
   pc = 0;
   next_pc = 0;
   cycles: Int53 = 0; // avoids int32_t overflow past ~2.15B cycles
   currentMode: ExecutionModeRiscv = ExecutionModeRiscv.Mode_Machine;
+
+  getRegister(index: number): number {
+    return this.regs[index];
+  }
+
+  getRegisterU(index: number): Uint32 {
+    return this.regs[index] >>> 0;
+  }
+
+  setRegister(index: number, value: number): void {
+    // Identical to setRegisterU: Int32Array stores apply ToInt32, keeping all 32 bits.
+    // x0 is hardwired to zero.
+    if (index !== 0) this.regs[index] = value;
+  }
+
+  setRegisterU(index: number, value: number): void {
+    if (index !== 0) this.regs[index] = value;
+  }
 
   getCycles(): Int53 {
     return this.cycles;
@@ -779,53 +797,27 @@ function signExtend16(value: number) {
   return (value << 16) >> 16;
 }
 
-export class RegisterSet {
-  private regs: Int32Array;
-
-  constructor(numRegisters: number) {
-    this.regs = new Int32Array(numRegisters);
-  }
-
-  getRegister(index: number): number {
-    return this.regs[index];
-  }
-
-  getRegisterU(index: number): Uint32 {
-    return this.regs[index] >>> 0;
-  }
-
-  setRegister(index: number, value: number): void {
-    // setRegister and setRegisterU are identical: Int32Array stores apply
-    // ToInt32, which preserves all 32 bits regardless of signedness.
-    if (index !== 0) this.regs[index] = value;
-  }
-
-  setRegisterU(index: number, value: number): void {
-    if (index !== 0) this.regs[index] = value;
-  }
-}
-
 // LOAD (0x03) - I-type
 function executeLoad(inst: number, cpu: CPU) {
   const r = rd(inst),
     s1 = rs1(inst),
     im = imm_i(inst);
-  const addr = cpu.registerSet.getRegisterU(s1) + im;
+  const addr = cpu.getRegisterU(s1) + im;
   switch (func3(inst)) {
     case 0x0:
-      cpu.registerSet.setRegister(r, signExtend8(cpu.chip.readUint8(addr)));
+      cpu.setRegister(r, signExtend8(cpu.chip.readUint8(addr)));
       break; // lb
     case 0x1:
-      cpu.registerSet.setRegister(r, signExtend16(cpu.chip.readUint16(addr)));
+      cpu.setRegister(r, signExtend16(cpu.chip.readUint16(addr)));
       break; // lh
     case 0x2:
-      cpu.registerSet.setRegisterU(r, cpu.chip.readUint32(addr));
+      cpu.setRegisterU(r, cpu.chip.readUint32(addr));
       break; // lw
     case 0x4:
-      cpu.registerSet.setRegister(r, cpu.chip.readUint8(addr));
+      cpu.setRegister(r, cpu.chip.readUint8(addr));
       break; // lbu
     case 0x5:
-      cpu.registerSet.setRegister(r, cpu.chip.readUint16(addr));
+      cpu.setRegister(r, cpu.chip.readUint16(addr));
       break; // lhu
     default:
       throw Error(`Invalid LOAD func3 ${func3(inst)}`);
@@ -842,78 +834,77 @@ function executeMiscMem(inst: number, cpu: CPU) {
 function executeOpImm(inst: number, cpu: CPU) {
   const r = rd(inst),
     s1 = rs1(inst);
-  const rs = cpu.registerSet;
   switch (func3(inst)) {
     case 0x0: // addi
-      rs.setRegisterU(r, (rs.getRegisterU(s1) + imm_i(inst)) >>> 0);
+      cpu.setRegisterU(r, (cpu.getRegisterU(s1) + imm_i(inst)) >>> 0);
       break;
     case 0x1: {
       // slli / bseti / bclri / binvi / clz / ctz / cpop / sext.b / sext.h
       const sh = shamt(inst),
         f7 = func7(inst),
         imu = immU_i(inst);
-      if (f7 === 0x00) rs.setRegisterU(r, rs.getRegisterU(s1) << sh); // slli
-      else if (f7 === 0x14) rs.setRegister(r, rs.getRegister(s1) | (1 << sh)); // bseti (Zbs)
-      else if (f7 === 0x24) rs.setRegister(r, rs.getRegister(s1) & ~(1 << sh)); // bclri
-      else if (f7 === 0x34) rs.setRegister(r, rs.getRegister(s1) ^ (1 << sh)); // binvi
+      if (f7 === 0x00) cpu.setRegisterU(r, cpu.getRegisterU(s1) << sh); // slli
+      else if (f7 === 0x14) cpu.setRegister(r, cpu.getRegister(s1) | (1 << sh)); // bseti (Zbs)
+      else if (f7 === 0x24) cpu.setRegister(r, cpu.getRegister(s1) & ~(1 << sh)); // bclri
+      else if (f7 === 0x34) cpu.setRegister(r, cpu.getRegister(s1) ^ (1 << sh)); // binvi
       else if (imu === 0b011000000001) {
         // ctz (Zbb)
-        const t = rs.getRegister(s1) >>> 0;
-        rs.setRegister(r, t === 0 ? 32 : 31 - Math.clz32(t & -t));
+        const t = cpu.getRegister(s1) >>> 0;
+        cpu.setRegister(r, t === 0 ? 32 : 31 - Math.clz32(t & -t));
       } else if (imu === 0b011000000010) {
         // cpop (Zbb)
-        let t = rs.getRegister(s1) >>> 0;
+        let t = cpu.getRegister(s1) >>> 0;
         t = t - ((t >> 1) & 0x55555555);
         t = (t & 0x33333333) + ((t >> 2) & 0x33333333);
-        rs.setRegister(r, (((t + (t >> 4)) & 0xf0f0f0f) * 0x1010101) >> 24);
+        cpu.setRegister(r, (((t + (t >> 4)) & 0xf0f0f0f) * 0x1010101) >> 24);
       } else if (imu === 0b011000000101) {
         // sext.h (Zbb)
-        rs.setRegister(r, signExtend16(rs.getRegisterU(s1) & 0xffff));
+        cpu.setRegister(r, signExtend16(cpu.getRegisterU(s1) & 0xffff));
       } else if (imu === 0b011000000100) {
         // sext.b (Zbb)
-        rs.setRegister(r, signExtend8(rs.getRegisterU(s1) & 0xff));
+        cpu.setRegister(r, signExtend8(cpu.getRegisterU(s1) & 0xff));
       } else if (
         (inst & 0b11111111111100000111000001111111) ===
         0b01100000000000000001000000010011
       ) {
-        rs.setRegister(r, Math.clz32(rs.getRegisterU(s1))); // clz (Zbb)
+        cpu.setRegister(r, Math.clz32(cpu.getRegisterU(s1))); // clz (Zbb)
       } else if (imu === 0b000010001111) {
         // zip (Zbkb) — interleave: even bits from high half, odd bits from low half
-        const u = rs.getRegisterU(s1);
+        const u = cpu.getRegisterU(s1);
         let result = 0;
         for (let i = 0; i < 16; i++) {
           result |= ((u >>> (16 + i)) & 1) << (2 * i); // even positions
           result |= ((u >>> i) & 1) << (2 * i + 1); // odd positions
         }
-        rs.setRegisterU(r, result >>> 0);
+        cpu.setRegisterU(r, result >>> 0);
       } else throw Error(`Unknown OP-IMM func3=1, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x2:
-      rs.setRegister(r, rs.getRegister(s1) < imm_i(inst) ? 1 : 0);
+      cpu.setRegister(r, cpu.getRegister(s1) < imm_i(inst) ? 1 : 0);
       break; // slti
     case 0x3:
-      rs.setRegister(r, rs.getRegisterU(s1) < immU_i(inst) ? 1 : 0);
+      cpu.setRegister(r, cpu.getRegisterU(s1) < immU_i(inst) ? 1 : 0);
       break; // sltiu
     case 0x4:
-      rs.setRegister(r, rs.getRegister(s1) ^ imm_i(inst));
+      cpu.setRegister(r, cpu.getRegister(s1) ^ imm_i(inst));
       break; // xori
     case 0x5: {
       // srli / srai / bexti / rori / rev8 / orc.b / brev8
       const sh = shamt(inst),
         f7 = func7(inst),
         imu = immU_i(inst),
-        v = rs.getRegister(s1);
-      if (f7 === 0x00) rs.setRegister(r, v >>> sh); // srli
-      else if (f7 === 0x20) rs.setRegister(r, v >> sh); // srai
-      else if (f7 === 0x24) rs.setRegister(r, (v >>> sh) & 1); // bexti (Zbs)
+        v = cpu.getRegister(s1);
+      if (f7 === 0x00) cpu.setRegister(r, v >>> sh); // srli
+      else if (f7 === 0x20) cpu.setRegister(r, v >> sh); // srai
+      else if (f7 === 0x24) cpu.setRegister(r, (v >>> sh) & 1); // bexti (Zbs)
       else if (f7 === 0x30) {
         // rori (Zbb)
-        const u = rs.getRegisterU(s1);
-        rs.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
+        const u = cpu.getRegisterU(s1);
+        cpu.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
       } else if (imu === 0x698) {
         // rev8 (Zbb)
-        rs.setRegisterU(
+        cpu.setRegisterU(
           r,
           ((v >>> 24) |
             ((v >>> 8) & 0xff00) |
@@ -923,7 +914,7 @@ function executeOpImm(inst: number, cpu: CPU) {
         );
       } else if (imu === 0x687) {
         // brev8 (Zbkb) — reverse bits within each byte
-        const u = rs.getRegisterU(s1);
+        const u = cpu.getRegisterU(s1);
         let result = 0;
         for (let i = 0; i < 32; i += 8) {
           let by = (u >>> i) & 0xff;
@@ -932,32 +923,32 @@ function executeOpImm(inst: number, cpu: CPU) {
           by = ((by & 0xaa) >> 1) | ((by & 0x55) << 1);
           result |= by << i;
         }
-        rs.setRegisterU(r, result >>> 0);
+        cpu.setRegisterU(r, result >>> 0);
       } else if (imu === 0x287) {
         // orc.b (Zbb) — broadcast bit 7 of each byte across all 8 bits
-        const u = rs.getRegisterU(s1);
+        const u = cpu.getRegisterU(s1);
         let result = 0;
         for (let i = 0; i < 32; i += 8) {
           if (u & (0x80 << i)) result |= 0xff << i;
         }
-        rs.setRegisterU(r, result >>> 0);
+        cpu.setRegisterU(r, result >>> 0);
       } else if (imu === 0b000010001111) {
         // unzip (Zbkb) — deinterleave: odd bits to low half, even bits to high half
-        const u = rs.getRegisterU(s1);
+        const u = cpu.getRegisterU(s1);
         let result = 0;
         for (let i = 0; i < 16; i++) {
           result |= ((u >>> (2 * i + 1)) & 1) << i; // odd positions -> low half
           result |= ((u >>> (2 * i)) & 1) << (16 + i); // even positions -> high half
         }
-        rs.setRegisterU(r, result >>> 0);
+        cpu.setRegisterU(r, result >>> 0);
       } else throw Error(`Unknown OP-IMM func3=5, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x6:
-      rs.setRegister(r, rs.getRegister(s1) | imm_i(inst));
+      cpu.setRegister(r, cpu.getRegister(s1) | imm_i(inst));
       break; // ori
     case 0x7:
-      rs.setRegister(r, rs.getRegister(s1) & imm_i(inst));
+      cpu.setRegister(r, cpu.getRegister(s1) & imm_i(inst));
       break; // andi
     default:
       throw Error(`Invalid OP-IMM func3 ${func3(inst)}`);
@@ -968,8 +959,8 @@ function executeOpImm(inst: number, cpu: CPU) {
 function executeStore(inst: number, cpu: CPU) {
   const s1 = rs1(inst),
     s2 = rs2(inst);
-  const addr = cpu.registerSet.getRegister(s1) + imm_s(inst);
-  const v = cpu.registerSet.getRegister(s2);
+  const addr = cpu.getRegister(s1) + imm_s(inst);
+  const v = cpu.getRegister(s2);
   switch (func3(inst)) {
     case 0x0:
       cpu.chip.writeUint8(addr, v & 0xff);
@@ -993,13 +984,12 @@ function executeAmo(inst: number, cpu: CPU) {
   const r = rd(inst),
     s1 = rs1(inst),
     s2 = rs2(inst);
-  const rs = cpu.registerSet,
-    chip = cpu.chip;
-  const addr = rs.getRegisterU(s1);
+  const chip = cpu.chip;
+  const addr = cpu.getRegisterU(s1);
 
   // lr.w: load + set reservation (no write)
   if (funct5 === 0x02) {
-    rs.setRegisterU(r, chip.readUint32(addr));
+    cpu.setRegisterU(r, chip.readUint32(addr));
     cpu.lr_addr = addr & ~0xf;
     cpu.otherCore.invalidateLrReservation(addr);
     cpu.cycles += 3;
@@ -1009,19 +999,19 @@ function executeAmo(inst: number, cpu: CPU) {
   // sc.w: conditional store; rd=0 on success, rd=1 on failure
   if (funct5 === 0x03) {
     if (cpu.lr_addr === (addr & ~0xf)) {
-      chip.writeUint32(addr, rs.getRegisterU(s2));
-      rs.setRegisterU(r, 0);
+      chip.writeUint32(addr, cpu.getRegisterU(s2));
+      cpu.setRegisterU(r, 0);
     } else {
-      rs.setRegisterU(r, 1);
+      cpu.setRegisterU(r, 1);
     }
     cpu.lr_addr = -1;
     cpu.cycles += 3;
     return;
   }
 
-  const v = rs.getRegisterU(s2);
+  const v = cpu.getRegisterU(s2);
   const mem = chip.readUint32(addr);
-  rs.setRegisterU(r, mem);
+  cpu.setRegisterU(r, mem);
   // AMO store + invalidate other hart's reservation
   const amoStore = (val: number): void => {
     chip.writeUint32(addr, val);
@@ -1072,39 +1062,38 @@ function executeOp(inst: number, cpu: CPU) {
   const r = rd(inst),
     s1 = rs1(inst),
     s2 = rs2(inst);
-  const rs = cpu.registerSet;
   switch (func3(inst)) {
     case 0x0: {
-      const a = rs.getRegister(s1),
-        b = rs.getRegister(s2),
+      const a = cpu.getRegister(s1),
+        b = cpu.getRegister(s2),
         f7 = func7(inst);
-      if (f7 === 0x00) rs.setRegister(r, a + b); // add
-      else if (f7 === 0x20) rs.setRegister(r, a - b); // sub
-      else if (f7 === 0x01) rs.setRegister(r, Math.imul(a, b)); // mul (RV32M)
+      if (f7 === 0x00) cpu.setRegister(r, a + b); // add
+      else if (f7 === 0x20) cpu.setRegister(r, a - b); // sub
+      else if (f7 === 0x01) cpu.setRegister(r, Math.imul(a, b)); // mul (RV32M)
       else throw Error(`Unknown OP func3=0, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x1: {
-      const a = rs.getRegister(s1),
-        b = rs.getRegisterU(s2),
+      const a = cpu.getRegister(s1),
+        b = cpu.getRegisterU(s2),
         f7 = func7(inst);
-      if (f7 === 0x00) rs.setRegister(r, a << b); // sll
+      if (f7 === 0x00) cpu.setRegister(r, a << b); // sll
       else if (f7 === 0x01) {
         // mulh (RV32M): signed*signed, high 32 bits. Compute the unsigned high
         // product then apply the two's-complement sign corrections, avoiding
         // the float precision loss when the 64-bit product exceeds 2^53.
-        const bs = rs.getRegister(s2);
+        const bs = cpu.getRegister(s2);
         let hi = umulh(a >>> 0, bs >>> 0);
         if (a < 0) hi = (hi - (bs >>> 0)) | 0;
         if (bs < 0) hi = (hi - (a >>> 0)) | 0;
-        rs.setRegister(r, hi);
-      } else if (f7 === 0x14) rs.setRegister(r, a | (1 << (b & 31))); // bset (Zbs)
-      else if (f7 === 0x24) rs.setRegister(r, a & ~(1 << (b & 31))); // bclr (Zbs)
+        cpu.setRegister(r, hi);
+      } else if (f7 === 0x14) cpu.setRegister(r, a | (1 << (b & 31))); // bset (Zbs)
+      else if (f7 === 0x24) cpu.setRegister(r, a & ~(1 << (b & 31))); // bclr (Zbs)
       else if (f7 === 0x30) {
         // rol (Zbb)
         const sh = b & 31;
-        rs.setRegister(r, ((a << sh) | (a >>> (32 - sh))) >>> 0);
-      } else if (f7 === 0x34) rs.setRegister(r, a ^ (1 << (b & 31))); // binv (Zbs)
+        cpu.setRegister(r, ((a << sh) | (a >>> (32 - sh))) >>> 0);
+      } else if (f7 === 0x34) cpu.setRegister(r, a ^ (1 << (b & 31))); // binv (Zbs)
       else throw Error(`Unknown OP func3=1, func7: 0x${f7.toString(16)}`);
       break;
     }
@@ -1133,98 +1122,98 @@ function executeOp(inst: number, cpu: CPU) {
             return;
           }
         }
-        rs.setRegister(r, rs.getRegister(s1) < rs.getRegister(s2) ? 1 : 0);
+        cpu.setRegister(r, cpu.getRegister(s1) < cpu.getRegister(s2) ? 1 : 0);
       } else if (f7 === 0x01) {
         // mulhsu (RV32M): signed * unsigned, high 32 bits. Unsigned high product
         // plus the single sign correction for rs1; umulh keeps it float-exact.
-        const a = rs.getRegister(s1); // signed
-        const b = rs.getRegisterU(s2); // unsigned
+        const a = cpu.getRegister(s1); // signed
+        const b = cpu.getRegisterU(s2); // unsigned
         let hi = umulh(a >>> 0, b);
         if (a < 0) hi = (hi - b) | 0;
-        rs.setRegister(r, hi);
+        cpu.setRegister(r, hi);
       } else if (f7 === 0x10) {
         // sh1add (Zbb)
-        rs.setRegister(r, ((rs.getRegister(s1) << 1) + rs.getRegister(s2)) & 0xffffffff);
+        cpu.setRegister(r, ((cpu.getRegister(s1) << 1) + cpu.getRegister(s2)) & 0xffffffff);
       } else throw Error(`Unknown OP func3=2, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x3: {
-      const a = rs.getRegisterU(s1),
-        b = rs.getRegisterU(s2),
+      const a = cpu.getRegisterU(s1),
+        b = cpu.getRegisterU(s2),
         f7 = func7(inst);
-      if (f7 === 0x00) rs.setRegister(r, a < b ? 1 : 0); // sltu
-      else if (f7 === 0x01) rs.setRegisterU(r, umulh(a, b)); // mulhu (RV32M), float-exact
+      if (f7 === 0x00) cpu.setRegister(r, a < b ? 1 : 0); // sltu
+      else if (f7 === 0x01) cpu.setRegisterU(r, umulh(a, b)); // mulhu (RV32M), float-exact
       else throw Error(`Unknown OP func3=3, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x4: {
-      const a = rs.getRegister(s1),
-        b = rs.getRegister(s2),
+      const a = cpu.getRegister(s1),
+        b = cpu.getRegister(s2),
         f7 = func7(inst);
-      if (f7 === 0x00) rs.setRegister(r, a ^ b); // xor
+      if (f7 === 0x00) cpu.setRegister(r, a ^ b); // xor
       else if (f7 === 0x01) {
         // div (RV32M)
-        if (b === 0) rs.setRegisterU(r, 0xffffffff);
-        else if (a >>> 0 === 0x80000000 && b >>> 0 === 0xffffffff) rs.setRegisterU(r, 0x80000000);
-        else rs.setRegister(r, (a / b) | 0);
+        if (b === 0) cpu.setRegisterU(r, 0xffffffff);
+        else if (a >>> 0 === 0x80000000 && b >>> 0 === 0xffffffff) cpu.setRegisterU(r, 0x80000000);
+        else cpu.setRegister(r, (a / b) | 0);
         cpu.cycles += 17;
-      } else if (f7 === 0x10) rs.setRegister(r, ((a << 2) + b) & 0xffffffff); // sh2add (Zbb)
-      else if (f7 === 0x04) rs.setRegister(r, (a & 0xffff) | ((b & 0xffff) << 16)); // pack (Zbkb)
-      else if (f7 === 0x05) rs.setRegister(r, a < b ? a : b); // min (Zbb)
-      else if (f7 === 0x20) rs.setRegister(r, ~a ^ b); // xnor (Zbb)
+      } else if (f7 === 0x10) cpu.setRegister(r, ((a << 2) + b) & 0xffffffff); // sh2add (Zbb)
+      else if (f7 === 0x04) cpu.setRegister(r, (a & 0xffff) | ((b & 0xffff) << 16)); // pack (Zbkb)
+      else if (f7 === 0x05) cpu.setRegister(r, a < b ? a : b); // min (Zbb)
+      else if (f7 === 0x20) cpu.setRegister(r, ~a ^ b); // xnor (Zbb)
       else throw Error(`Unknown OP func3=4, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x5: {
-      const a = rs.getRegister(s1),
-        b = rs.getRegister(s2),
+      const a = cpu.getRegister(s1),
+        b = cpu.getRegister(s2),
         f7 = func7(inst);
-      if (f7 === 0x00) rs.setRegister(r, a >>> b); // srl
+      if (f7 === 0x00) cpu.setRegister(r, a >>> b); // srl
       else if (f7 === 0x05) {
         // minu (Zbb)
         const u1 = a >>> 0,
           u2 = b >>> 0;
-        rs.setRegister(r, u1 < u2 ? u1 : u2);
-      } else if (f7 === 0x20) rs.setRegister(r, a >> b); // sra
-      else if (f7 === 0x24) rs.setRegister(r, (a >>> (b & 31)) & 1); // bext (Zbs)
+        cpu.setRegister(r, u1 < u2 ? u1 : u2);
+      } else if (f7 === 0x20) cpu.setRegister(r, a >> b); // sra
+      else if (f7 === 0x24) cpu.setRegister(r, (a >>> (b & 31)) & 1); // bext (Zbs)
       else if (f7 === 0x30) {
         // ror (Zbb)
         const sh = b & 31;
-        const u = rs.getRegisterU(s1);
-        rs.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
+        const u = cpu.getRegisterU(s1);
+        cpu.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
       } else if (f7 === 0x01) {
         // divu (RV32M)
-        if (b === 0) rs.setRegisterU(r, 0xffffffff);
-        else rs.setRegister(r, ((a >>> 0) / (b >>> 0)) >>> 0);
+        if (b === 0) cpu.setRegisterU(r, 0xffffffff);
+        else cpu.setRegister(r, ((a >>> 0) / (b >>> 0)) >>> 0);
         cpu.cycles += 17;
       } else throw Error(`Unknown OP func3=5, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x6: {
-      const a = rs.getRegister(s1),
-        b = rs.getRegister(s2),
+      const a = cpu.getRegister(s1),
+        b = cpu.getRegister(s2),
         f7 = func7(inst);
-      if (f7 === 0x00) rs.setRegister(r, a | b); // or
+      if (f7 === 0x00) cpu.setRegister(r, a | b); // or
       else if (f7 === 0x01) {
-        rs.setRegister(r, b === 0 ? a : a % b);
+        cpu.setRegister(r, b === 0 ? a : a % b);
         cpu.cycles += 17;
       } // rem (RV32M)
-      else if (f7 === 0x05) rs.setRegister(r, a > b ? a : b); // max (Zbb)
-      else if (f7 === 0x20) rs.setRegister(r, a | ~b); // orn (Zbb)
-      else if (f7 === 0x10) rs.setRegister(r, ((a << 3) + b) & 0xffffffff); // sh3add (Zbb)
+      else if (f7 === 0x05) cpu.setRegister(r, a > b ? a : b); // max (Zbb)
+      else if (f7 === 0x20) cpu.setRegister(r, a | ~b); // orn (Zbb)
+      else if (f7 === 0x10) cpu.setRegister(r, ((a << 3) + b) & 0xffffffff); // sh3add (Zbb)
       else throw Error(`Unknown OP func3=6, func7: 0x${f7.toString(16)}`);
       break;
     }
     case 0x7: {
-      const a = rs.getRegister(s1),
-        b = rs.getRegister(s2),
+      const a = cpu.getRegister(s1),
+        b = cpu.getRegister(s2),
         f7 = func7(inst);
-      if (f7 === 0x00) rs.setRegister(r, a & b); // and
-      else if (f7 === 0x20) rs.setRegister(r, a & ~b); // andn (Zbb)
-      else if (f7 === 0x04) rs.setRegister(r, (a & 0xff) | ((b & 0xff) << 8)); // packh (Zbkb)
-      else if (f7 === 0x05) rs.setRegisterU(r, (a >>> 0 > b >>> 0 ? a : b) >>> 0); // maxu (Zbb)
+      if (f7 === 0x00) cpu.setRegister(r, a & b); // and
+      else if (f7 === 0x20) cpu.setRegister(r, a & ~b); // andn (Zbb)
+      else if (f7 === 0x04) cpu.setRegister(r, (a & 0xff) | ((b & 0xff) << 8)); // packh (Zbkb)
+      else if (f7 === 0x05) cpu.setRegisterU(r, (a >>> 0 > b >>> 0 ? a : b) >>> 0); // maxu (Zbb)
       else if (f7 === 0x01) {
-        rs.setRegisterU(r, (b === 0 ? a : (a >>> 0) % (b >>> 0)) >>> 0);
+        cpu.setRegisterU(r, (b === 0 ? a : (a >>> 0) % (b >>> 0)) >>> 0);
         cpu.cycles += 17;
       } // remu (RV32M)
       else throw Error(`Unknown OP func3=7, func7: 0x${f7.toString(16)}`);
@@ -1240,26 +1229,25 @@ function executeBranch(inst: number, cpu: CPU) {
   const s1 = rs1(inst),
     s2 = rs2(inst),
     im = imm_b(inst);
-  const rs = cpu.registerSet;
   let taken = false;
   switch (func3(inst)) {
     case 0x0:
-      taken = rs.getRegister(s1) === rs.getRegister(s2);
+      taken = cpu.getRegister(s1) === cpu.getRegister(s2);
       break; // beq
     case 0x1:
-      taken = rs.getRegister(s1) !== rs.getRegister(s2);
+      taken = cpu.getRegister(s1) !== cpu.getRegister(s2);
       break; // bne
     case 0x4:
-      taken = rs.getRegister(s1) < rs.getRegister(s2);
+      taken = cpu.getRegister(s1) < cpu.getRegister(s2);
       break; // blt
     case 0x5:
-      taken = rs.getRegister(s1) >= rs.getRegister(s2);
+      taken = cpu.getRegister(s1) >= cpu.getRegister(s2);
       break; // bge
     case 0x6:
-      taken = rs.getRegisterU(s1) < rs.getRegisterU(s2);
+      taken = cpu.getRegisterU(s1) < cpu.getRegisterU(s2);
       break; // bltu
     case 0x7:
-      taken = rs.getRegisterU(s1) >= rs.getRegisterU(s2);
+      taken = cpu.getRegisterU(s1) >= cpu.getRegisterU(s2);
       break; // bgeu
     default:
       throw Error(`Invalid BRANCH func3 ${func3(inst)}`);
@@ -1272,20 +1260,20 @@ function executeBranch(inst: number, cpu: CPU) {
 function executeJalr(inst: number, cpu: CPU) {
   if (func3(inst) !== 0) throw Error(`Invalid JALR func3 ${func3(inst)}`);
   // Read rs1 before writing rd - they may be the same register (e.g. jalr ra, ra, imm).
-  const target = cpu.registerSet.getRegister(rs1(inst)) + imm_i(inst);
-  cpu.registerSet.setRegister(rd(inst), cpu.pc + cpu.inst_length);
+  const target = cpu.getRegister(rs1(inst)) + imm_i(inst);
+  cpu.setRegister(rd(inst), cpu.pc + cpu.inst_length);
   cpu.next_pc = target;
   cpu.cycles++;
 }
 
 // LUI (0x37) - U-type. Top 20 bits of the immediate land directly in rd.
 function executeLui(inst: number, cpu: CPU) {
-  cpu.registerSet.setRegisterU(rd(inst), imm_u(inst));
+  cpu.setRegisterU(rd(inst), imm_u(inst));
 }
 
 // AUIPC (0x17) - U-type. rd = pc + upper-immediate.
 function executeAuipc(inst: number, cpu: CPU) {
-  cpu.registerSet.setRegister(rd(inst), imm_u(inst) + cpu.pc);
+  cpu.setRegister(rd(inst), imm_u(inst) + cpu.pc);
 }
 
 // Profiler trace magic: a 0xabcd/0xffff marker at magicStart signals that a
@@ -1310,7 +1298,7 @@ export function checkTraceMagic(cpu: CPU, magicStart: number) {
 
 // JAL (0x6f) - J-type. Link register gets pc+inst_length, then jump.
 function executeJal(inst: number, cpu: CPU) {
-  cpu.registerSet.setRegister(rd(inst), cpu.pc + cpu.inst_length);
+  cpu.setRegister(rd(inst), cpu.pc + cpu.inst_length);
   checkTraceMagic(cpu, cpu.pc + cpu.inst_length);
   cpu.next_pc = cpu.pc + imm_j(inst);
   cpu.cycles++;
@@ -1318,7 +1306,6 @@ function executeJal(inst: number, cpu: CPU) {
 
 // SYSTEM (0x73) - CSR ops + mret/ecall/ebreak
 function executeSystem(inst: number, cpu: CPU) {
-  const rs = cpu.registerSet;
   switch (func3(inst)) {
     case 0x0: {
       // mret / ecall / ebreak - dispatched by the full 32-bit word
@@ -1361,8 +1348,8 @@ function executeSystem(inst: number, cpu: CPU) {
       const csr = immU_i(inst),
         r = rd(inst),
         s1 = rs1(inst);
-      const newVal = rs.getRegister(s1);
-      if (r !== 0) rs.setRegister(r, cpu.getCSR(csr, newVal));
+      const newVal = cpu.getRegister(s1);
+      if (r !== 0) cpu.setRegister(r, cpu.getCSR(csr, newVal));
       cpu.setCSR(csr, newVal, newVal);
       break;
     }
@@ -1371,10 +1358,10 @@ function executeSystem(inst: number, cpu: CPU) {
       const csr = immU_i(inst),
         r = rd(inst),
         s1 = rs1(inst);
-      const orVal = rs.getRegister(s1);
+      const orVal = cpu.getRegister(s1);
       const old = cpu.getCSR(csr, orVal);
       if (s1 !== 0) cpu.setCSR(csr, old | orVal, orVal);
-      rs.setRegister(r, old);
+      cpu.setRegister(r, old);
       break;
     }
     case 0x3: {
@@ -1382,10 +1369,10 @@ function executeSystem(inst: number, cpu: CPU) {
       const csr = immU_i(inst),
         r = rd(inst),
         s1 = rs1(inst);
-      const notVal = rs.getRegister(s1);
+      const notVal = cpu.getRegister(s1);
       const old = cpu.getCSR(csr, notVal);
       if (notVal !== 0) cpu.setCSR(csr, old & ~notVal, notVal);
-      rs.setRegister(r, old);
+      cpu.setRegister(r, old);
       break;
     }
     case 0x5: {
@@ -1393,7 +1380,7 @@ function executeSystem(inst: number, cpu: CPU) {
       const csr = immU_i(inst),
         r = rd(inst),
         imm5 = rs1(inst);
-      if (r !== 0) rs.setRegister(r, cpu.getCSR(csr, imm5));
+      if (r !== 0) cpu.setRegister(r, cpu.getCSR(csr, imm5));
       cpu.setCSR(csr, imm5, imm5);
       break;
     }
@@ -1404,7 +1391,7 @@ function executeSystem(inst: number, cpu: CPU) {
         imm5 = rs1(inst);
       const old = cpu.getCSR(csr, imm5);
       if (imm5 !== 0) cpu.setCSR(csr, old | imm5, imm5);
-      rs.setRegister(r, old);
+      cpu.setRegister(r, old);
       break;
     }
     case 0x7: {
@@ -1414,7 +1401,7 @@ function executeSystem(inst: number, cpu: CPU) {
         imm5 = rs1(inst);
       const old = cpu.getCSR(csr, imm5);
       if (imm5 !== 0) cpu.setCSR(csr, old & ~imm5, imm5);
-      rs.setRegister(r, old);
+      cpu.setRegister(r, old);
       break;
     }
     default:
@@ -1428,13 +1415,13 @@ function executeCustom0(inst: number, cpu: CPU) {
   const size = (inst >>> 26) & 0b111;
   if (c_ident === 0b00000000000000000000000000001011) {
     // h3.bextm - shift amount from rs2 register
-    const sh = cpu.registerSet.getRegisterU(rs2(inst));
-    const v = cpu.registerSet.getRegisterU(rs1(inst)) >>> sh;
-    cpu.registerSet.setRegisterU(rd(inst), v & ((2 << size) - 1));
+    const sh = cpu.getRegisterU(rs2(inst));
+    const v = cpu.getRegisterU(rs1(inst)) >>> sh;
+    cpu.setRegisterU(rd(inst), v & ((2 << size) - 1));
   } else if (c_ident === 0b00000000000000000100000000001011) {
     // h3.bextmi - shift amount is the immediate rs2 field
-    const v = cpu.registerSet.getRegisterU(rs1(inst)) >>> rs2(inst);
-    cpu.registerSet.setRegisterU(rd(inst), v & ((2 << size) - 1));
+    const v = cpu.getRegisterU(rs1(inst)) >>> rs2(inst);
+    cpu.setRegisterU(rd(inst), v & ((2 << size) - 1));
   } else {
     throw Error(`Invalid CUSTOM0 instruction 0x${inst.toString(16)}`);
   }

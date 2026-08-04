@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
           for (int i = 16; i < 32; i++) fprintf(stderr, " x%d=0x%08x", i, 0u);
         } else {
           for (int i = 0; i < 32; i++)
-            fprintf(stderr, " x%d=0x%08x", i, (uint32_t)core0->registerSet->regs[i]);
+            fprintf(stderr, " x%d=0x%08x", i, (uint32_t)core0->regs[i]);
         }
         fprintf(stderr, "\n");
       }

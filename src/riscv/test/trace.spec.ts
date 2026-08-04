@@ -115,7 +115,7 @@ describe('RISC-V profiler trace magic', () => {
 
     expect(onTrace).toHaveBeenCalledOnce();
     expect(onTrace).toHaveBeenCalledWith(cpu.mhartid, SCRATCH, 'call');
-    expect(cpu.registerSet.getRegisterU(1)).toBe(SCRATCH + 2);
+    expect(cpu.getRegisterU(1)).toBe(SCRATCH + 2);
     expect(cpu.pc).toBe(SCRATCH + 4);
   });
 });

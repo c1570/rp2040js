@@ -113,7 +113,7 @@ describe.skipIf(!gdbAvailable)('GDB integration (real gdb binary)', () => {
   });
 
   test('connect and read registers', async () => {
-    chip.core0.registerSet.setRegisterU(1, 0xdeadbeef);
+    chip.core0.setRegisterU(1, 0xdeadbeef);
     chip.core0.pc = SCRATCH;
 
     const output = await runGdbSession(port, [
@@ -189,7 +189,7 @@ describe.skipIf(!gdbAvailable)('GDB integration (real gdb binary)', () => {
     chip.writeUint32(SCRATCH + 4, 0x00128293); // addi x5, x5, 1
     chip.writeUint32(SCRATCH + 8, 0xffdff06f); // j -4 (back to SCRATCH+4)
     chip.core0.pc = SCRATCH;
-    chip.core0.registerSet.setRegisterU(5, 0);
+    chip.core0.setRegisterU(5, 0);
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -229,8 +229,8 @@ describe.skipIf(!gdbAvailable)('GDB integration (real gdb binary)', () => {
     chip.writeUint32(SCRATCH + 4, 0x00128313); // addi x6, x5, 1
     chip.writeUint32(SCRATCH + 8, 0xffdff06f); // j -4
     chip.core0.pc = SCRATCH;
-    chip.core0.registerSet.setRegisterU(5, 0);
-    chip.core0.registerSet.setRegisterU(6, 0);
+    chip.core0.setRegisterU(5, 0);
+    chip.core0.setRegisterU(6, 0);
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -267,8 +267,8 @@ describe.skipIf(!gdbAvailable)('GDB integration (real gdb binary)', () => {
   test('switch to core 1 and read/write registers', async () => {
     // Unpark core1 and give it a distinct register state
     chip.core1.waiting = false;
-    chip.core0.registerSet.setRegisterU(5, 0x11111111);
-    chip.core1.registerSet.setRegisterU(5, 0x22222222);
+    chip.core0.setRegisterU(5, 0x11111111);
+    chip.core1.setRegisterU(5, 0x22222222);
     // Park both cores so continue/step don't interfere
     chip.core0.waiting = true;
     chip.core1.waiting = true;
@@ -292,9 +292,9 @@ describe.skipIf(!gdbAvailable)('GDB integration (real gdb binary)', () => {
     expect(prints![1]).toMatch(/0x22222222/i); // core 1 x5
     expect(prints![2]).toMatch(/0xdeadbeef/i); // core 1 x5 after write
     // Verify the write reached the emulator
-    expect(chip.core1.registerSet.getRegisterU(5)).toBe(0xdeadbeef);
+    expect(chip.core1.getRegisterU(5)).toBe(0xdeadbeef);
     // Core 0 should be untouched
-    expect(chip.core0.registerSet.getRegisterU(5)).toBe(0x11111111);
+    expect(chip.core0.getRegisterU(5)).toBe(0x11111111);
   });
 
   test('single-step core 1 independently', async () => {
@@ -335,13 +335,13 @@ describe.skipIf(!gdbAvailable)('GDB integration (real gdb binary)', () => {
     chip.writeUint32(SCRATCH, 0x00128293); // addi x5, x5, 1
     chip.writeUint32(SCRATCH + 4, 0xffdff06f); // j -4
     chip.core0.pc = SCRATCH;
-    chip.core0.registerSet.setRegisterU(5, 0);
+    chip.core0.setRegisterU(5, 0);
 
     // Core 1 program: addi x6, x6, 1 then j back
     chip.writeUint32(SCRATCH + 0x100, 0x00130313); // addi x6, x6, 1
     chip.writeUint32(SCRATCH + 0x104, 0xffdff06f); // j -4
     chip.core1.pc = SCRATCH + 0x100;
-    chip.core1.registerSet.setRegisterU(6, 0);
+    chip.core1.setRegisterU(6, 0);
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,

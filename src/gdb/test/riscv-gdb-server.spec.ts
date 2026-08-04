@@ -107,7 +107,7 @@ describe('RISC-V GDB Server', () => {
 
   describe('register access', () => {
     test('read all registers (g)', () => {
-      chip.core0.registerSet.setRegisterU(1, 0xdeadbeef);
+      chip.core0.setRegisterU(1, 0xdeadbeef);
       chip.core0.pc = 0x20000100;
 
       const r = payload(server.processGDBMessage('g'));
@@ -121,7 +121,7 @@ describe('RISC-V GDB Server', () => {
     });
 
     test('read single register (p)', () => {
-      chip.core0.registerSet.setRegisterU(5, 0x12345678);
+      chip.core0.setRegisterU(5, 0x12345678);
 
       const r = payload(server.processGDBMessage('p05'));
       expect(r).toBe('78563412'); // little-endian hex
@@ -141,7 +141,7 @@ describe('RISC-V GDB Server', () => {
 
     test('write single register (P)', () => {
       server.processGDBMessage('P05=78563412'); // 0x12345678 LE
-      expect(chip.core0.registerSet.getRegisterU(5)).toBe(0x12345678);
+      expect(chip.core0.getRegisterU(5)).toBe(0x12345678);
     });
 
     test('write pc register', () => {
@@ -159,8 +159,8 @@ describe('RISC-V GDB Server', () => {
 
     test('register access targets selected core', () => {
       // Set different values in each core
-      chip.core0.registerSet.setRegisterU(1, 0xaaaaaaaa);
-      chip.core1.registerSet.setRegisterU(1, 0xbbbbbbbb);
+      chip.core0.setRegisterU(1, 0xaaaaaaaa);
+      chip.core1.setRegisterU(1, 0xbbbbbbbb);
 
       // Default is core 0
       expect(decodeRegs(payload(server.processGDBMessage('g')))[1]).toBe(0xaaaaaaaa);

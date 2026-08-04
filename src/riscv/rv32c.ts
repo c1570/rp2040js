@@ -76,8 +76,7 @@ function caddi4spn(cpu: CPU, inst: number): void {
   // addi rd', x2, nzuimm
   const nzuimm = dec_ciw_imm(inst);
   const rd = dec_rd_short(inst);
-  const rs = cpu.registerSet;
-  rs.setRegisterU(rd, (rs.getRegisterU(2) + nzuimm) >>> 0);
+  cpu.setRegisterU(rd, (cpu.getRegisterU(2) + nzuimm) >>> 0);
 }
 
 // C.LW, funct3 = 010, opcode = 00
@@ -86,35 +85,35 @@ function clw(cpu: CPU, inst: number): void {
   const imm = dec_clw_csw_imm(inst);
   const rs1 = dec_rs1_short(inst);
   const rd = dec_rd_short(inst);
-  const addr = cpu.registerSet.getRegisterU(rs1) + imm;
-  cpu.registerSet.setRegisterU(rd, cpu.chip.readUint32(addr));
+  const addr = cpu.getRegisterU(rs1) + imm;
+  cpu.setRegisterU(rd, cpu.chip.readUint32(addr));
 }
 
 // Zcb extension, funct3 = 100, opcode = 00. Sub-op in bits[12:10]
 function zcb_100_00(cpu: CPU, inst: number): void {
-  const base = cpu.registerSet.getRegisterU(dec_rs1_short(inst));
+  const base = cpu.getRegisterU(dec_rs1_short(inst));
   const sub = (inst >>> 10) & 0b111;
   switch (sub) {
     case 0b000: {
       // c.lbu
       const uimm = (((inst >>> 5) & 1) << 1) | ((inst >>> 6) & 1);
       const rd = dec_rd_short(inst);
-      cpu.registerSet.setRegister(rd, cpu.chip.readUint8(base + uimm));
+      cpu.setRegister(rd, cpu.chip.readUint8(base + uimm));
       return;
     }
     case 0b001: {
       const uimm = ((inst >>> 5) & 1) << 1;
       const rd = dec_rd_short(inst);
       const half = cpu.chip.readUint16(base + uimm);
-      if ((inst >>> 6) & 1) cpu.registerSet.setRegister(rd, sign_extend(half, 15)); // c.lh
-      else cpu.registerSet.setRegister(rd, half); // c.lhu
+      if ((inst >>> 6) & 1) cpu.setRegister(rd, sign_extend(half, 15)); // c.lh
+      else cpu.setRegister(rd, half); // c.lhu
       return;
     }
     case 0b010: {
       // c.sb
       const uimm = (((inst >>> 5) & 1) << 1) | ((inst >>> 6) & 1);
       const rs2 = dec_rs2_short(inst);
-      cpu.chip.writeUint8(base + uimm, cpu.registerSet.getRegister(rs2) & 0xff);
+      cpu.chip.writeUint8(base + uimm, cpu.getRegister(rs2) & 0xff);
       return;
     }
     case 0b011: {
@@ -122,7 +121,7 @@ function zcb_100_00(cpu: CPU, inst: number): void {
       // c.sh
       const uimm = ((inst >>> 5) & 1) << 1;
       const rs2 = dec_rs2_short(inst);
-      cpu.chip.writeUint16(base + uimm, cpu.registerSet.getRegister(rs2) & 0xffff);
+      cpu.chip.writeUint16(base + uimm, cpu.getRegister(rs2) & 0xffff);
       return;
     }
   }
@@ -135,7 +134,7 @@ function csw(cpu: CPU, inst: number): void {
   const imm = dec_clw_csw_imm(inst);
   const rs1 = dec_rs1_short(inst);
   const rs2 = dec_rs2_short(inst);
-  cpu.chip.writeUint32(cpu.registerSet.getRegisterU(rs1) + imm, cpu.registerSet.getRegister(rs2));
+  cpu.chip.writeUint32(cpu.getRegisterU(rs1) + imm, cpu.getRegister(rs2));
 }
 
 function cnop(): void {
@@ -151,15 +150,14 @@ function caddi(cpu: CPU, inst: number): void {
   nzimm |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
   nzimm = sign_extend(nzimm, 5);
   if (nzimm === 0) return; // HINT
-  const rs = cpu.registerSet;
-  rs.setRegisterU(rd, (rs.getRegisterU(rd) + nzimm) >>> 0);
+  cpu.setRegisterU(rd, (cpu.getRegisterU(rd) + nzimm) >>> 0);
 }
 
 // C.JAL, funct3 = 001, opcode = 01
 function cjal(cpu: CPU, inst: number): void {
   // jal x1, imm — ra = pc+2, jump to pc+imm
   checkTraceMagic(cpu, cpu.pc + 2);
-  cpu.registerSet.setRegister(1, cpu.pc + 2);
+  cpu.setRegister(1, cpu.pc + 2);
   cpu.next_pc = cpu.pc + dec_cj_imm(inst);
   cpu.cycles++;
 }
@@ -173,7 +171,7 @@ function cli(cpu: CPU, inst: number): void {
   imm |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
   imm = sign_extend(imm, 5);
   if (rd === 0) return; // HINT
-  cpu.registerSet.setRegister(rd, imm);
+  cpu.setRegister(rd, imm);
 }
 
 // C.ADDI16SP, funct3 = 011, opcode = 01
@@ -187,8 +185,7 @@ function caddi16sp(cpu: CPU, inst: number): void {
   nzimm |= (inst & 0x0040) >> 2;
   nzimm = sign_extend(nzimm, 9);
   assert(nzimm !== 0);
-  const rs = cpu.registerSet;
-  rs.setRegisterU(2, (rs.getRegisterU(2) + nzimm) >>> 0);
+  cpu.setRegisterU(2, (cpu.getRegisterU(2) + nzimm) >>> 0);
 }
 
 // C.LUI, funct3 = 011, opcode = 01
@@ -201,7 +198,7 @@ function clui(cpu: CPU, inst: number): void {
   nzimm = sign_extend(nzimm, 17);
   assert(nzimm !== 0);
   if (rd === 0) return; // HINT
-  cpu.registerSet.setRegisterU(rd, nzimm);
+  cpu.setRegisterU(rd, nzimm);
 }
 
 function csrli(cpu: CPU, inst: number): void {
@@ -212,7 +209,7 @@ function csrli(cpu: CPU, inst: number): void {
   shamt |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
   assert(shamt !== 0);
   const rd = dec_rs1_short(inst);
-  cpu.registerSet.setRegister(rd, cpu.registerSet.getRegister(rd) >>> shamt);
+  cpu.setRegister(rd, cpu.getRegister(rd) >>> shamt);
 }
 
 function csrai(cpu: CPU, inst: number): void {
@@ -223,7 +220,7 @@ function csrai(cpu: CPU, inst: number): void {
   shamt |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
   assert(shamt !== 0);
   const rd = dec_rs1_short(inst);
-  cpu.registerSet.setRegister(rd, cpu.registerSet.getRegister(rd) >> shamt);
+  cpu.setRegister(rd, cpu.getRegister(rd) >> shamt);
 }
 
 function candi(cpu: CPU, inst: number): void {
@@ -233,36 +230,32 @@ function candi(cpu: CPU, inst: number): void {
   imm |= (inst & C.CI_MASK_12) >> 7;
   imm |= (inst & (C.CI_MASK_6_4 | C.CI_MASK_3_2)) >> 2;
   imm = sign_extend(imm, 5);
-  cpu.registerSet.setRegister(rd, cpu.registerSet.getRegister(rd) & imm);
+  cpu.setRegister(rd, cpu.getRegister(rd) & imm);
 }
 
 function csub(cpu: CPU, inst: number): void {
   // sub rd', rd', rs2'
   const rd = dec_rs1_short(inst);
   const rs2 = dec_rs2_short(inst);
-  const rs = cpu.registerSet;
-  rs.setRegister(rd, rs.getRegister(rd) - rs.getRegister(rs2));
+  cpu.setRegister(rd, cpu.getRegister(rd) - cpu.getRegister(rs2));
 }
 
 function cxor(cpu: CPU, inst: number): void {
   const rd = dec_rs1_short(inst);
   const rs2 = dec_rs2_short(inst);
-  const rs = cpu.registerSet;
-  rs.setRegister(rd, rs.getRegister(rd) ^ rs.getRegister(rs2));
+  cpu.setRegister(rd, cpu.getRegister(rd) ^ cpu.getRegister(rs2));
 }
 
 function cor(cpu: CPU, inst: number): void {
   const rd = dec_rs1_short(inst);
   const rs2 = dec_rs2_short(inst);
-  const rs = cpu.registerSet;
-  rs.setRegister(rd, rs.getRegister(rd) | rs.getRegister(rs2));
+  cpu.setRegister(rd, cpu.getRegister(rd) | cpu.getRegister(rs2));
 }
 
 function cand(cpu: CPU, inst: number): void {
   const rd = dec_rs1_short(inst);
   const rs2 = dec_rs2_short(inst);
-  const rs = cpu.registerSet;
-  rs.setRegister(rd, rs.getRegister(rd) & rs.getRegister(rs2));
+  cpu.setRegister(rd, cpu.getRegister(rd) & cpu.getRegister(rs2));
 }
 
 // C.J, funct3 = 101, opcode = 01
@@ -278,7 +271,7 @@ function cbeqz(cpu: CPU, inst: number): void {
   // beq rs1', x0, offset
   const offset = dec_branch_imm(inst);
   const rs1 = dec_rs1_short(inst);
-  const taken = cpu.registerSet.getRegister(rs1) === 0;
+  const taken = cpu.getRegister(rs1) === 0;
   if (taken) cpu.next_pc = cpu.pc + offset;
   cpu.h3_branch_cycles(taken);
 }
@@ -288,7 +281,7 @@ function cbenz(cpu: CPU, inst: number): void {
   // bne rs1', x0, offset
   const offset = dec_branch_imm(inst);
   const rs1 = dec_rs1_short(inst);
-  const taken = cpu.registerSet.getRegister(rs1) !== 0;
+  const taken = cpu.getRegister(rs1) !== 0;
   if (taken) cpu.next_pc = cpu.pc + offset;
   cpu.h3_branch_cycles(taken);
 }
@@ -303,7 +296,7 @@ function cslli(cpu: CPU, inst: number): void {
   assert(shamt !== 0);
   const rd = dec_rd(inst);
   if (rd === 0) return; // HINT
-  cpu.registerSet.setRegisterU(rd, cpu.registerSet.getRegisterU(rd) << shamt);
+  cpu.setRegisterU(rd, cpu.getRegisterU(rd) << shamt);
 }
 
 // C.LWSP, funct3 = 010, opcode = 10
@@ -315,15 +308,15 @@ function clwsp(cpu: CPU, inst: number): void {
   offset |= (inst & C.CI_MASK_3_2) << 4;
   const rd = dec_rd(inst);
   assert(rd !== 0);
-  const addr = cpu.registerSet.getRegisterU(2) + offset;
-  cpu.registerSet.setRegisterU(rd, cpu.chip.readUint32(addr));
+  const addr = cpu.getRegisterU(2) + offset;
+  cpu.setRegisterU(rd, cpu.chip.readUint32(addr));
 }
 
 function cjr(cpu: CPU, inst: number): void {
   // jalr x0, rs1, 0 (jump to rs1, no link)
   const rs1 = dec_rs1(inst);
   assert(rs1 !== 0);
-  cpu.next_pc = cpu.registerSet.getRegister(rs1);
+  cpu.next_pc = cpu.getRegister(rs1);
   cpu.cycles++;
 }
 
@@ -333,7 +326,7 @@ function cmv(cpu: CPU, inst: number): void {
   assert(rs2 !== 0);
   const rd = dec_rd(inst);
   if (rd === 0) return; // HINT
-  cpu.registerSet.setRegister(rd, cpu.registerSet.getRegister(rs2));
+  cpu.setRegister(rd, cpu.getRegister(rs2));
 }
 
 function cebreak(cpu: CPU): void {
@@ -345,8 +338,8 @@ function cjalr(cpu: CPU, inst: number): void {
   // jalr x1, rs1, 0 (call)
   const rs1 = dec_rs1(inst);
   assert(rs1 !== 0);
-  cpu.registerSet.setRegister(1, cpu.pc + 2);
-  cpu.next_pc = cpu.registerSet.getRegister(rs1);
+  cpu.setRegister(1, cpu.pc + 2);
+  cpu.next_pc = cpu.getRegister(rs1);
   cpu.cycles++;
 }
 
@@ -356,8 +349,7 @@ function cadd(cpu: CPU, inst: number): void {
   assert(rs2 !== 0);
   const rd = dec_rd(inst);
   if (rd === 0) return; // HINT
-  const rs = cpu.registerSet;
-  rs.setRegister(rd, rs.getRegister(rd) + rs.getRegister(rs2));
+  cpu.setRegister(rd, cpu.getRegister(rd) + cpu.getRegister(rs2));
 }
 
 // C.SWSP, funct3 = 110, opcode = 10
@@ -365,8 +357,8 @@ function cswsp(cpu: CPU, inst: number): void {
   // sw rs2, offset(x2)
   const offset = dec_css_imm(inst);
   const rs2 = dec_rs2(inst);
-  const addr = cpu.registerSet.getRegisterU(2) + offset;
-  cpu.chip.writeUint32(addr, cpu.registerSet.getRegister(rs2));
+  const addr = cpu.getRegisterU(2) + offset;
+  cpu.chip.writeUint32(addr, cpu.getRegister(rs2));
 }
 
 // funct3 = 011, opcode = 01
@@ -411,29 +403,27 @@ function parse_100_01(cpu: CPU, inst: number): void {
           // c.mul (Zcb): mul rd', rd', rs2'
           const rd = dec_rs1_short(inst);
           const rs2 = dec_rs2_short(inst);
-          const rs = cpu.registerSet;
-          rs.setRegister(rd, (rs.getRegister(rd) * rs.getRegister(rs2)) & 0xffffffff);
+          cpu.setRegister(rd, (cpu.getRegister(rd) * cpu.getRegister(rs2)) & 0xffffffff);
           return;
         }
         case 0b111: {
           // Zcb unary ops, sub-op in bits[4:2]
           const rd = dec_rs1_short(inst);
-          const rs = cpu.registerSet;
           switch ((inst >>> 2) & 0b111) {
             case 0b000: // c.zext.b -> andi rd, rd, 0xff
-              rs.setRegister(rd, rs.getRegister(rd) & 0xff);
+              cpu.setRegister(rd, cpu.getRegister(rd) & 0xff);
               return;
             case 0b001: // c.sext.b -> sext.b rd, rd
-              rs.setRegister(rd, sign_extend(rs.getRegisterU(rd) & 0xff, 7));
+              cpu.setRegister(rd, sign_extend(cpu.getRegisterU(rd) & 0xff, 7));
               return;
             case 0b010: // c.zext.h -> zext.h rd, rd (pack rd, rd, x0)
-              rs.setRegister(rd, rs.getRegisterU(rd) & 0xffff);
+              cpu.setRegister(rd, cpu.getRegisterU(rd) & 0xffff);
               return;
             case 0b011: // c.sext.h -> sext.h rd, rd
-              rs.setRegister(rd, sign_extend(rs.getRegisterU(rd) & 0xffff, 15));
+              cpu.setRegister(rd, sign_extend(cpu.getRegisterU(rd) & 0xffff, 15));
               return;
             case 0b101: // c.not -> xori rd, rd, -1
-              rs.setRegister(rd, ~rs.getRegister(rd));
+              cpu.setRegister(rd, ~cpu.getRegister(rd));
               return;
           }
           return;
@@ -486,14 +476,14 @@ function parse_101_10(cpu: CPU, inst: number): void {
       const rlist = (inst & 0b11110000) >>> 4;
       const spimm = (inst & 0b1100) << 2;
       const stack_adj = stack_adj_base[rlist] + spimm;
-      const sp = cpu.registerSet.getRegisterU(2);
+      const sp = cpu.getRegisterU(2);
       let addr = sp - 4;
       for (let reg of xreg_list[rlist]) {
-        cpu.chip.writeUint32(addr, cpu.registerSet.getRegisterU(reg));
+        cpu.chip.writeUint32(addr, cpu.getRegisterU(reg));
         addr -= 4;
         cpu.cycles++;
       }
-      cpu.registerSet.setRegisterU(2, sp - stack_adj);
+      cpu.setRegisterU(2, sp - stack_adj);
       return;
     }
     case 0b1011101000000010: {
@@ -501,14 +491,14 @@ function parse_101_10(cpu: CPU, inst: number): void {
       const rlist = (inst & 0b11110000) >>> 4;
       const spimm = (inst & 0b1100) << 2;
       const stack_adj = stack_adj_base[rlist] + spimm;
-      const sp = cpu.registerSet.getRegisterU(2);
+      const sp = cpu.getRegisterU(2);
       let addr = sp + stack_adj - 4;
       for (let reg of xreg_list[rlist]) {
-        cpu.registerSet.setRegisterU(reg, cpu.chip.readUint32(addr));
+        cpu.setRegisterU(reg, cpu.chip.readUint32(addr));
         addr -= 4;
         cpu.cycles++;
       }
-      cpu.registerSet.setRegisterU(2, sp + stack_adj);
+      cpu.setRegisterU(2, sp + stack_adj);
       return;
     }
     case 0b1011110000000010: {
@@ -516,16 +506,16 @@ function parse_101_10(cpu: CPU, inst: number): void {
       const rlist = (inst & 0b11110000) >>> 4;
       const spimm = (inst & 0b1100) << 2;
       const stack_adj = stack_adj_base[rlist] + spimm;
-      const sp = cpu.registerSet.getRegisterU(2);
+      const sp = cpu.getRegisterU(2);
       let addr = sp + stack_adj - 4;
       for (let reg of xreg_list[rlist]) {
-        cpu.registerSet.setRegisterU(reg, cpu.chip.readUint32(addr));
+        cpu.setRegisterU(reg, cpu.chip.readUint32(addr));
         addr -= 4;
         cpu.cycles++;
       }
-      cpu.registerSet.setRegisterU(2, sp + stack_adj);
-      cpu.registerSet.setRegister(10, 0); // li a0, 0
-      cpu.next_pc = cpu.registerSet.getRegister(1); // ret = jalr x0, x1, 0
+      cpu.setRegisterU(2, sp + stack_adj);
+      cpu.setRegister(10, 0); // li a0, 0
+      cpu.next_pc = cpu.getRegister(1); // ret = jalr x0, x1, 0
       cpu.cycles++;
       return;
     }
@@ -534,15 +524,15 @@ function parse_101_10(cpu: CPU, inst: number): void {
       const rlist = (inst & 0b11110000) >>> 4;
       const spimm = (inst & 0b1100) << 2;
       const stack_adj = stack_adj_base[rlist] + spimm;
-      const sp = cpu.registerSet.getRegisterU(2);
+      const sp = cpu.getRegisterU(2);
       let addr = sp + stack_adj - 4;
       for (let reg of xreg_list[rlist]) {
-        cpu.registerSet.setRegisterU(reg, cpu.chip.readUint32(addr));
+        cpu.setRegisterU(reg, cpu.chip.readUint32(addr));
         addr -= 4;
         cpu.cycles++;
       }
-      cpu.registerSet.setRegisterU(2, sp + stack_adj);
-      cpu.next_pc = cpu.registerSet.getRegister(1); // ret = jalr x0, x1, 0
+      cpu.setRegisterU(2, sp + stack_adj);
+      cpu.next_pc = cpu.getRegister(1); // ret = jalr x0, x1, 0
       cpu.cycles++;
       return;
     }
@@ -552,18 +542,16 @@ function parse_101_10(cpu: CPU, inst: number): void {
       // cm.mvsa01 r1s, r2s (Zcmp) — s0/s1 <- a0/a1
       const r1s = 8 + ((inst >>> 7) & 1);
       const r2s = 8 + ((inst >>> 2) & 1);
-      const rs = cpu.registerSet;
-      rs.setRegister(r1s, rs.getRegister(10));
-      rs.setRegister(r2s, rs.getRegister(11));
+      cpu.setRegister(r1s, cpu.getRegister(10));
+      cpu.setRegister(r2s, cpu.getRegister(11));
       return;
     }
     case 0b1010110001100010: {
       // cm.mva01s r1s, r2s (Zcmp) — a0/a1 <- s0/s1
       const r1s = 8 + ((inst >>> 7) & 1);
       const r2s = 8 + ((inst >>> 2) & 1);
-      const rs = cpu.registerSet;
-      rs.setRegister(10, rs.getRegister(r1s));
-      rs.setRegister(11, rs.getRegister(r2s));
+      cpu.setRegister(10, cpu.getRegister(r1s));
+      cpu.setRegister(11, cpu.getRegister(r2s));
       return;
     }
   }
