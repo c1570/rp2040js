@@ -153,6 +153,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
   }
 
   private updateDMATx() {
+    this.updateFifoStat();
     if (this.txFIFO.full) {
       this.rp2040.dma_clearDREQ(this.dreqTx);
     } else {
@@ -161,6 +162,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
   }
 
   private updateDMARx() {
+    this.updateFifoStat();
     if (this.rxFIFO.empty) {
       this.rp2040.dma_clearDREQ(this.dreqRx);
     } else {
@@ -451,7 +453,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
 
   executeInstruction(opcode: number) {
     const arg = opcode & 0xff;
-    switch (opcode >>> 13) {
+    switch ((opcode >>> 13) & 0x7) {
       /* JMP */
       case 0b000:
         if (this.jmpCondition(arg >> 5)) {
@@ -750,12 +752,13 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
   /** Steps the machine, assuming the caller has already checked `enabled`. */
   stepUnchecked() {
     // Fractional clock divider via phase accumulator: advance by 256 each
-    // sys_clk cycle, execute when phase >= INT*256+FRAC.
-    this.curClockPhase += 256;
-    if (this.curClockPhase < this.clockDiv) {
-      return;
+    if (this.clockDiv !== 256) {
+      this.curClockPhase += 256;
+      if (this.curClockPhase < this.clockDiv) {
+        return;
+      }
+      this.curClockPhase -= this.clockDiv;
     }
-    this.curClockPhase -= this.clockDiv;
 
     this.cycles++;
 
@@ -918,13 +921,15 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
     }
   }
 
-  get fifoStat() {
+  fifoStat = 0;
+
+  updateFifoStat() {
     const result =
       (this.txFIFO.empty ? FSTAT_TXEMPTY : 0) |
       (this.txFIFO.full ? FSTAT_TXFULL : 0) |
       (this.rxFIFO.empty ? FSTAT_RXEMPTY : 0) |
       (this.rxFIFO.full ? FSTAT_RXFULL : 0);
-    return result << this.index;
+    this.fifoStat = result << this.index;
   }
 
   restart() {
@@ -1332,12 +1337,13 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
       this.oldPinDirections = this.pinDirections;
       this.oldPinValues = this.pinValues;
 
-      // Notify GPIO about the changed pins
+      // Notify GPIO about the changed pins: Walks only the set bits
       const { gpio } = this.rp2040;
-      for (let pinIndex = 0; pinIndex < 32; pinIndex++) {
-        if (changedPins & (1 << pinIndex)) {
-          gpio[pinIndex + this.gpiobase].checkForUpdates();
-        }
+      let remaining = changedPins;
+      while (remaining) {
+        const lowest = remaining & -remaining;
+        gpio[31 - Math.clz32(lowest) + this.gpiobase].checkForUpdates();
+        remaining ^= lowest;
       }
     }
   }
