@@ -1339,6 +1339,7 @@ function collectTypes(filepath) {
                   type: `${typedArrayCType(ctor)}*`,
                   isTypedArray: true,
                   taType: ctor,
+                  isReadonly: !!member.readonly,
                   size: member.value.arguments?.[0]?.value,
                   sizeNode: member.value.arguments?.[0],
                 });
@@ -2341,15 +2342,19 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
     if (!field?.initNode) continue;
     const initNode = field.initNode;
 
+    // Inlined typed array: the struct's own calloc already zeroed it.
+    if (field.inlineArray && field.isTypedArray) continue;
+
     // `x: T[] = []` — a growable array (see the collectTypes `isGrowableArray`
     // comment): preallocate GROWABLE_ARRAY_CAPACITY element slots up front and start
     // the companion count at 0, instead of the `elems.every(...)` branch just below
     // (vacuously true on an empty array) calloc'ing a useless 0-byte block.
     if (field.isGrowableArray) {
       const elemType = field.type.slice(0, -1);
-      out.push(
-        `  self->${cName(fname)} = calloc(${GROWABLE_ARRAY_CAPACITY}, sizeof(${elemType}));`
-      );
+      if (!field.inlineArray)
+        out.push(
+          `  self->${cName(fname)} = calloc(${GROWABLE_ARRAY_CAPACITY}, sizeof(${elemType}));`
+        );
       out.push(`  self->${cName(fname)}_count = 0;`);
       continue;
     }
@@ -2370,7 +2375,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
       const ctor = field.type.slice(0, -2);
       const elems = initNode.elements;
       if (elems.every((e) => e?.type === 'NewExpression' && e.callee?.name === ctor)) {
-        out.push(`  self->${cName(fname)} = calloc(${elems.length}, sizeof(${ctor}*));`);
+        if (!field.inlineArray)
+          out.push(`  self->${cName(fname)} = calloc(${elems.length}, sizeof(${ctor}*));`);
         elems.forEach((e, i) => {
           out.push(`  self->${cName(fname)}[${i}] = ${emitExpr(e, className, params, ctx)};`);
         });
@@ -2389,7 +2395,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
       const elems = initNode.elements;
       if (elems.every((e) => e && e.type !== 'NewExpression')) {
         const elemType = field.type.slice(0, -1);
-        out.push(`  self->${cName(fname)} = calloc(${elems.length}, sizeof(${elemType}));`);
+        if (!field.inlineArray)
+          out.push(`  self->${cName(fname)} = calloc(${elems.length}, sizeof(${elemType}));`);
         elems.forEach((e, i) => {
           out.push(`  self->${cName(fname)}[${i}] = ${emitExpr(e, className, params, ctx)};`);
         });
@@ -2409,7 +2416,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
     ) {
       const elemType = field.type.slice(0, -1);
       const size = emitExpr(initNode.arguments[0], className, params, ctx);
-      out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${elemType}));`);
+      if (!field.inlineArray)
+        out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${elemType}));`);
       continue;
     }
     // `x = new Array<T>(N)` — same sized-and-element-less allocation as the bare
@@ -2425,7 +2433,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
     ) {
       const elemType = field.type.slice(0, -1);
       const size = emitExpr(initNode.arguments[0], className, params, ctx);
-      out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${elemType}));`);
+      if (!field.inlineArray)
+        out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${elemType}));`);
       continue;
     }
     // `x: T[] = Array(N).fill(v)` — sized-and-value-filled, no `.map()` (which has its
@@ -2446,7 +2455,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
       const elemType = field.type.slice(0, -1);
       const size = emitExpr(initNode.callee.object.arguments[0], className, params, ctx);
       const fillArg = initNode.arguments[0];
-      out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${elemType}));`);
+      if (!field.inlineArray)
+        out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${elemType}));`);
       if (!(fillArg?.type === 'NumericLiteral' && fillArg.value === 0)) {
         const fillVal = emitExpr(fillArg, className, params, ctx);
         out.push(
@@ -2485,7 +2495,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
         if (mapFn.body.callee?.name === ctor) {
           const size = emitExpr(arraySizeCall.arguments[0], className, params, ctx);
           const idxName = cName(mapFn.params[1]?.name ?? 'i');
-          out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${ctor}*));`);
+          if (!field.inlineArray)
+            out.push(`  self->${cName(fname)} = calloc(${size}, sizeof(${ctor}*));`);
           out.push(`  for (int32_t ${idxName} = 0; ${idxName} < ${size}; ${idxName}++) {`);
           out.push(
             `    self->${cName(fname)}[${idxName}] = ${emitExpr(
@@ -2518,7 +2529,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
       if (props.length > 0 && keyed.every((k) => k.key !== null)) {
         const elemType = field.type.slice(0, -1);
         const maxKey = Math.max(...keyed.map((k) => k.key));
-        out.push(`  self->${cName(fname)} = calloc(${maxKey + 1}, sizeof(${elemType}));`);
+        if (!field.inlineArray)
+          out.push(`  self->${cName(fname)} = calloc(${maxKey + 1}, sizeof(${elemType}));`);
         for (const { key, node: p } of keyed) {
           const val = emitExpr(p.value, className, params, ctx);
           const wrapped = wrapArgIfInterfaceParam(val, p.value, elemType, ctx, className, params);
@@ -2538,7 +2550,8 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
       // generic ObjectExpression fallback has no target type to build against).
       if (props.length === 0) {
         const elemType = field.type.slice(0, -1);
-        out.push(`  self->${cName(fname)} = calloc(4096, sizeof(${elemType}));`);
+        if (!field.inlineArray)
+          out.push(`  self->${cName(fname)} = calloc(4096, sizeof(${elemType}));`);
         continue;
       }
     }
@@ -2899,7 +2912,10 @@ function emitClassImpl(node, out) {
     } else {
       const params = [{ name: 'self', type: `${name}*` }, ...msig.params];
       const paramStr = params.map((p) => `${p.type} ${cName(p.name)}`).join(', ');
-      out.push(`static ${msig.retType} ${name}_${mname}(${paramStr}) {`);
+      // Optimization: noinline stepPios as otherwise stepThings' prologue
+      // would get much more expensive
+      const noInline = mname === 'stepPios' ? '__attribute__((noinline)) ' : '';
+      out.push(`${noInline}static ${msig.retType} ${name}_${mname}(${paramStr}) {`);
       const scope = { self: name };
       for (const p of msig.params) {
         // Prefer the TS type name collected at param-collection time (handles
@@ -3364,7 +3380,11 @@ function emitStmt(node, funcName, params, out, ctx) {
         if (field?.isArray && (field.type.endsWith('**') || field.type.endsWith('*'))) {
           const elemType = field.type.slice(0, -1);
           const lhs = emitExpr(assignExpr.left, funcName, params, ctx);
-          out.push(`  ${lhs} = calloc(${assignExpr.right.elements.length}, sizeof(${elemType}));`);
+          if (!field.inlineArray) {
+            out.push(
+              `  ${lhs} = calloc(${assignExpr.right.elements.length}, sizeof(${elemType}));`
+            );
+          }
           assignExpr.right.elements.forEach((e, i) => {
             const val = emitExpr(e, funcName, params, ctx);
             const wrapped = wrapArgIfInterfaceParam(val, e, elemType, ctx, funcName, params);
@@ -5882,6 +5902,28 @@ function collectParams(paramNodes, opts = {}) {
     });
 }
 
+const MAX_INLINE_ARRAY_ELEMS = 4096;
+function markInlineArrays() {
+  for (const info of classes.values()) {
+    for (const finfo of info.fields.values()) {
+      if ((!finfo.isArray && !finfo.isTypedArray) || finfo.isGrowableArray) continue;
+      // Reassignment would need the allocation rewritten as a zero-fill; readonly rules it
+      // out, and tsc enforces that.
+      if (finfo.isTypedArray && !finfo.isReadonly) continue;
+      if (finfo.kind === 'closure' || typeof finfo.type !== 'string') continue;
+      if (!finfo.type.endsWith('*')) continue;
+      const size =
+        typeof finfo.size === 'number'
+          ? finfo.size
+          : finfo.sizeNode?.type === 'NumericLiteral'
+          ? finfo.sizeNode.value
+          : undefined;
+      if (!Number.isInteger(size) || size <= 0 || size > MAX_INLINE_ARRAY_ELEMS) continue;
+      finfo.inlineArray = size;
+    }
+  }
+}
+
 // Emit all collected enums
 function emitAllEnums(out) {
   out.push('// ─── Enum definitions ───');
@@ -6297,7 +6339,12 @@ function emitAllStructDefs(out) {
         out.push(`  void* ${finfo.ctxField};`);
         continue;
       }
-      out.push(`  ${finfo.type} ${cName(fname)};`);
+      if (finfo.inlineArray) {
+        const align = finfo.isTypedArray ? '__attribute__((aligned(8))) ' : '';
+        out.push(`  ${align}${finfo.type.slice(0, -1)} ${cName(fname)}[${finfo.inlineArray}];`);
+      } else {
+        out.push(`  ${finfo.type} ${cName(fname)};`);
+      }
       if (finfo.isGrowableArray) out.push(`  int32_t ${cName(fname)}_count;`);
     }
     out.push(`};`);
@@ -6383,6 +6430,8 @@ function main() {
   // before every class was collected (directory-traversal order, not dependency
   // order) — see resolveUnresolvedGetterTypes.
   resolveUnresolvedGetterTypes();
+
+  markInlineArrays();
 
   // Pass 1.5: now that every interface is fully collected, rewrite references to
   // "pure data" interfaces (only property signatures, no methods — e.g.
