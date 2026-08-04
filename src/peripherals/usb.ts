@@ -365,28 +365,27 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
     this.checkInterrupts();
   }
 
-  private sieStatusUpdated() {
-    const intRegisterMap = [
-      [SIE_SETUP_REC, 1 << 16],
-      [SIE_RESUME, 1 << 15],
-      [SIE_SUSPENDED, 1 << 14],
-      [SIE_CONNECTED, 1 << 13],
-      [SIE_BUS_RESET, 1 << 12],
-      [SIE_VBUS_DETECTED, 1 << 11],
-      [SIE_STALL_REC, 1 << 10],
-      [SIE_CRC_ERROR, 1 << 9],
-      [SIE_BIT_STUFF_ERROR, 1 << 8],
-      [SIE_RX_OVERFLOW, 1 << 7],
-      [SIE_RX_TIMEOUT, 1 << 6],
-      [SIE_DATA_SEQ_ERROR, 1 << 5],
-    ];
-    for (const [sieBit, intRawBit] of intRegisterMap) {
-      if (this.sieStatus & sieBit) {
-        this.intRaw |= intRawBit;
-      } else {
-        this.intRaw &= ~intRawBit;
-      }
+  private mirrorSieBit(sieBit: number, intRawBit: number) {
+    if (this.sieStatus & sieBit) {
+      this.intRaw |= intRawBit;
+    } else {
+      this.intRaw &= ~intRawBit;
     }
+  }
+
+  private sieStatusUpdated() {
+    this.mirrorSieBit(SIE_SETUP_REC, 1 << 16);
+    this.mirrorSieBit(SIE_RESUME, 1 << 15);
+    this.mirrorSieBit(SIE_SUSPENDED, 1 << 14);
+    this.mirrorSieBit(SIE_CONNECTED, 1 << 13);
+    this.mirrorSieBit(SIE_BUS_RESET, 1 << 12);
+    this.mirrorSieBit(SIE_VBUS_DETECTED, 1 << 11);
+    this.mirrorSieBit(SIE_STALL_REC, 1 << 10);
+    this.mirrorSieBit(SIE_CRC_ERROR, 1 << 9);
+    this.mirrorSieBit(SIE_BIT_STUFF_ERROR, 1 << 8);
+    this.mirrorSieBit(SIE_RX_OVERFLOW, 1 << 7);
+    this.mirrorSieBit(SIE_RX_TIMEOUT, 1 << 6);
+    this.mirrorSieBit(SIE_DATA_SEQ_ERROR, 1 << 5);
     this.checkInterrupts();
   }
 }
