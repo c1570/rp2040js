@@ -11,6 +11,8 @@
 //   number                             → int32_t (unsigned via >>> at use sites)
 //   Int32Array / Uint32Array           → int32_t* / uint32_t* (calloc'd)
 //   Uint8Array                         → uint8_t*
+//   Int53Array                         → uint64_t* (Float64-backed in JS, native 64-bit
+//                                         pack/unpack via int53High/int53Pack intrinsics)
 //   enum E { A, B }                    → typedef enum { E_A, E_B } E;
 //   interface I { foo(): T }           → vtable typedef
 
@@ -482,7 +484,7 @@ const cTypeOf = (tsType, opts = {}) => {
       // Named function type (gpio-pin.ts), emitted as a typedef by emitAllEnums.
       if (name === 'GPIOPinListener') return 'GPIOPinListener';
       // TypedArrays → C pointer types
-      if (name.match(/^(Int|Uint|Float)(8|16|32|64)Array$/)) return `${typedArrayCType(name)}*`;
+      if (name.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/)) return `${typedArrayCType(name)}*`;
       // Array<T> / ArrayLike<T> → T* (resolve type parameter) — ArrayLike is only ever
       // used here for numeric indexing over a real array, same as Array<T>.
       if (name === 'Array' || name === 'ArrayLike') {
@@ -635,6 +637,10 @@ const typedArrayCType = (name) => {
       return 'float';
     case 'Float64Array':
       return 'double';
+    case 'Int53Array':
+      // Float64-backed in JS (holds integers up to 2^53), uint64_t in C — native
+      // 64-bit pack/unpack via the int53High/int53Pack intrinsics (see below).
+      return 'uint64_t';
     default:
       return 'uint8_t';
   }
@@ -982,7 +988,7 @@ function inferReturnTypeFromReturns(body, paramTypesByName, selfClassName) {
         if (decl.init?.type === 'NewExpression') {
           const ctor = decl.init.callee?.name;
           if (ctor && classes.has(ctor)) localVarTypes[declName] = `${ctor}*`;
-          else if (ctor?.match(/^(Int|Uint|Float)(8|16|32|64)Array$/))
+          else if (ctor?.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/))
             localVarTypes[declName] = `${typedArrayCType(ctor)}*`;
         } else if (decl.init?.type === 'TSAsExpression') {
           // `const x = expr as unknown as ClassName;` — a common pattern for
@@ -1239,7 +1245,7 @@ function collectTypes(filepath) {
             // Check for typed arrays
             else if (
               inner.type === 'TSTypeReference' &&
-              tsTypeName?.match(/^(Int|Uint|Float)(8|16|32|64)Array$/)
+              tsTypeName?.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/)
             ) {
               const taName = tsTypeName;
               fields.set(fname, {
@@ -1334,7 +1340,7 @@ function collectTypes(filepath) {
             // Infer from value
             if (member.value?.type === 'NewExpression') {
               const ctor = member.value.callee?.name;
-              if (ctor?.match(/^(Int|Uint|Float)(8|16|32|64)Array$/)) {
+              if (ctor?.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/)) {
                 fields.set(fname, {
                   type: `${typedArrayCType(ctor)}*`,
                   isTypedArray: true,
@@ -1597,7 +1603,7 @@ function collectTypes(filepath) {
                   const init = node.right;
                   if (init?.type === 'NewExpression') {
                     const ctor = init.callee?.name;
-                    if (ctor?.match(/^(Int|Uint|Float)(8|16|32|64)Array$/)) {
+                    if (ctor?.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/)) {
                       fields.set(fname, {
                         type: `${typedArrayCType(ctor)}*`,
                         isTypedArray: true,
@@ -2140,7 +2146,7 @@ function emitImpl(node, out) {
           }
         } else if (
           decl.init?.type === 'NewExpression' &&
-          decl.init.callee?.name?.match(/^(Int|Uint|Float)(8|16|32|64)Array$/) &&
+          decl.init.callee?.name?.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/) &&
           decl.init.arguments[0]?.type === 'ArrayExpression' &&
           decl.init.arguments[0].elements.every((e) => e?.type === 'NumericLiteral')
         ) {
@@ -3061,7 +3067,7 @@ function emitStmt(node, funcName, params, out, ctx) {
         // Check for typed array allocation
         if (decl.init?.type === 'NewExpression') {
           const ctor = decl.init.callee?.name;
-          if (ctor && ctor.match(/^(Int|Uint|Float)(8|16|32|64)Array$/)) {
+          if (ctor && ctor.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/)) {
             const elType = typedArrayCType(ctor);
             const size = emitExpr(decl.init.arguments[0], funcName, params, ctx);
             out.push(`  ${elType}* ${cName(name)} = calloc(${size}, sizeof(${elType}));`);
@@ -4805,6 +4811,15 @@ function emitExpr(node, funcName, params, ctx, opts) {
       if (name === 's32') return `((int32_t)(${args.join(',')}))`;
       if (name === 'bit') return `(1 << (${args.join(',')}))`;
 
+      // Int53 pack/unpack intrinsics — utils/types.ts's int53High/int53Pack back onto
+      // native uint64_t bit ops (the JS helpers use float division/addition to dodge the
+      // ToInt32 truncation of JS bitwise ops on values >2^31). Unchecked calls fall back
+      // to the real JS helper function bodies, which transpile (correctly, just slowly).
+      if (name === 'int53High' && args.length === 1)
+        return `((uint32_t)((uint64_t)(${args[0]}) >> 32))`;
+      if (name === 'int53Pack' && args.length === 2)
+        return `(((uint64_t)(uint32_t)(${args[0]})) | (((uint64_t)(uint32_t)(${args[1]})) << 32))`;
+
       const builtins = { signExtend8: 'signExtend8', signExtend16: 'signExtend16' };
       if (builtins[name]) return `${builtins[name]}(${args.join(', ')})`;
 
@@ -5317,7 +5332,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
     case 'NewExpression': {
       const ctor = node.callee?.name;
       // TypedArray allocation
-      if (ctor?.match(/^(Int|Uint|Float)(8|16|32|64)Array$/)) {
+      if (ctor?.match(/^(Int|Uint|Float)(8|16|32|53|64)Array$/)) {
         const elType = typedArrayCType(ctor);
         const arg0 = node.arguments[0];
         // `new Uint16Array(someOtherTypedArray.buffer)` — the ArrayBuffer-aliasing

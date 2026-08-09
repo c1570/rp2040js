@@ -45,7 +45,7 @@ import { CortexM33Core } from './cortex-m33/core';
 import { RPPPB2350 } from './peripherals/ppb_rp2350';
 import { bootrom_rp2350_A2 } from './bootroms';
 import { loadFirmware, LoadFirmwareOptions, LoadFirmwareResult } from './utils/load-firmware';
-import { Uint32, Float64, Int53 } from './utils/types';
+import { Uint32, Float64, Int53, Int53Array } from './utils/types';
 
 export const FLASH_START_ADDRESS = 0x10000000;
 export const RAM_START_ADDRESS = 0x20000000;
@@ -87,7 +87,7 @@ export interface RP2350Options {
 export class RP2350 implements IRPChip {
   readonly bootrom = new Uint32Array((32 >>> 2) * KB);
   readonly bootromBytes: Uint32 = this.bootrom.length * 4;
-  readonly sram = new Uint8Array((256 * 2 + 8) * KB);
+  readonly sram = new Uint8Array((256 * 2 + 8) * 1024);
   readonly sram32 = new Uint32Array(this.sram.buffer);
   readonly sram16 = new Uint16Array(this.sram.buffer);
   readonly flash = new Uint8Array(FLASH_SIZE);
@@ -95,6 +95,12 @@ export class RP2350 implements IRPChip {
   readonly flash32 = new Uint32Array(this.flash.buffer);
   readonly usbDPRAM = new Uint8Array(4 * KB);
   readonly usbDPRAMView = new DataView(this.usbDPRAM.buffer);
+
+  // ─── RISC-V decoded-instruction cache ─────────────────────────────
+  // One Int53Array per region: each slot packs ops(low32) + raw_imm(high21).
+  // 0 = not-yet-decoded. Single array load on cache hit.
+  readonly sramDecode = new Int53Array(this.sram.length / 2);
+  readonly flashDecode = new Int53Array(FLASH_SIZE / 2);
 
   readonly identifier = 'rp2350';
 
@@ -368,6 +374,10 @@ export class RP2350 implements IRPChip {
    * skip chip init, etc.).
    */
   loadFirmware(path: string, options?: LoadFirmwareOptions): LoadFirmwareResult {
+    // Writes flash/SRAM directly rather than through writeUint*, so nothing else
+    // invalidates the decode caches for it. Matters when loading onto an instance
+    // that has already run.
+    this.invalidateDecodeCache();
     return loadFirmware(this, path, options);
   }
 
@@ -479,6 +489,24 @@ export class RP2350 implements IRPChip {
     return (address & 0x1 ? (value & 0xff00) >>> 8 : value & 0xff) >>> 0;
   }
 
+  private invalidateSramDecode(address: Uint32, len: number) {
+    const startIdx = (address - RAM_START_ADDRESS) >>> 1;
+    const endIdx = (address + len - 1 - RAM_START_ADDRESS) >>> 1;
+    // Entries are keyed on an instruction's FIRST halfword, so a 32-bit instruction
+    // starting one halfword before the write overlaps it and must go too.
+    if (startIdx > 0) this.sramDecode[startIdx - 1] = 0;
+    for (let i = startIdx; i <= endIdx; i++) {
+      this.sramDecode[i] = 0;
+    }
+  }
+
+  /** Drops every cached decode. For callers that rewrite code memory behind the
+   * caches' back, i.e. anything loading an image rather than executing stores. */
+  invalidateDecodeCache() {
+    this.sramDecode.fill(0);
+    this.flashDecode.fill(0);
+  }
+
   writeUint32(address: Uint32, value: Uint32) {
     address = address >>> 0;
     if (address & 0x3) {
@@ -491,6 +519,7 @@ export class RP2350 implements IRPChip {
     }
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sram32[(address - RAM_START_ADDRESS) >>> 2] = value;
+      this.invalidateSramDecode(address, 4);
     } else if (address >= SIO_START_ADDRESS && address < SIO_START_ADDRESS + 0x10000000) {
       this.sio.writeUint32(address - SIO_START_ADDRESS, value, this.currentCore);
     } else if (this.isArmCore && address >= 0xe0020000 && address < 0xe0030000) {
@@ -530,6 +559,7 @@ export class RP2350 implements IRPChip {
   writeUint8(address: Uint32, value: Uint32) {
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sram[address - RAM_START_ADDRESS] = value;
+      this.invalidateSramDecode(address, 1);
       return;
     }
     if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {
@@ -572,6 +602,7 @@ export class RP2350 implements IRPChip {
 
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sram16[(address - RAM_START_ADDRESS) >>> 1] = value;
+      this.invalidateSramDecode(address, 2);
       return;
     }
     if (address >= FLASH_START_ADDRESS && address < RAM_START_ADDRESS) {

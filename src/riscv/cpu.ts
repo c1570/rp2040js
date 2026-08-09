@@ -1,31 +1,157 @@
 import { ICpuCore } from '../cpu-core';
-import { IRPChip } from '../rpchip';
 import type { RP2350 } from '../rp2350';
-import { executeRv32c } from './rv32c';
+import { decodeWord } from './decode';
+import { getDecodeEntry } from './decode-cache';
 import { Uint32, Int53 } from '../utils/types';
 
-const opcode = (i: number) => i & 0x7f;
-const rd = (i: number) => (i >>> 7) & 0x1f;
-const func3 = (i: number) => (i >>> 12) & 0x7;
-const rs1 = (i: number) => (i >>> 15) & 0x1f;
-const rs2 = (i: number) => (i >>> 20) & 0x1f;
-const func7 = (i: number) => (i >>> 25) & 0x7f;
-const shamt = (i: number) => (i >>> 20) & 0x1f; // same bits as rs2 in shift-imm encodings
+// ─── Deliberately local, do not import these ───────────────────────
+// Every module format this ships in (tsc CJS, tsc ESM, esbuild) compiles an
+// imported binding to a property access on the exporting module. Local copy of
+// utils/types.ts's helper so the hot path calls a function directly.
 
-const imm_i = (i: number) => i >> 20; // I-type, signed
-const immU_i = (i: number) => (i >>> 20) & 0xfff; // I-type, raw 12-bit
-const imm_s = (i: number) => ((i >> 25) << 5) | ((i >>> 7) & 0x1f); // S-type, signed
-const imm_b = (i: number) =>
-  ((i >> 31) << 12) |
-  (((i >>> 7) & 1) << 11) |
-  (((i >>> 25) & 0x3f) << 5) |
-  (((i >>> 8) & 0xf) << 1); // B-type, signed
-const imm_u = (i: number) => i & 0xfffff000; // U-type (bits[31:12] in place)
-const imm_j = (i: number) =>
-  ((i >> 31) << 20) |
-  (((i >>> 12) & 0xff) << 12) |
-  (((i >>> 20) & 1) << 11) |
-  (((i >>> 21) & 0x3ff) << 1); // J-type, signed
+function int53High(packed: number): number {
+  return Math.floor(packed / 4294967296) | 0;
+}
+
+// Tag values, duplicated from decode.ts for the same reason and with more at
+// stake: a `switch` whose case labels are property accesses rather than literals
+// cannot compile to a jump table, so all 173 of the ones below would degrade to a
+// linear chain of module lookups per dispatch — measured 14.6x slower under Node.
+// decode-tags.spec.ts fails the build if these drift from decode.ts.
+const T_INVALID = 0;
+const T_LB = 1;
+const T_LH = 2;
+const T_LW = 3;
+const T_LBU = 4;
+const T_LHU = 5;
+const T_FENCE = 6;
+const T_ADDI = 7;
+const T_SLLI = 8;
+const T_BSETI = 9;
+const T_BCLRI = 10;
+const T_BINVI = 11;
+const T_CTZ = 12;
+const T_CPOP = 13;
+const T_SEXT_H = 14;
+const T_SEXT_B = 15;
+const T_CLZ = 16;
+const T_ZIP = 17;
+const T_UNZIP = 18;
+const T_SLTI = 19;
+const T_SLTIU = 20;
+const T_XORI = 21;
+const T_ORI = 22;
+const T_ANDI = 23;
+const T_SRLI = 24;
+const T_SRAI = 25;
+const T_BEXTI = 26;
+const T_RORI = 27;
+const T_REV8 = 28;
+const T_BREV8 = 29;
+const T_ORC_B = 30;
+const T_ZEXT_H = 31;
+const T_SB = 32;
+const T_SH = 33;
+const T_SW = 34;
+const T_LR_W = 35;
+const T_SC_W = 36;
+const T_AMOADD_W = 37;
+const T_AMOSWAP_W = 38;
+const T_AMOXOR_W = 39;
+const T_AMOOR_W = 40;
+const T_AMOAND_W = 41;
+const T_AMOMIN_W = 42;
+const T_AMOMAX_W = 43;
+const T_AMOMINU_W = 44;
+const T_AMOMAXU_W = 45;
+const T_ADD = 46;
+const T_SUB = 47;
+const T_MUL = 48;
+const T_SLL = 49;
+const T_MULH = 50;
+const T_BSET = 51;
+const T_BCLR = 52;
+const T_ROL = 53;
+const T_BINV = 54;
+const T_SLT = 55;
+const T_MULHSU = 56;
+const T_SH1ADD = 57;
+const T_SLTU = 58;
+const T_MULHU = 59;
+const T_XOR = 60;
+const T_DIV = 61;
+const T_SH2ADD = 62;
+const T_PACK = 63;
+const T_MIN = 64;
+const T_XNOR = 65;
+const T_SRL = 66;
+const T_MINU = 67;
+const T_SRA = 68;
+const T_BEXT = 69;
+const T_ROR = 70;
+const T_DIVU = 71;
+const T_OR = 72;
+const T_REM = 73;
+const T_MAX = 74;
+const T_ORN = 75;
+const T_SH3ADD = 76;
+const T_AND = 77;
+const T_ANDN = 78;
+const T_PACKH = 79;
+const T_MAXU = 80;
+const T_REMU = 81;
+const T_H3_BLOCK = 82;
+const T_H3_UNBLOCK = 83;
+const T_LUI = 84;
+const T_AUIPC = 85;
+const T_BEQ = 86;
+const T_BNE = 87;
+const T_BLT = 88;
+const T_BGE = 89;
+const T_BLTU = 90;
+const T_BGEU = 91;
+const T_JALR = 92;
+const T_JAL = 93;
+const T_MRET = 94;
+const T_ECALL = 95;
+const T_EBREAK = 96;
+const T_WFI = 97;
+const T_CSRRW = 98;
+const T_CSRRS = 99;
+const T_CSRRC = 100;
+const T_CSRWI = 101;
+const T_CSRRSI = 102;
+const T_CSRRCI = 103;
+const T_H3_BEXTM = 104;
+const T_H3_BEXTMI = 105;
+const T_CM_PUSH = 106;
+const T_CM_POP = 107;
+const T_CM_POPRETZ = 108;
+const T_CM_POPRET = 109;
+const T_CM_MVSA01 = 110;
+const T_CM_MVA01S = 111;
+
+// Zcmp register-list and stack-adjacency tables, moved from rv32c.ts (deleted).
+// Indexed by the 4-bit rlist field of cm.push / cm.pop / cm.popret / cm.popretz.
+const xreg_list = [
+  [],
+  [],
+  [],
+  [],
+  [1],
+  [8, 1],
+  [9, 8, 1],
+  [18, 9, 8, 1],
+  [19, 18, 9, 8, 1],
+  [20, 19, 18, 9, 8, 1],
+  [21, 20, 19, 18, 9, 8, 1],
+  [22, 21, 20, 19, 18, 9, 8, 1],
+  [23, 22, 21, 20, 19, 18, 9, 8, 1],
+  [24, 23, 22, 21, 20, 19, 18, 9, 8, 1],
+  [25, 24, 23, 22, 21, 20, 19, 18, 9, 8, 1],
+  [27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 9, 8, 1],
+];
+const stack_adj_base = [0, 0, 0, 0, 16, 16, 16, 16, 32, 32, 32, 32, 48, 48, 48, 64];
 
 enum ExecutionModeRiscv {
   Mode_Machine,
@@ -178,42 +304,8 @@ export class CPU implements ICpuCore {
 
   inst_length = 0;
 
-  private fetchInstruction(): number {
-    const pc = this.pc;
-    if (pc & 3) {
-      // 2-byte aligned: read the halfword first to detect compressed encodings.
-      const inst = this.chip.readUint16(pc);
-      if ((inst & 3) != 3) {
-        if (inst == 0) {
-          throw Error(`Illegal 16 bit instruction 0 at 0x${pc.toString(16)}`);
-        }
-        // RV32C: execute the decompressed instruction inline and return a
-        // sentinel; step() will skip dispatch and only run the PC-update logic.
-        executeRv32c(this, inst);
-        this.inst_length = 2;
-        return 0;
-      }
-      // 32-bit instruction straddling the word boundary: fetch the upper half.
-      const full = (inst | (this.chip.readUint16(pc + 2) << 16)) >>> 0;
-      if (this.did_just_jump) this.cycles++; // jumped to non 32 bit aligned instr
-      this.inst_length = 4;
-      return full;
-    }
-    // 4-byte aligned: a single readUint32 covers both a compressed instruction
-    // (low half) and a full 32-bit instruction, halving the fetch reads.
-    const word = this.chip.readUint32(pc) >>> 0;
-    if ((word & 3) != 3) {
-      const inst = word & 0xffff;
-      if (inst == 0) {
-        throw Error(`Illegal 16 bit instruction 0 at 0x${pc.toString(16)}`);
-      }
-      executeRv32c(this, inst);
-      this.inst_length = 2;
-      return 0;
-    }
-    this.inst_length = 4;
-    return word;
-  }
+  // Packed decode entry for current instruction (see decode.ts for layout).
+  curPacked: Int53 = 0;
 
   printDisassembly() {
     const pc = this.pc;
@@ -235,9 +327,9 @@ export class CPU implements ICpuCore {
       this.cycles++;
       return this.cycles - before;
     }
-    const instruction = this.fetchInstruction();
+    this.curPacked = getDecodeEntry(this.chip, this.pc);
     try {
-      this.step(instruction);
+      this.executePacked();
     } catch (e) {
       this.printDisassembly();
       throw e;
@@ -267,60 +359,189 @@ export class CPU implements ICpuCore {
   }
 
   step(instruction: number) {
-    // 0 = sentinel from fetchInstruction() meaning the compressed instruction
-    // was already executed inline by executeRv32c(); skip dispatch but still
-    // run the PC-update logic below.
-    if (instruction !== 0) {
-      // Cascaded switch on opcode (bits[6:0]); each case dispatches to a
-      // per-opcode executor that pre-extracts the relevant fields once.
-      switch (instruction & 0x7f) {
-        case 0x03:
-          executeLoad(instruction, this);
-          break; // LOAD
-        case 0x0f:
-          executeMiscMem(instruction, this);
-          break; // MISC-MEM
-        case 0x13:
-          executeOpImm(instruction, this);
-          break; // OP-IMM
-        case 0x17:
-          executeAuipc(instruction, this);
-          break; // AUIPC
-        case 0x23:
-          executeStore(instruction, this);
-          break; // STORE
-        case 0x2f:
-          executeAmo(instruction, this);
-          break; // AMO
-        case 0x33:
-          executeOp(instruction, this);
-          break; // OP
-        case 0x37:
-          executeLui(instruction, this);
-          break; // LUI
-        case 0x63:
-          executeBranch(instruction, this);
-          break; // BRANCH
-        case 0x67:
-          executeJalr(instruction, this);
-          break; // JALR
-        case 0x6f:
-          executeJal(instruction, this);
-          break; // JAL
-        case 0x73:
-          executeSystem(instruction, this);
-          break; // SYSTEM
-        case 0x0b:
-          executeCustom0(instruction, this);
-          break; // CUSTOM0
-        default:
-          throw Error(
-            `Invalid instruction: 0x${instruction.toString(16)} at 0x${this.pc.toString(
-              16
-            )}, opcode 0x${(instruction & 0x7f).toString(16)}`
-          );
+    this.curPacked = decodeWord(instruction >>> 0);
+    this.executePacked();
+  }
+
+  // Run one instruction from curPacked. Extracts fields, sign-extends the
+  // immediate to the width required by each instruction group, dispatches to
+  // per-group methods, then runs the PC-update tail.
+  //
+  // Immediate encoding: decode.ts stores raw immediates masked to 21 bits in
+  // the high part of the packed entry. Sign extension to the encoding width is
+  // done HERE (in the dispatch) via arithmetic shifts, so exec methods receive
+  // ready-to-use 32-bit signed values:
+  //   I/S-type (12-bit):  sx12 = (imm << 20) >> 20
+  //   B-type   (13-bit):  sx13 = (imm << 19) >> 19
+  //   J-type   (21-bit):  sx21 = (imm << 11) >> 11
+  //   U-type   (20-bit):  imm << 12 (always positive, just shift into place)
+  private executePacked() {
+    const packed = this.curPacked;
+    const ops = packed >>> 0;
+    const tag = (ops >>> 24) & 0xff;
+    const r = (ops >>> 9) & 0x1f;
+    const s1 = (ops >>> 14) & 0x1f;
+    const s2 = (ops >>> 19) & 0x1f;
+    const is32 = (ops >>> 8) & 1;
+    const imm = int53High(packed); // raw 21-bit immediate
+    if (is32 && this.pc & 3 && this.did_just_jump) this.cycles++;
+    this.inst_length = is32 ? 4 : 2;
+
+    switch (tag) {
+      case T_INVALID:
+        throw Error(`Illegal instruction 0 at 0x${this.pc.toString(16)}`);
+      case T_LB:
+      case T_LH:
+      case T_LW:
+      case T_LBU:
+      case T_LHU:
+        this.execLoad(tag, r, s1, (imm << 20) >> 20); // sx12
+        break;
+      case T_FENCE:
+        break;
+      case T_ADDI:
+      case T_SLLI:
+      case T_BSETI:
+      case T_BCLRI:
+      case T_BINVI:
+      case T_CTZ:
+      case T_CPOP:
+      case T_SEXT_H:
+      case T_SEXT_B:
+      case T_CLZ:
+      case T_ZIP:
+      case T_UNZIP:
+      case T_SLTI:
+      case T_SLTIU:
+      case T_XORI:
+      case T_ORI:
+      case T_ANDI:
+      case T_SRLI:
+      case T_SRAI:
+      case T_BEXTI:
+      case T_RORI:
+      case T_REV8:
+      case T_BREV8:
+      case T_ORC_B:
+      case T_ZEXT_H:
+        this.execOpImm(tag, r, s1, (imm << 20) >> 20); // sx12
+        break;
+      case T_SB:
+      case T_SH:
+      case T_SW:
+        this.execStore(tag, s1, s2, (imm << 20) >> 20); // sx12
+        break;
+      case T_LR_W:
+      case T_SC_W:
+      case T_AMOADD_W:
+      case T_AMOSWAP_W:
+      case T_AMOXOR_W:
+      case T_AMOOR_W:
+      case T_AMOAND_W:
+      case T_AMOMIN_W:
+      case T_AMOMAX_W:
+      case T_AMOMINU_W:
+      case T_AMOMAXU_W:
+        this.execAmo(tag, r, s1, s2);
+        break;
+      case T_ADD:
+      case T_SUB:
+      case T_MUL:
+      case T_SLL:
+      case T_MULH:
+      case T_BSET:
+      case T_BCLR:
+      case T_ROL:
+      case T_BINV:
+      case T_SLT:
+      case T_MULHSU:
+      case T_SH1ADD:
+      case T_SLTU:
+      case T_MULHU:
+      case T_XOR:
+      case T_DIV:
+      case T_SH2ADD:
+      case T_PACK:
+      case T_MIN:
+      case T_XNOR:
+      case T_SRL:
+      case T_MINU:
+      case T_SRA:
+      case T_BEXT:
+      case T_ROR:
+      case T_DIVU:
+      case T_OR:
+      case T_REM:
+      case T_MAX:
+      case T_ORN:
+      case T_SH3ADD:
+      case T_AND:
+      case T_ANDN:
+      case T_PACKH:
+      case T_MAXU:
+      case T_REMU:
+        this.execOp(tag, r, s1, s2);
+        break;
+      case T_H3_BLOCK:
+      case T_H3_UNBLOCK:
+        this.execH3(tag);
+        break;
+      case T_LUI:
+        this.setRegisterU(r, (imm << 12) >>> 0);
+        break;
+      case T_AUIPC:
+        this.setRegister(r, (imm << 12) + this.pc);
+        break;
+      case T_BEQ:
+      case T_BNE:
+      case T_BLT:
+      case T_BGE:
+      case T_BLTU:
+      case T_BGEU:
+        this.execBranch(tag, s1, s2, (imm << 19) >> 19); // sx13
+        break;
+      case T_JALR: {
+        const target = this.getRegister(s1) + ((imm << 20) >> 20); // sx12
+        this.setRegister(r, this.pc + this.inst_length);
+        this.next_pc = target;
+        this.cycles++;
+        break;
       }
-    } // end if (instruction !== 0)
+      case T_JAL: {
+        const link = this.pc + this.inst_length;
+        this.setRegister(r, link);
+        checkTraceMagic(this, link);
+        this.next_pc = this.pc + ((imm << 11) >> 11); // sx21
+        this.cycles++;
+        break;
+      }
+      case T_MRET:
+      case T_ECALL:
+      case T_EBREAK:
+      case T_WFI:
+      case T_CSRRW:
+      case T_CSRRS:
+      case T_CSRRC:
+      case T_CSRWI:
+      case T_CSRRSI:
+      case T_CSRRCI:
+        this.execSystem(tag, r, s1, imm);
+        break;
+      case T_H3_BEXTM:
+      case T_H3_BEXTMI:
+        this.execCustom0(tag, r, s1, s2, imm);
+        break;
+      case T_CM_PUSH:
+      case T_CM_POP:
+      case T_CM_POPRETZ:
+      case T_CM_POPRET:
+      case T_CM_MVSA01:
+      case T_CM_MVA01S:
+        this.execZcmp(tag, r, s1, s2, imm);
+        break;
+      default:
+        throw Error(`Unhandled tag ${tag} at PC 0x${this.pc.toString(16)}`);
+    }
 
     if (this.next_pc != 0) {
       this.pc = this.next_pc;
@@ -329,6 +550,446 @@ export class CPU implements ICpuCore {
     } else {
       this.pc += this.inst_length;
       this.did_just_jump = false;
+    }
+  }
+
+  private execLoad(tag: number, r: number, s1: number, imm: number) {
+    const addr = this.getRegisterU(s1) + imm;
+    if (tag === T_LB) this.setRegister(r, signExtend8(this.chip.readUint8(addr)));
+    else if (tag === T_LH) this.setRegister(r, signExtend16(this.chip.readUint16(addr)));
+    else if (tag === T_LW) this.setRegisterU(r, this.chip.readUint32(addr));
+    else if (tag === T_LBU) this.setRegister(r, this.chip.readUint8(addr));
+    else this.setRegister(r, this.chip.readUint16(addr));
+  }
+
+  private execStore(tag: number, s1: number, s2: number, imm: number) {
+    const addr = this.getRegister(s1) + imm;
+    const v = this.getRegister(s2);
+    if (tag === T_SB) this.chip.writeUint8(addr, v & 0xff);
+    else if (tag === T_SH) this.chip.writeUint16(addr, v & 0xffff);
+    else this.chip.writeUint32(addr, v);
+  }
+
+  // imm is already sign-extended to 12 bits by executePacked.
+  private execOpImm(tag: number, r: number, s1: number, imm: number) {
+    switch (tag) {
+      case T_ADDI:
+        this.setRegisterU(r, (this.getRegisterU(s1) + imm) >>> 0);
+        break;
+      case T_SLLI:
+        this.setRegisterU(r, this.getRegisterU(s1) << imm);
+        break;
+      case T_BSETI:
+        this.setRegister(r, this.getRegister(s1) | (1 << imm));
+        break;
+      case T_BCLRI:
+        this.setRegister(r, this.getRegister(s1) & ~(1 << imm));
+        break;
+      case T_BINVI:
+        this.setRegister(r, this.getRegister(s1) ^ (1 << imm));
+        break;
+      case T_CTZ: {
+        const t = this.getRegister(s1) >>> 0;
+        this.setRegister(r, t === 0 ? 32 : 31 - Math.clz32(t & -t));
+        break;
+      }
+      case T_CPOP: {
+        let t = this.getRegister(s1) >>> 0;
+        t = t - ((t >> 1) & 0x55555555);
+        t = (t & 0x33333333) + ((t >> 2) & 0x33333333);
+        this.setRegister(r, (((t + (t >> 4)) & 0xf0f0f0f) * 0x1010101) >> 24);
+        break;
+      }
+      case T_SEXT_H:
+        this.setRegister(r, signExtend16(this.getRegisterU(s1) & 0xffff));
+        break;
+      case T_SEXT_B:
+        this.setRegister(r, signExtend8(this.getRegisterU(s1) & 0xff));
+        break;
+      case T_CLZ:
+        this.setRegister(r, Math.clz32(this.getRegisterU(s1)));
+        break;
+      case T_ZIP: {
+        const u = this.getRegisterU(s1);
+        let result = 0;
+        for (let i = 0; i < 16; i++) {
+          result |= ((u >>> (16 + i)) & 1) << (2 * i);
+          result |= ((u >>> i) & 1) << (2 * i + 1);
+        }
+        this.setRegisterU(r, result >>> 0);
+        break;
+      }
+      case T_UNZIP: {
+        const u = this.getRegisterU(s1);
+        let result = 0;
+        for (let i = 0; i < 16; i++) {
+          result |= ((u >>> (2 * i + 1)) & 1) << i;
+          result |= ((u >>> (2 * i)) & 1) << (16 + i);
+        }
+        this.setRegisterU(r, result >>> 0);
+        break;
+      }
+      case T_SLTI:
+        this.setRegister(r, this.getRegister(s1) < imm ? 1 : 0);
+        break;
+      case T_SLTIU:
+        this.setRegister(r, this.getRegisterU(s1) < (imm & 0xfff) ? 1 : 0);
+        break;
+      case T_XORI:
+        this.setRegister(r, this.getRegister(s1) ^ imm);
+        break;
+      case T_ORI:
+        this.setRegister(r, this.getRegister(s1) | imm);
+        break;
+      case T_ANDI:
+        this.setRegister(r, this.getRegister(s1) & imm);
+        break;
+      case T_SRLI:
+        this.setRegister(r, this.getRegister(s1) >>> imm);
+        break;
+      case T_SRAI:
+        this.setRegister(r, this.getRegister(s1) >> imm);
+        break;
+      case T_BEXTI:
+        this.setRegister(r, (this.getRegister(s1) >>> imm) & 1);
+        break;
+      case T_RORI: {
+        const u = this.getRegisterU(s1);
+        this.setRegister(r, ((u << (32 - imm)) >>> 0) | (u >>> imm));
+        break;
+      }
+      case T_REV8: {
+        const v = this.getRegister(s1);
+        this.setRegisterU(
+          r,
+          ((v >>> 24) |
+            ((v >>> 8) & 0xff00) |
+            ((v << 8) & 0xff0000) |
+            (((v & 0xff) << 24) >>> 0)) >>>
+            0
+        );
+        break;
+      }
+      case T_BREV8: {
+        const u = this.getRegisterU(s1);
+        let result = 0;
+        for (let i = 0; i < 32; i += 8) {
+          let by = (u >>> i) & 0xff;
+          by = ((by & 0xf0) >> 4) | ((by & 0x0f) << 4);
+          by = ((by & 0xcc) >> 2) | ((by & 0x33) << 2);
+          by = ((by & 0xaa) >> 1) | ((by & 0x55) << 1);
+          result |= by << i;
+        }
+        this.setRegisterU(r, result >>> 0);
+        break;
+      }
+      case T_ORC_B: {
+        const u = this.getRegisterU(s1);
+        let result = 0;
+        for (let i = 0; i < 32; i += 8) {
+          if (u & (0x80 << i)) result |= 0xff << i;
+        }
+        this.setRegisterU(r, result >>> 0);
+        break;
+      }
+      case T_ZEXT_H:
+        this.setRegisterU(r, this.getRegisterU(s1) & 0xffff);
+        break;
+    }
+  }
+
+  private execAmo(tag: number, r: number, s1: number, s2: number) {
+    const addr = this.getRegisterU(s1);
+    if (tag === T_LR_W) {
+      this.setRegisterU(r, this.chip.readUint32(addr));
+      this.lr_addr = addr & ~0xf;
+      this.otherCore.invalidateLrReservation(addr);
+      this.cycles += 3;
+      return;
+    }
+    if (tag === T_SC_W) {
+      if (this.lr_addr === (addr & ~0xf)) {
+        this.chip.writeUint32(addr, this.getRegisterU(s2));
+        this.setRegisterU(r, 0);
+      } else {
+        this.setRegisterU(r, 1);
+      }
+      this.lr_addr = -1;
+      this.cycles += 3;
+      return;
+    }
+    const v = this.getRegisterU(s2);
+    const mem = this.chip.readUint32(addr);
+    this.setRegisterU(r, mem);
+    let sv: number;
+    if (tag === T_AMOADD_W) sv = (mem + v) >>> 0;
+    else if (tag === T_AMOSWAP_W) sv = v;
+    else if (tag === T_AMOXOR_W) sv = mem ^ v;
+    else if (tag === T_AMOOR_W) sv = mem | v;
+    else if (tag === T_AMOAND_W) sv = mem & v;
+    else if (tag === T_AMOMIN_W) sv = (mem | 0) < (v | 0) ? mem : v;
+    else if (tag === T_AMOMAX_W) sv = (mem | 0) > (v | 0) ? mem : v;
+    else if (tag === T_AMOMINU_W) sv = mem < v ? mem : v;
+    else sv = mem > v ? mem : v;
+    this.chip.writeUint32(addr, sv);
+    this.otherCore.invalidateLrReservation(addr);
+    this.cycles += 3;
+  }
+
+  private execOp(tag: number, r: number, s1: number, s2: number) {
+    const a = this.getRegister(s1),
+      b = this.getRegister(s2);
+    switch (tag) {
+      case T_ADD:
+        this.setRegister(r, a + b);
+        break;
+      case T_SUB:
+        this.setRegister(r, a - b);
+        break;
+      case T_MUL:
+        this.setRegister(r, Math.imul(a, b));
+        break;
+      case T_SLL:
+        this.setRegister(r, a << this.getRegisterU(s2));
+        break;
+      case T_MULH: {
+        let hi = umulh(a >>> 0, b >>> 0);
+        if (a < 0) hi = (hi - (b >>> 0)) | 0;
+        if (b < 0) hi = (hi - (a >>> 0)) | 0;
+        this.setRegister(r, hi);
+        break;
+      }
+      case T_BSET:
+        this.setRegister(r, a | (1 << (this.getRegisterU(s2) & 31)));
+        break;
+      case T_BCLR:
+        this.setRegister(r, a & ~(1 << (this.getRegisterU(s2) & 31)));
+        break;
+      case T_ROL: {
+        const sh = this.getRegisterU(s2) & 31;
+        this.setRegister(r, ((a << sh) | (a >>> (32 - sh))) >>> 0);
+        break;
+      }
+      case T_BINV:
+        this.setRegister(r, a ^ (1 << (this.getRegisterU(s2) & 31)));
+        break;
+      case T_SLT:
+        this.setRegister(r, a < b ? 1 : 0);
+        break;
+      case T_MULHSU: {
+        const bu = this.getRegisterU(s2);
+        let hi = umulh(a >>> 0, bu);
+        if (a < 0) hi = (hi - bu) | 0;
+        this.setRegister(r, hi);
+        break;
+      }
+      case T_SH1ADD:
+        this.setRegister(r, ((a << 1) + b) & 0xffffffff);
+        break;
+      case T_SLTU:
+        this.setRegister(r, this.getRegisterU(s1) < this.getRegisterU(s2) ? 1 : 0);
+        break;
+      case T_MULHU:
+        this.setRegisterU(r, umulh(this.getRegisterU(s1), this.getRegisterU(s2)));
+        break;
+      case T_XOR:
+        this.setRegister(r, a ^ b);
+        break;
+      case T_DIV:
+        if (b === 0) this.setRegisterU(r, 0xffffffff);
+        else if (a >>> 0 === 0x80000000 && b >>> 0 === 0xffffffff) this.setRegisterU(r, 0x80000000);
+        else this.setRegister(r, (a / b) | 0);
+        this.cycles += 17;
+        break;
+      case T_SH2ADD:
+        this.setRegister(r, ((a << 2) + b) & 0xffffffff);
+        break;
+      case T_PACK:
+        this.setRegister(r, (a & 0xffff) | ((b & 0xffff) << 16));
+        break;
+      case T_MIN:
+        this.setRegister(r, a < b ? a : b);
+        break;
+      case T_XNOR:
+        this.setRegister(r, ~a ^ b);
+        break;
+      case T_SRL:
+        this.setRegister(r, a >>> b);
+        break;
+      case T_MINU: {
+        const u1 = a >>> 0,
+          u2 = b >>> 0;
+        this.setRegister(r, u1 < u2 ? u1 : u2);
+        break;
+      }
+      case T_SRA:
+        this.setRegister(r, a >> b);
+        break;
+      case T_BEXT:
+        this.setRegister(r, (a >>> (b & 31)) & 1);
+        break;
+      case T_ROR: {
+        const sh = b & 31;
+        const u = this.getRegisterU(s1);
+        this.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
+        break;
+      }
+      case T_DIVU:
+        if (b === 0) this.setRegisterU(r, 0xffffffff);
+        else this.setRegister(r, ((a >>> 0) / (b >>> 0)) >>> 0);
+        this.cycles += 17;
+        break;
+      case T_OR:
+        this.setRegister(r, a | b);
+        break;
+      case T_REM:
+        this.setRegister(r, b === 0 ? a : a % b);
+        this.cycles += 17;
+        break;
+      case T_MAX:
+        this.setRegister(r, a > b ? a : b);
+        break;
+      case T_ORN:
+        this.setRegister(r, a | ~b);
+        break;
+      case T_SH3ADD:
+        this.setRegister(r, ((a << 3) + b) & 0xffffffff);
+        break;
+      case T_AND:
+        this.setRegister(r, a & b);
+        break;
+      case T_ANDN:
+        this.setRegister(r, a & ~b);
+        break;
+      case T_PACKH:
+        this.setRegister(r, (a & 0xff) | ((b & 0xff) << 8));
+        break;
+      case T_MAXU: {
+        const u1 = a >>> 0,
+          u2 = b >>> 0;
+        this.setRegisterU(r, (u1 > u2 ? u1 : u2) >>> 0);
+        break;
+      }
+      case T_REMU:
+        this.setRegisterU(r, (b === 0 ? a : (a >>> 0) % (b >>> 0)) >>> 0);
+        this.cycles += 17;
+        break;
+    }
+  }
+
+  private execH3(tag: number) {
+    if (tag === T_H3_BLOCK) {
+      if (this.eventRegistered) this.eventRegistered = false;
+      else if (this.wakingInterruptPending()) this.interruptsUpdated = true;
+      else {
+        this.waiting = true;
+        this.waitingOnBlock = true;
+      }
+    } else this.fireSEV();
+  }
+
+  private execBranch(tag: number, s1: number, s2: number, imm: number) {
+    let taken = false;
+    if (tag === T_BEQ) taken = this.getRegister(s1) === this.getRegister(s2);
+    else if (tag === T_BNE) taken = this.getRegister(s1) !== this.getRegister(s2);
+    else if (tag === T_BLT) taken = this.getRegister(s1) < this.getRegister(s2);
+    else if (tag === T_BGE) taken = this.getRegister(s1) >= this.getRegister(s2);
+    else if (tag === T_BLTU) taken = this.getRegisterU(s1) < this.getRegisterU(s2);
+    else taken = this.getRegisterU(s1) >= this.getRegisterU(s2);
+    if (taken) this.next_pc = this.pc + imm;
+    this.h3_branch_cycles(taken);
+  }
+
+  private execSystem(tag: number, r: number, s1: number, imm: number) {
+    if (tag === T_MRET) {
+      let mstatus = this.getCSR(0x300, 0);
+      mstatus &= ~(3 << 11);
+      mstatus &= ~0b1000;
+      mstatus |= (mstatus >>> 4) & 0b1000;
+      mstatus |= 1 << 7;
+      this.setCSR(0x300, mstatus, 0);
+      this.next_pc = this.getCSR(0x341, 0);
+      this.cycles++;
+      this.updateMEICONTEXT_priority_restore();
+      this.interruptsUpdated = true;
+    } else if (tag === T_ECALL) this.trapEntry(0xb, true);
+    else if (tag === T_EBREAK) this.trapEntry(3, true);
+    else if (tag === T_WFI) {
+      if (this.wakingInterruptPending()) this.interruptsUpdated = true;
+      else {
+        this.waiting = true;
+        this.waitingOnBlock = false;
+      }
+    } else if (tag === T_CSRRW) {
+      const csr = imm & 0xfff;
+      const newVal = this.getRegister(s1);
+      if (r !== 0) this.setRegister(r, this.getCSR(csr, newVal));
+      this.setCSR(csr, newVal, newVal);
+    } else if (tag === T_CSRRS) {
+      const csr = imm & 0xfff;
+      const orVal = this.getRegister(s1);
+      const old = this.getCSR(csr, orVal);
+      if (s1 !== 0) this.setCSR(csr, old | orVal, orVal);
+      this.setRegister(r, old);
+    } else if (tag === T_CSRRC) {
+      const csr = imm & 0xfff;
+      const notVal = this.getRegister(s1);
+      const old = this.getCSR(csr, notVal);
+      if (notVal !== 0) this.setCSR(csr, old & ~notVal, notVal);
+      this.setRegister(r, old);
+    } else {
+      const csr = (imm >>> 5) & 0xfff;
+      const imm5 = imm & 0x1f;
+      if (tag === T_CSRWI) {
+        if (r !== 0) this.setRegister(r, this.getCSR(csr, imm5));
+        this.setCSR(csr, imm5, imm5);
+      } else if (tag === T_CSRRSI) {
+        const old = this.getCSR(csr, imm5);
+        if (imm5 !== 0) this.setCSR(csr, old | imm5, imm5);
+        this.setRegister(r, old);
+      } else {
+        const old = this.getCSR(csr, imm5);
+        if (imm5 !== 0) this.setCSR(csr, old & ~imm5, imm5);
+        this.setRegister(r, old);
+      }
+    }
+  }
+
+  private execCustom0(tag: number, r: number, s1: number, s2: number, imm: number) {
+    const size = (imm >>> 1) & 0b111;
+    const sh = tag === T_H3_BEXTM ? this.getRegisterU(s2) : s2;
+    this.setRegisterU(r, (this.getRegisterU(s1) >>> sh) & ((2 << size) - 1));
+  }
+
+  private execZcmp(tag: number, r: number, s1: number, s2: number, imm: number) {
+    if (tag === T_CM_PUSH) {
+      const stack_adj = stack_adj_base[s2] + imm;
+      const sp = this.getRegisterU(2);
+      let addr = sp - 4;
+      for (const reg of xreg_list[s2]) {
+        this.chip.writeUint32(addr, this.getRegisterU(reg));
+        addr -= 4;
+        this.cycles++;
+      }
+      this.setRegisterU(2, sp - stack_adj);
+    } else if (tag === T_CM_POP || tag === T_CM_POPRETZ || tag === T_CM_POPRET) {
+      const stack_adj = stack_adj_base[s2] + imm;
+      const sp = this.getRegisterU(2);
+      let addr = sp + stack_adj - 4;
+      for (const reg of xreg_list[s2]) {
+        this.setRegisterU(reg, this.chip.readUint32(addr));
+        addr -= 4;
+        this.cycles++;
+      }
+      this.setRegisterU(2, sp + stack_adj);
+      if (tag === T_CM_POPRETZ) this.setRegister(10, 0);
+      if (tag === T_CM_POPRET || tag === T_CM_POPRETZ) {
+        this.next_pc = this.getRegister(1);
+        this.cycles++;
+      }
+    } else {
+      this.setRegister(r, this.getRegister(s2));
+      this.setRegister(s1, this.getRegister(imm));
     }
   }
 
@@ -797,490 +1458,11 @@ function signExtend16(value: number) {
   return (value << 16) >> 16;
 }
 
-// LOAD (0x03) - I-type
-function executeLoad(inst: number, cpu: CPU) {
-  const r = rd(inst),
-    s1 = rs1(inst),
-    im = imm_i(inst);
-  const addr = cpu.getRegisterU(s1) + im;
-  switch (func3(inst)) {
-    case 0x0:
-      cpu.setRegister(r, signExtend8(cpu.chip.readUint8(addr)));
-      break; // lb
-    case 0x1:
-      cpu.setRegister(r, signExtend16(cpu.chip.readUint16(addr)));
-      break; // lh
-    case 0x2:
-      cpu.setRegisterU(r, cpu.chip.readUint32(addr));
-      break; // lw
-    case 0x4:
-      cpu.setRegister(r, cpu.chip.readUint8(addr));
-      break; // lbu
-    case 0x5:
-      cpu.setRegister(r, cpu.chip.readUint16(addr));
-      break; // lhu
-    default:
-      throw Error(`Invalid LOAD func3 ${func3(inst)}`);
-  }
-}
-
-// MISC-MEM (0x0f) - fence / fence.i are no-ops here
-function executeMiscMem(inst: number, cpu: CPU) {
-  // intentionally empty
-}
-
-// OP-IMM (0x13) - I-type; func3=1 and func3=5 carry sub-encodings via func7
-// and Zbb unary-op selectors (immU).
-function executeOpImm(inst: number, cpu: CPU) {
-  const r = rd(inst),
-    s1 = rs1(inst);
-  switch (func3(inst)) {
-    case 0x0: // addi
-      cpu.setRegisterU(r, (cpu.getRegisterU(s1) + imm_i(inst)) >>> 0);
-      break;
-    case 0x1: {
-      // slli / bseti / bclri / binvi / clz / ctz / cpop / sext.b / sext.h
-      const sh = shamt(inst),
-        f7 = func7(inst),
-        imu = immU_i(inst);
-      if (f7 === 0x00) cpu.setRegisterU(r, cpu.getRegisterU(s1) << sh); // slli
-      else if (f7 === 0x14) cpu.setRegister(r, cpu.getRegister(s1) | (1 << sh)); // bseti (Zbs)
-      else if (f7 === 0x24) cpu.setRegister(r, cpu.getRegister(s1) & ~(1 << sh)); // bclri
-      else if (f7 === 0x34) cpu.setRegister(r, cpu.getRegister(s1) ^ (1 << sh)); // binvi
-      else if (imu === 0b011000000001) {
-        // ctz (Zbb)
-        const t = cpu.getRegister(s1) >>> 0;
-        cpu.setRegister(r, t === 0 ? 32 : 31 - Math.clz32(t & -t));
-      } else if (imu === 0b011000000010) {
-        // cpop (Zbb)
-        let t = cpu.getRegister(s1) >>> 0;
-        t = t - ((t >> 1) & 0x55555555);
-        t = (t & 0x33333333) + ((t >> 2) & 0x33333333);
-        cpu.setRegister(r, (((t + (t >> 4)) & 0xf0f0f0f) * 0x1010101) >> 24);
-      } else if (imu === 0b011000000101) {
-        // sext.h (Zbb)
-        cpu.setRegister(r, signExtend16(cpu.getRegisterU(s1) & 0xffff));
-      } else if (imu === 0b011000000100) {
-        // sext.b (Zbb)
-        cpu.setRegister(r, signExtend8(cpu.getRegisterU(s1) & 0xff));
-      } else if (
-        (inst & 0b11111111111100000111000001111111) ===
-        0b01100000000000000001000000010011
-      ) {
-        cpu.setRegister(r, Math.clz32(cpu.getRegisterU(s1))); // clz (Zbb)
-      } else if (imu === 0b000010001111) {
-        // zip (Zbkb) — interleave: even bits from high half, odd bits from low half
-        const u = cpu.getRegisterU(s1);
-        let result = 0;
-        for (let i = 0; i < 16; i++) {
-          result |= ((u >>> (16 + i)) & 1) << (2 * i); // even positions
-          result |= ((u >>> i) & 1) << (2 * i + 1); // odd positions
-        }
-        cpu.setRegisterU(r, result >>> 0);
-      } else throw Error(`Unknown OP-IMM func3=1, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x2:
-      cpu.setRegister(r, cpu.getRegister(s1) < imm_i(inst) ? 1 : 0);
-      break; // slti
-    case 0x3:
-      cpu.setRegister(r, cpu.getRegisterU(s1) < immU_i(inst) ? 1 : 0);
-      break; // sltiu
-    case 0x4:
-      cpu.setRegister(r, cpu.getRegister(s1) ^ imm_i(inst));
-      break; // xori
-    case 0x5: {
-      // srli / srai / bexti / rori / rev8 / orc.b / brev8
-      const sh = shamt(inst),
-        f7 = func7(inst),
-        imu = immU_i(inst),
-        v = cpu.getRegister(s1);
-      if (f7 === 0x00) cpu.setRegister(r, v >>> sh); // srli
-      else if (f7 === 0x20) cpu.setRegister(r, v >> sh); // srai
-      else if (f7 === 0x24) cpu.setRegister(r, (v >>> sh) & 1); // bexti (Zbs)
-      else if (f7 === 0x30) {
-        // rori (Zbb)
-        const u = cpu.getRegisterU(s1);
-        cpu.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
-      } else if (imu === 0x698) {
-        // rev8 (Zbb)
-        cpu.setRegisterU(
-          r,
-          ((v >>> 24) |
-            ((v >>> 8) & 0xff00) |
-            ((v << 8) & 0xff0000) |
-            (((v & 0xff) << 24) >>> 0)) >>>
-            0
-        );
-      } else if (imu === 0x687) {
-        // brev8 (Zbkb) — reverse bits within each byte
-        const u = cpu.getRegisterU(s1);
-        let result = 0;
-        for (let i = 0; i < 32; i += 8) {
-          let by = (u >>> i) & 0xff;
-          by = ((by & 0xf0) >> 4) | ((by & 0x0f) << 4);
-          by = ((by & 0xcc) >> 2) | ((by & 0x33) << 2);
-          by = ((by & 0xaa) >> 1) | ((by & 0x55) << 1);
-          result |= by << i;
-        }
-        cpu.setRegisterU(r, result >>> 0);
-      } else if (imu === 0x287) {
-        // orc.b (Zbb) — broadcast bit 7 of each byte across all 8 bits
-        const u = cpu.getRegisterU(s1);
-        let result = 0;
-        for (let i = 0; i < 32; i += 8) {
-          if (u & (0x80 << i)) result |= 0xff << i;
-        }
-        cpu.setRegisterU(r, result >>> 0);
-      } else if (imu === 0b000010001111) {
-        // unzip (Zbkb) — deinterleave: odd bits to low half, even bits to high half
-        const u = cpu.getRegisterU(s1);
-        let result = 0;
-        for (let i = 0; i < 16; i++) {
-          result |= ((u >>> (2 * i + 1)) & 1) << i; // odd positions -> low half
-          result |= ((u >>> (2 * i)) & 1) << (16 + i); // even positions -> high half
-        }
-        cpu.setRegisterU(r, result >>> 0);
-      } else throw Error(`Unknown OP-IMM func3=5, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x6:
-      cpu.setRegister(r, cpu.getRegister(s1) | imm_i(inst));
-      break; // ori
-    case 0x7:
-      cpu.setRegister(r, cpu.getRegister(s1) & imm_i(inst));
-      break; // andi
-    default:
-      throw Error(`Invalid OP-IMM func3 ${func3(inst)}`);
-  }
-}
-
-// STORE (0x23) - S-type
-function executeStore(inst: number, cpu: CPU) {
-  const s1 = rs1(inst),
-    s2 = rs2(inst);
-  const addr = cpu.getRegister(s1) + imm_s(inst);
-  const v = cpu.getRegister(s2);
-  switch (func3(inst)) {
-    case 0x0:
-      cpu.chip.writeUint8(addr, v & 0xff);
-      break; // sb
-    case 0x1:
-      cpu.chip.writeUint16(addr, v & 0xffff);
-      break; // sh
-    case 0x2:
-      cpu.chip.writeUint32(addr, v);
-      break; // sw
-    default:
-      throw Error(`Invalid STORE func3 ${func3(inst)}`);
-  }
-}
-
-// AMO/LR/SC (0x2f) - R-type; func3=0x2. funct5 (bits[31:27]) selects the
-// operation; aq/rl bits (26:25) are no-ops in the emulator.
-function executeAmo(inst: number, cpu: CPU) {
-  if (func3(inst) !== 0x2) throw Error(`Invalid AMO func3 ${func3(inst)}`);
-  const funct5 = (inst >>> 27) & 0x1f;
-  const r = rd(inst),
-    s1 = rs1(inst),
-    s2 = rs2(inst);
-  const chip = cpu.chip;
-  const addr = cpu.getRegisterU(s1);
-
-  // lr.w: load + set reservation (no write)
-  if (funct5 === 0x02) {
-    cpu.setRegisterU(r, chip.readUint32(addr));
-    cpu.lr_addr = addr & ~0xf;
-    cpu.otherCore.invalidateLrReservation(addr);
-    cpu.cycles += 3;
-    return;
-  }
-
-  // sc.w: conditional store; rd=0 on success, rd=1 on failure
-  if (funct5 === 0x03) {
-    if (cpu.lr_addr === (addr & ~0xf)) {
-      chip.writeUint32(addr, cpu.getRegisterU(s2));
-      cpu.setRegisterU(r, 0);
-    } else {
-      cpu.setRegisterU(r, 1);
-    }
-    cpu.lr_addr = -1;
-    cpu.cycles += 3;
-    return;
-  }
-
-  const v = cpu.getRegisterU(s2);
-  const mem = chip.readUint32(addr);
-  cpu.setRegisterU(r, mem);
-  // AMO store + invalidate other hart's reservation
-  const amoStore = (val: number): void => {
-    chip.writeUint32(addr, val);
-    cpu.otherCore.invalidateLrReservation(addr);
-  };
-  switch (funct5) {
-    case 0x00:
-      amoStore((mem + v) >>> 0);
-      break; // amoadd.w
-    case 0x01:
-      amoStore(v);
-      break; // amoswap.w
-    case 0x04:
-      amoStore(mem ^ v);
-      break; // amoxor.w
-    case 0x08:
-      amoStore(mem | v);
-      break; // amoor.w
-    case 0x0c:
-      amoStore(mem & v);
-      break; // amoand.w
-    case 0x10: {
-      const ms = mem | 0,
-        vs = v | 0;
-      amoStore(ms < vs ? mem : v);
-      break; // amomin.w (signed)
-    }
-    case 0x14: {
-      const ms = mem | 0,
-        vs = v | 0;
-      amoStore(ms > vs ? mem : v);
-      break; // amomax.w (signed)
-    }
-    case 0x18:
-      amoStore(mem < v ? mem : v);
-      break; // amominu.w (unsigned)
-    case 0x1c:
-      amoStore(mem > v ? mem : v);
-      break; // amomaxu.w (unsigned)
-    default:
-      throw Error(`Unknown AMO funct5: 0x${funct5.toString(16)}`);
-  }
-  cpu.cycles += 3;
-}
-
-// OP (0x33) - R-type; sub-dispatched by func7 within func3
-function executeOp(inst: number, cpu: CPU) {
-  const r = rd(inst),
-    s1 = rs1(inst),
-    s2 = rs2(inst);
-  switch (func3(inst)) {
-    case 0x0: {
-      const a = cpu.getRegister(s1),
-        b = cpu.getRegister(s2),
-        f7 = func7(inst);
-      if (f7 === 0x00) cpu.setRegister(r, a + b); // add
-      else if (f7 === 0x20) cpu.setRegister(r, a - b); // sub
-      else if (f7 === 0x01) cpu.setRegister(r, Math.imul(a, b)); // mul (RV32M)
-      else throw Error(`Unknown OP func3=0, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x1: {
-      const a = cpu.getRegister(s1),
-        b = cpu.getRegisterU(s2),
-        f7 = func7(inst);
-      if (f7 === 0x00) cpu.setRegister(r, a << b); // sll
-      else if (f7 === 0x01) {
-        // mulh (RV32M): signed*signed, high 32 bits. Compute the unsigned high
-        // product then apply the two's-complement sign corrections, avoiding
-        // the float precision loss when the 64-bit product exceeds 2^53.
-        const bs = cpu.getRegister(s2);
-        let hi = umulh(a >>> 0, bs >>> 0);
-        if (a < 0) hi = (hi - (bs >>> 0)) | 0;
-        if (bs < 0) hi = (hi - (a >>> 0)) | 0;
-        cpu.setRegister(r, hi);
-      } else if (f7 === 0x14) cpu.setRegister(r, a | (1 << (b & 31))); // bset (Zbs)
-      else if (f7 === 0x24) cpu.setRegister(r, a & ~(1 << (b & 31))); // bclr (Zbs)
-      else if (f7 === 0x30) {
-        // rol (Zbb)
-        const sh = b & 31;
-        cpu.setRegister(r, ((a << sh) | (a >>> (32 - sh))) >>> 0);
-      } else if (f7 === 0x34) cpu.setRegister(r, a ^ (1 << (b & 31))); // binv (Zbs)
-      else throw Error(`Unknown OP func3=1, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x2: {
-      const f7 = func7(inst);
-      if (f7 === 0x00) {
-        // slt - but special-case h3.block / h3.unblock (Xh3power) for slt x0,x0,x0|1
-        if (r === 0 && s1 === 0) {
-          if (s2 === 0) {
-            // h3.block: falls through on a latched unblock (consuming it), and
-            // also falls through when an enabled interrupt is already asserted
-            // -- the block wake condition is block_wakeup_req OR wfi_wakeup_req
-            // (hazard3_power_ctrl.v), same as the wfi handler.
-            if (cpu.eventRegistered) {
-              cpu.eventRegistered = false;
-            } else if (cpu.wakingInterruptPending()) {
-              cpu.interruptsUpdated = true; // trap on the next instruction boundary
-            } else {
-              cpu.waiting = true;
-              cpu.waitingOnBlock = true;
-            }
-            return;
-          } else if (s2 === 1) {
-            // h3.unblock
-            cpu.fireSEV();
-            return;
-          }
-        }
-        cpu.setRegister(r, cpu.getRegister(s1) < cpu.getRegister(s2) ? 1 : 0);
-      } else if (f7 === 0x01) {
-        // mulhsu (RV32M): signed * unsigned, high 32 bits. Unsigned high product
-        // plus the single sign correction for rs1; umulh keeps it float-exact.
-        const a = cpu.getRegister(s1); // signed
-        const b = cpu.getRegisterU(s2); // unsigned
-        let hi = umulh(a >>> 0, b);
-        if (a < 0) hi = (hi - b) | 0;
-        cpu.setRegister(r, hi);
-      } else if (f7 === 0x10) {
-        // sh1add (Zbb)
-        cpu.setRegister(r, ((cpu.getRegister(s1) << 1) + cpu.getRegister(s2)) & 0xffffffff);
-      } else throw Error(`Unknown OP func3=2, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x3: {
-      const a = cpu.getRegisterU(s1),
-        b = cpu.getRegisterU(s2),
-        f7 = func7(inst);
-      if (f7 === 0x00) cpu.setRegister(r, a < b ? 1 : 0); // sltu
-      else if (f7 === 0x01) cpu.setRegisterU(r, umulh(a, b)); // mulhu (RV32M), float-exact
-      else throw Error(`Unknown OP func3=3, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x4: {
-      const a = cpu.getRegister(s1),
-        b = cpu.getRegister(s2),
-        f7 = func7(inst);
-      if (f7 === 0x00) cpu.setRegister(r, a ^ b); // xor
-      else if (f7 === 0x01) {
-        // div (RV32M)
-        if (b === 0) cpu.setRegisterU(r, 0xffffffff);
-        else if (a >>> 0 === 0x80000000 && b >>> 0 === 0xffffffff) cpu.setRegisterU(r, 0x80000000);
-        else cpu.setRegister(r, (a / b) | 0);
-        cpu.cycles += 17;
-      } else if (f7 === 0x10) cpu.setRegister(r, ((a << 2) + b) & 0xffffffff); // sh2add (Zbb)
-      else if (f7 === 0x04) cpu.setRegister(r, (a & 0xffff) | ((b & 0xffff) << 16)); // pack (Zbkb)
-      else if (f7 === 0x05) cpu.setRegister(r, a < b ? a : b); // min (Zbb)
-      else if (f7 === 0x20) cpu.setRegister(r, ~a ^ b); // xnor (Zbb)
-      else throw Error(`Unknown OP func3=4, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x5: {
-      const a = cpu.getRegister(s1),
-        b = cpu.getRegister(s2),
-        f7 = func7(inst);
-      if (f7 === 0x00) cpu.setRegister(r, a >>> b); // srl
-      else if (f7 === 0x05) {
-        // minu (Zbb)
-        const u1 = a >>> 0,
-          u2 = b >>> 0;
-        cpu.setRegister(r, u1 < u2 ? u1 : u2);
-      } else if (f7 === 0x20) cpu.setRegister(r, a >> b); // sra
-      else if (f7 === 0x24) cpu.setRegister(r, (a >>> (b & 31)) & 1); // bext (Zbs)
-      else if (f7 === 0x30) {
-        // ror (Zbb)
-        const sh = b & 31;
-        const u = cpu.getRegisterU(s1);
-        cpu.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
-      } else if (f7 === 0x01) {
-        // divu (RV32M)
-        if (b === 0) cpu.setRegisterU(r, 0xffffffff);
-        else cpu.setRegister(r, ((a >>> 0) / (b >>> 0)) >>> 0);
-        cpu.cycles += 17;
-      } else throw Error(`Unknown OP func3=5, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x6: {
-      const a = cpu.getRegister(s1),
-        b = cpu.getRegister(s2),
-        f7 = func7(inst);
-      if (f7 === 0x00) cpu.setRegister(r, a | b); // or
-      else if (f7 === 0x01) {
-        cpu.setRegister(r, b === 0 ? a : a % b);
-        cpu.cycles += 17;
-      } // rem (RV32M)
-      else if (f7 === 0x05) cpu.setRegister(r, a > b ? a : b); // max (Zbb)
-      else if (f7 === 0x20) cpu.setRegister(r, a | ~b); // orn (Zbb)
-      else if (f7 === 0x10) cpu.setRegister(r, ((a << 3) + b) & 0xffffffff); // sh3add (Zbb)
-      else throw Error(`Unknown OP func3=6, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    case 0x7: {
-      const a = cpu.getRegister(s1),
-        b = cpu.getRegister(s2),
-        f7 = func7(inst);
-      if (f7 === 0x00) cpu.setRegister(r, a & b); // and
-      else if (f7 === 0x20) cpu.setRegister(r, a & ~b); // andn (Zbb)
-      else if (f7 === 0x04) cpu.setRegister(r, (a & 0xff) | ((b & 0xff) << 8)); // packh (Zbkb)
-      else if (f7 === 0x05) cpu.setRegisterU(r, (a >>> 0 > b >>> 0 ? a : b) >>> 0); // maxu (Zbb)
-      else if (f7 === 0x01) {
-        cpu.setRegisterU(r, (b === 0 ? a : (a >>> 0) % (b >>> 0)) >>> 0);
-        cpu.cycles += 17;
-      } // remu (RV32M)
-      else throw Error(`Unknown OP func3=7, func7: 0x${f7.toString(16)}`);
-      break;
-    }
-    default:
-      throw Error(`Invalid OP func3 ${func3(inst)}`);
-  }
-}
-
-// BRANCH (0x63) - B-type; signed (blt/bge) vs unsigned (bltu/bgeu) by func3
-function executeBranch(inst: number, cpu: CPU) {
-  const s1 = rs1(inst),
-    s2 = rs2(inst),
-    im = imm_b(inst);
-  let taken = false;
-  switch (func3(inst)) {
-    case 0x0:
-      taken = cpu.getRegister(s1) === cpu.getRegister(s2);
-      break; // beq
-    case 0x1:
-      taken = cpu.getRegister(s1) !== cpu.getRegister(s2);
-      break; // bne
-    case 0x4:
-      taken = cpu.getRegister(s1) < cpu.getRegister(s2);
-      break; // blt
-    case 0x5:
-      taken = cpu.getRegister(s1) >= cpu.getRegister(s2);
-      break; // bge
-    case 0x6:
-      taken = cpu.getRegisterU(s1) < cpu.getRegisterU(s2);
-      break; // bltu
-    case 0x7:
-      taken = cpu.getRegisterU(s1) >= cpu.getRegisterU(s2);
-      break; // bgeu
-    default:
-      throw Error(`Invalid BRANCH func3 ${func3(inst)}`);
-  }
-  if (taken) cpu.next_pc = cpu.pc + im;
-  cpu.h3_branch_cycles(taken);
-}
-
-// JALR (0x67) - I-type; only func3=0 defined
-function executeJalr(inst: number, cpu: CPU) {
-  if (func3(inst) !== 0) throw Error(`Invalid JALR func3 ${func3(inst)}`);
-  // Read rs1 before writing rd - they may be the same register (e.g. jalr ra, ra, imm).
-  const target = cpu.getRegister(rs1(inst)) + imm_i(inst);
-  cpu.setRegister(rd(inst), cpu.pc + cpu.inst_length);
-  cpu.next_pc = target;
-  cpu.cycles++;
-}
-
-// LUI (0x37) - U-type. Top 20 bits of the immediate land directly in rd.
-function executeLui(inst: number, cpu: CPU) {
-  cpu.setRegisterU(rd(inst), imm_u(inst));
-}
-
-// AUIPC (0x17) - U-type. rd = pc + upper-immediate.
-function executeAuipc(inst: number, cpu: CPU) {
-  cpu.setRegister(rd(inst), imm_u(inst) + cpu.pc);
-}
-
 // Profiler trace magic: a 0xabcd/0xffff marker at magicStart signals that a
-// NUL-terminated trace-tag string follows; onTrace consumes it. Shared by JAL
-// (4-byte, magicStart = pc+4) and C.J / C.JAL (2-byte, magicStart = pc+2) so
-// compressed jumps fire traces too — fetchInstruction() runs executeRv32c
-// before setting inst_length, so callers must pass the literal offset.
+// NUL-terminated trace-tag string follows; onTrace consumes it. Called from the
+// JAL/JALR execution arms (link address = pc + inst_length), so both 32-bit and
+// compressed (C.J/C.JAL) jumps fire traces — the compressed forms decode to the
+// same T_JAL/T_JALR with inst_length=2.
 export function checkTraceMagic(cpu: CPU, magicStart: number) {
   if (
     cpu.chip.readUint16(magicStart) === 0xabcd &&
@@ -1293,136 +1475,5 @@ export function checkTraceMagic(cpu: CPU, magicStart: number) {
       profTag += String.fromCharCode(ch);
     }
     cpu.chip.onTrace(cpu.mhartid, cpu.pc, profTag);
-  }
-}
-
-// JAL (0x6f) - J-type. Link register gets pc+inst_length, then jump.
-function executeJal(inst: number, cpu: CPU) {
-  cpu.setRegister(rd(inst), cpu.pc + cpu.inst_length);
-  checkTraceMagic(cpu, cpu.pc + cpu.inst_length);
-  cpu.next_pc = cpu.pc + imm_j(inst);
-  cpu.cycles++;
-}
-
-// SYSTEM (0x73) - CSR ops + mret/ecall/ebreak
-function executeSystem(inst: number, cpu: CPU) {
-  switch (func3(inst)) {
-    case 0x0: {
-      // mret / ecall / ebreak - dispatched by the full 32-bit word
-      switch (inst >>> 0) {
-        case 0x30200073: {
-          // mret
-          let mstatus = cpu.getCSR(0x300, 0);
-          mstatus &= ~(3 << 11); // MSTATUS.MPP <- 0 (U-mode)
-          mstatus &= ~0b1000;
-          mstatus |= (mstatus >>> 4) & 0b1000; // MIE <- MPIE
-          mstatus |= 1 << 7; // MPIE <- 1
-          cpu.setCSR(0x300, mstatus, 0);
-          cpu.next_pc = cpu.getCSR(0x341, 0); // jump to MEPC
-          cpu.cycles++;
-          cpu.updateMEICONTEXT_priority_restore(); // Xh3irq
-          cpu.interruptsUpdated = true;
-          break;
-        }
-        case 0x73:
-          cpu.trapEntry(0xb, true);
-          break; // ecall (M-mode)
-        case 0x100073:
-          cpu.trapEntry(3, true);
-          break; // ebreak
-        case 0x10500073:
-          if (cpu.wakingInterruptPending()) {
-            cpu.interruptsUpdated = true; // trap on the next instruction boundary
-          } else {
-            cpu.waiting = true;
-            cpu.waitingOnBlock = false;
-          }
-          break; // wfi
-        default:
-          throw Error(`Unknown SYSTEM instruction 0x${(inst >>> 0).toString(16)}`);
-      }
-      break;
-    }
-    case 0x1: {
-      // csrrw
-      const csr = immU_i(inst),
-        r = rd(inst),
-        s1 = rs1(inst);
-      const newVal = cpu.getRegister(s1);
-      if (r !== 0) cpu.setRegister(r, cpu.getCSR(csr, newVal));
-      cpu.setCSR(csr, newVal, newVal);
-      break;
-    }
-    case 0x2: {
-      // csrrs
-      const csr = immU_i(inst),
-        r = rd(inst),
-        s1 = rs1(inst);
-      const orVal = cpu.getRegister(s1);
-      const old = cpu.getCSR(csr, orVal);
-      if (s1 !== 0) cpu.setCSR(csr, old | orVal, orVal);
-      cpu.setRegister(r, old);
-      break;
-    }
-    case 0x3: {
-      // csrrc
-      const csr = immU_i(inst),
-        r = rd(inst),
-        s1 = rs1(inst);
-      const notVal = cpu.getRegister(s1);
-      const old = cpu.getCSR(csr, notVal);
-      if (notVal !== 0) cpu.setCSR(csr, old & ~notVal, notVal);
-      cpu.setRegister(r, old);
-      break;
-    }
-    case 0x5: {
-      // csrwi - rs1 field holds the 5-bit immediate
-      const csr = immU_i(inst),
-        r = rd(inst),
-        imm5 = rs1(inst);
-      if (r !== 0) cpu.setRegister(r, cpu.getCSR(csr, imm5));
-      cpu.setCSR(csr, imm5, imm5);
-      break;
-    }
-    case 0x6: {
-      // csrrsi
-      const csr = immU_i(inst),
-        r = rd(inst),
-        imm5 = rs1(inst);
-      const old = cpu.getCSR(csr, imm5);
-      if (imm5 !== 0) cpu.setCSR(csr, old | imm5, imm5);
-      cpu.setRegister(r, old);
-      break;
-    }
-    case 0x7: {
-      // csrrci
-      const csr = immU_i(inst),
-        r = rd(inst),
-        imm5 = rs1(inst);
-      const old = cpu.getCSR(csr, imm5);
-      if (imm5 !== 0) cpu.setCSR(csr, old & ~imm5, imm5);
-      cpu.setRegister(r, old);
-      break;
-    }
-    default:
-      throw Error(`Invalid SYSTEM func3 ${func3(inst)}`);
-  }
-}
-
-// CUSTOM0 (Hazard3 bit-field extract with mask) - non-standard c_ident match.
-function executeCustom0(inst: number, cpu: CPU) {
-  const c_ident = inst & 0b11100010000000000111000001111111;
-  const size = (inst >>> 26) & 0b111;
-  if (c_ident === 0b00000000000000000000000000001011) {
-    // h3.bextm - shift amount from rs2 register
-    const sh = cpu.getRegisterU(rs2(inst));
-    const v = cpu.getRegisterU(rs1(inst)) >>> sh;
-    cpu.setRegisterU(rd(inst), v & ((2 << size) - 1));
-  } else if (c_ident === 0b00000000000000000100000000001011) {
-    // h3.bextmi - shift amount is the immediate rs2 field
-    const v = cpu.getRegisterU(rs1(inst)) >>> rs2(inst);
-    cpu.setRegisterU(rd(inst), v & ((2 << size) - 1));
-  } else {
-    throw Error(`Invalid CUSTOM0 instruction 0x${inst.toString(16)}`);
   }
 }
