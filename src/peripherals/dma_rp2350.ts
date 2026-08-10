@@ -155,7 +155,7 @@ enum TransferKind {
   Swap32,
 }
 
-export class RPDMAChannel<ChipType extends IRPChip = IRPChip> implements AlarmCallback {
+export class RP2350DMAChannel<ChipType extends IRPChip = IRPChip> implements AlarmCallback {
   private ctrl = 0;
   private readAddr = 0;
   private writeAddr = 0;
@@ -170,7 +170,7 @@ export class RPDMAChannel<ChipType extends IRPChip = IRPChip> implements AlarmCa
   private ringMask = 0;
   private transferAlarm: IAlarm;
 
-  constructor(readonly dma: RPDMA, readonly rp2040: ChipType, readonly index: number) {
+  constructor(readonly dma: RP2350DMA, readonly rp2040: ChipType, readonly index: number) {
     this.transferAlarm = rp2040.clock.createAlarm(this);
     this.reset();
   }
@@ -419,13 +419,13 @@ export class RPDMAChannel<ChipType extends IRPChip = IRPChip> implements AlarmCa
   }
 }
 
-export class RPDMA<ChipType extends IRPChip = IRPChip>
+export class RP2350DMA<ChipType extends IRPChip = IRPChip>
   extends BasePeripheral<ChipType>
   implements Peripheral
 {
-  readonly channels: Array<RPDMAChannel> = Array(CHANNEL_COUNT)
+  readonly channels: Array<RP2350DMAChannel> = Array(CHANNEL_COUNT)
     .fill(0)
-    .map((v, i) => new RPDMAChannel(this, this.rp2040, i));
+    .map((v, i) => new RP2350DMAChannel(this, this.rp2040, i));
 
   intRaw = 0;
   private intEnable = [0, 0, 0, 0];

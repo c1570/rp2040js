@@ -2,9 +2,9 @@ import { beforeAll, describe, expect, test } from 'vitest';
 import { execFileSync } from 'child_process';
 import { join } from 'path';
 
-// Node-vs-C parity smoke test: runs cts2c-ensure-parity.ts over the blink_simple
-// firmware for a short 5M cycles on each architecture, checking the CRC32 of the
-// core0 PC trace matches block for block.
+// Node-vs-C parity smoke test: runs cts2c-ensure-parity.ts for a short 5M cycles on
+// each chip/architecture (blink_simple on RISC-V/ARM, hello_serial on RP2040), checking
+// the CRC32 of the core0 PC trace matches block for block.
 //
 // DISABLED BY DEFAULT — it transpiles the whole emulator and invokes gcc, so it is
 // far too slow and too toolchain-dependent (needs gcc and a writable build/) to run
@@ -33,7 +33,7 @@ const SCRIPT = 'cts2c/cts2c-ensure-parity.ts';
 const BUILD_TIMEOUT_MS = 240_000;
 const RUN_TIMEOUT_MS = 120_000;
 
-function runParity(hexFile: string, coreArch: 'riscv' | 'arm', skipBuild: boolean) {
+function runParity(hexFile: string, coreArch: 'riscv' | 'arm' | 'rp2040', skipBuild: boolean) {
   return execFileSync('npx', ['tsx', SCRIPT, hexFile, String(CYCLES), coreArch], {
     cwd: ROOT,
     encoding: 'utf8',
@@ -64,6 +64,17 @@ describeParity('cts2c Node-vs-C parity (blink_simple, 5M cycles)', () => {
     'ARM blink_simple matches Node',
     () => {
       const out = runParity('demo/m33_blink/blink_simple.hex', 'arm', true);
+      expect(out).toMatch(/^PASS: all \d+ CRC32 blocks match$/m);
+    },
+    RUN_TIMEOUT_MS
+  );
+
+  // RP2040 is a distinct chip (not an RP2350 coreArch option), so it gets its own hex
+  // firmware — hello_serial_rp2040/hello_serial.hex, not blink_simple.
+  test(
+    'RP2040 hello_serial matches Node',
+    () => {
+      const out = runParity('demo/hello_serial_rp2040/hello_serial.hex', 'rp2040', true);
       expect(out).toMatch(/^PASS: all \d+ CRC32 blocks match$/m);
     },
     RUN_TIMEOUT_MS

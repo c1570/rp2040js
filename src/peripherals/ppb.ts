@@ -137,7 +137,10 @@ export class RPPPB<ChipType extends IRPChip = IRPChip>
         let result = 0;
         for (let byteIndex = 0; byteIndex < 4; byteIndex++) {
           const interruptNumber = regIndex * 4 + byteIndex;
-          for (let priority = 0; priority < core.interruptPriorities.length; priority++) {
+          // interruptPriorities always has exactly 4 entries (ARMv6-M's 2-bit priority
+          // field), a fixed size cts2c can't otherwise resolve `.length` for through the
+          // `as unknown as RP2040` cast above.
+          for (let priority = 0; priority < 4; priority++) {
             if (core.interruptPriorities[priority] & (1 << interruptNumber)) {
               result |= priority << (8 * byteIndex + 6);
             }
@@ -230,7 +233,10 @@ export class RPPPB<ChipType extends IRPChip = IRPChip>
         for (let byteIndex = 0; byteIndex < 4; byteIndex++) {
           const interruptNumber = regIndex * 4 + byteIndex;
           const newPriority = (value >> (8 * byteIndex + 6)) & 0x3;
-          for (let priority = 0; priority < core.interruptPriorities.length; priority++) {
+          // interruptPriorities always has exactly 4 entries (ARMv6-M's 2-bit priority
+          // field), a fixed size cts2c can't otherwise resolve `.length` for through the
+          // `as unknown as RP2040` cast above.
+          for (let priority = 0; priority < 4; priority++) {
             core.interruptPriorities[priority] &= ~(1 << interruptNumber);
           }
           core.interruptPriorities[newPriority] |= 1 << interruptNumber;

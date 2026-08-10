@@ -8,7 +8,7 @@ const PROC0_INTF0 = 0x260;
 const PROC0_INTS0 = 0x278;
 const PROC0_INTS5 = 0x280;
 
-export class RPIO<ChipType extends IRPChip = IRPChip>
+export class RP2350IO<ChipType extends IRPChip = IRPChip>
   extends BasePeripheral<ChipType>
   implements Peripheral
 {

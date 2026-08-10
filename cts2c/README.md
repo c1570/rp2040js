@@ -25,7 +25,11 @@ generated emulator: UART output, GPIO listeners, stepping.
     npx tsx cts2c/cts2c-ensure-parity.ts demo/riscv_blink/blink_simple.hex 400000000 riscv
     npx tsx cts2c/cts2c-ensure-parity.ts demo/riscv_pio_blink/pio_blink.hex 400000000 riscv
     npx tsx cts2c/cts2c-ensure-parity.ts demo/m33_blink/blink_simple.hex 400000000 arm
+    npx tsx cts2c/cts2c-ensure-parity.ts demo/hello_serial_rp2040/hello_serial.hex 400000000 rp2040
 
 ## Scope
 
-RP2350 only. RP2040 is explicitly out of scope for now.
+RP2350 (RISC-V and ARM cores) and RP2040 are both supported and covered by the CI parity
+check above. RP2040 support relies on `monomorphize-chip-classes.mjs` to specialize
+ChipType-generic peripheral classes per chip, since cts2c's class monomorphization otherwise
+always resolves `ChipType` to RP2350.

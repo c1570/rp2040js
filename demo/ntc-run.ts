@@ -14,21 +14,19 @@ const { createCanvas, loadImage } = require('canvas');
 const readline = require('readline');
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { RP2040 } from '../src';
 import { RP2350 } from '../src';
 import { GPIOPinState } from '../src/gpio-pin';
 
-const homedir = require('os').homedir();
+const cnmDir = path.join(__dirname, '..', '..', 'cnm');
 
 const hex_files = [
-  ['MAIN', homedir + '/project/connomore64/src/main/cnm64_main.hex'],
-  ['VIC', homedir + '/project/connomore64/src/vic/cnm64_vic.hex'],
-  [
-    'OUTPUT',
-    homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_output/cnm64_output.hex',
-  ],
-  ['CIA1', homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_cia/cnm64_cia1.hex'],
-  ['CIA2', homedir + '/project/connomore64/PicoDVI/software/build/apps/cnm64_cia/cnm64_cia2.hex'],
+  ['MAIN', path.join(cnmDir, 'cnm64_main.hex')],
+  ['VIC', path.join(cnmDir, 'cnm64_vic.hex')],
+  ['OUTPUT', path.join(cnmDir, 'cnm64_output.hex')],
+  ['CIA1', path.join(cnmDir, 'cnm64_cia1.hex')],
+  ['CIA2', path.join(cnmDir, 'cnm64_cia2.hex')],
 ];
 
 const pin_gpio: number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10];

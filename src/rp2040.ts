@@ -1,4 +1,5 @@
 import { IRPChip } from './rpchip';
+import { Uint32 } from './utils/types';
 import { SimulationClock } from './clock/simulation-clock';
 import { CortexM0Core } from './cortex-m0-core';
 import { GPIOPin, FUNCTION_PWM, FUNCTION_SIO, FUNCTION_PIO0, FUNCTION_PIO1 } from './gpio-pin';
@@ -65,10 +66,13 @@ export class RP2040 implements IRPChip {
     new CortexM0Core(this, 'CortexM0Core0', 0),
     new CortexM0Core(this, 'CortexM0Core1', 1),
   ];
-  get core0() {
+  // Explicit return types: without one, cts2c's inference doesn't see through the
+  // `[CortexM0Core, CortexM0Core]` tuple-typed `core` field's indexing and falls back
+  // to int32_t (matches the pattern rp2350.ts's riscvCore0/armCore0 already use).
+  get core0(): CortexM0Core {
     return this.core[0];
   }
-  get core1() {
+  get core1(): CortexM0Core {
     return this.core[1];
   }
 
@@ -212,7 +216,7 @@ export class RP2040 implements IRPChip {
     this.pwm.reset();
   }
 
-  readUint32(address: number): number {
+  readUint32(address: Uint32): Uint32 {
     address = address >>> 0; // round to 32-bits, unsigned
     if (address & 0x3) {
       this.logger.error(
@@ -254,12 +258,12 @@ export class RP2040 implements IRPChip {
     return 0xffffffff;
   }
 
-  findPeripheral(address: number): Peripheral {
+  findPeripheral(address: Uint32): Peripheral {
     return this.peripherals[(address >>> 14) << 2];
   }
 
   /** We assume the address is 16-bit aligned */
-  readUint16(address: number) {
+  readUint16(address: Uint32): Uint32 {
     if (address >= FLASH_START_ADDRESS && address < FLASH_START_ADDRESS + this.flash.length) {
       return this.flashView.getUint16(address - FLASH_START_ADDRESS, true);
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
@@ -270,7 +274,7 @@ export class RP2040 implements IRPChip {
     return address & 0x2 ? (value & 0xffff0000) >>> 16 : value & 0xffff;
   }
 
-  readUint8(address: number) {
+  readUint8(address: Uint32): Uint32 {
     if (address >= FLASH_START_ADDRESS && address < FLASH_START_ADDRESS + this.flash.length) {
       return this.flash[address - FLASH_START_ADDRESS];
     } else if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
@@ -281,15 +285,16 @@ export class RP2040 implements IRPChip {
     return (address & 0x1 ? (value & 0xff00) >>> 8 : value & 0xff) >>> 0;
   }
 
-  writeUint32(address: number, value: number) {
+  writeUint32(address: Uint32, value: Uint32) {
     address = address >>> 0;
     const { bootrom } = this;
-    const peripheral = this.findPeripheral(address);
-    if (peripheral) {
-      const atomicType = (address & 0x3000) >> 12;
-      const offset = address & 0xfff;
-      peripheral.writeUint32Atomic(offset, value, atomicType);
-    } else if (address < bootrom.length * 4) {
+    // findPeripheral() indexes a dense array in the C build (keyed by the raw
+    // address, not a real sparse map), so it must never be called with an address
+    // outside any peripheral's range — out-of-bounds there is undefined behavior in
+    // C, unlike JS where an unmatched object-property lookup just returns undefined.
+    // The PPB region (0xe000e000-0xe000efff) is one such range: checked here before
+    // findPeripheral, matching readUint32's (already-correct) ordering.
+    if (address < bootrom.length * 4) {
       bootrom[address / 4] = value;
     } else if (
       address >= FLASH_START_ADDRESS &&
@@ -310,11 +315,18 @@ export class RP2040 implements IRPChip {
     } else if (address >>> 12 === 0xe000e) {
       this.ppb.writeUint32ViaCore(address & 0xfff, value, this.currentCore);
     } else {
-      this.logger.warn(LOG_NAME, `Write to undefined address: ${address.toString(16)}`);
+      const peripheral = this.findPeripheral(address);
+      if (peripheral) {
+        const atomicType = (address & 0x3000) >> 12;
+        const offset = address & 0xfff;
+        peripheral.writeUint32Atomic(offset, value, atomicType);
+      } else {
+        this.logger.warn(LOG_NAME, `Write to undefined address: ${address.toString(16)}`);
+      }
     }
   }
 
-  writeUint8(address: number, value: number) {
+  writeUint8(address: Uint32, value: Uint32) {
     if (address >= RAM_START_ADDRESS && address < RAM_START_ADDRESS + this.sram.length) {
       this.sram[address - RAM_START_ADDRESS] = value;
       return;
@@ -346,7 +358,7 @@ export class RP2040 implements IRPChip {
     this.writeUint32(alignedAddress, newValue[0]);
   }
 
-  writeUint16(address: number, value: number) {
+  writeUint16(address: Uint32, value: Uint32) {
     // we assume that addess is 16-bit aligned.
     // Ideally we should generate a fault if not!
 

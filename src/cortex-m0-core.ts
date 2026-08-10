@@ -1,5 +1,5 @@
 import { ICpuCore } from './cpu-core';
-import { Int53 } from './utils/types';
+import { Int53, Uint32 } from './utils/types';
 import { MAX_HARDWARE_IRQ } from './irq';
 import { RP2040, APB_START_ADDRESS, SIO_START_ADDRESS } from './rp2040';
 
@@ -583,7 +583,7 @@ export class CortexM0Core implements ICpuCore {
     }
   }
 
-  private substractUpdateFlags(minuend: number, subtrahend: number) {
+  private substractUpdateFlags(minuend: Uint32, subtrahend: Uint32) {
     const result = minuend - subtrahend;
     this.N = !!(result & 0x80000000);
     this.Z = (result & 0xffffffff) === 0;

@@ -20,10 +20,10 @@ import { RP2350SHA256 } from './peripherals/sha256_rp2350';
 import { RP2350TRNG } from './peripherals/trng_rp2350';
 import { RP2350OTP, RP2350OTPData } from './peripherals/otp_data_rp2350';
 import { RPClocks } from './peripherals/clocks';
-import { DREQChannel, RPDMA } from './peripherals/dma_rp2350';
+import { DREQChannel, RP2350DMA } from './peripherals/dma_rp2350';
 import { RPI2C } from './peripherals/i2c';
-import { RPIO } from './peripherals/io_rp2350';
-import { RPPADS } from './peripherals/pads_rp2350';
+import { RP2350IO } from './peripherals/io_rp2350';
+import { RP2350PADS } from './peripherals/pads_rp2350';
 import { Peripheral, UnimplementedPeripheral } from './peripherals/peripheral';
 import { RPPIO, StateMachine, WaitType } from './peripherals/pio';
 import { RPPWM } from './peripherals/pwm';
@@ -38,7 +38,7 @@ import { RPTimer } from './peripherals/timer';
 import { RPUART } from './peripherals/uart';
 import { RPUSBController } from './peripherals/usb';
 import { RPXIPQMI } from './peripherals/xip_rp2350';
-import { RPSIO } from './sio_rp2350';
+import { RP2350SIO } from './sio_rp2350';
 import { RPWatchdog } from './peripherals/watchdog';
 import { ConsoleLogger, Logger, LogLevel } from './utils/logging';
 import { CortexM33Core } from './cortex-m33/core';
@@ -156,7 +156,7 @@ export class RP2350 implements IRPChip {
   clkSys = 125 * MHz;
   clkPeri = 125 * MHz;
 
-  readonly sio = new RPSIO(
+  readonly sio = new RP2350SIO(
     this,
     IRQ2350.SIO_IRQ_FIFO,
     IRQ2350.SIO_IRQ_FIFO,
@@ -198,7 +198,7 @@ export class RP2350 implements IRPChip {
     new GPIOPin(this, 5, 'SD3'),
   ];
 
-  readonly dma = new RPDMA(this, 'DMA', IRQ2350.DMA_IRQ_0);
+  readonly dma = new RP2350DMA(this, 'DMA', IRQ2350.DMA_IRQ_0);
   readonly pio: Array<RPPIO> = [
     new RPPIO(
       this,
@@ -245,10 +245,10 @@ export class RP2350 implements IRPChip {
     0x40010: new RPClocks(this, 'CLOCKS_BASE'),
     0x40018: new RP2350PSM(this, 'PSM_BASE'),
     0x40020: new RPReset(this, 'RESETS_BASE'),
-    0x40028: new RPIO(this, 'IO_BANK0_BASE'),
+    0x40028: new RP2350IO(this, 'IO_BANK0_BASE'),
     0x40030: new UnimplementedPeripheral(this, 'IO_QSPI_BASE'),
-    0x40038: new RPPADS(this, 'PADS_BANK0_BASE', 'bank0'),
-    0x40040: new RPPADS(this, 'PADS_QSPI_BASE', 'qspi'),
+    0x40038: new RP2350PADS(this, 'PADS_BANK0_BASE', 'bank0'),
+    0x40040: new RP2350PADS(this, 'PADS_QSPI_BASE', 'qspi'),
     0x40048: new UnimplementedPeripheral(this, 'XOSC_BASE'),
     0x40050: new RP2350PLL(this, 'PLL_SYS_BASE'),
     0x40058: new UnimplementedPeripheral(this, 'PLL_USB_BASE'),

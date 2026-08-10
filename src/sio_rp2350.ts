@@ -48,7 +48,7 @@ const SPINLOCK_ST = 0x5c;
 const SPINLOCK0 = 0x100;
 const SPINLOCK31 = 0x17c;
 
-/** Fires the per-core mtimecmp interrupt; a dedicated class (rather than RPSIO
+/** Fires the per-core mtimecmp interrupt; a dedicated class (rather than RP2350SIO
  * implementing AlarmCallback itself) since there are two per-core alarms. */
 class MtimecmpAlarmCallback implements AlarmCallback {
   constructor(
@@ -62,7 +62,7 @@ class MtimecmpAlarmCallback implements AlarmCallback {
   }
 }
 
-export class RPSIO {
+export class RP2350SIO {
   gpioValue = 0;
   gpioOutputEnable = 0;
   gpioHiValue = 0;

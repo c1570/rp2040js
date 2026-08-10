@@ -11,7 +11,7 @@ const QSPI_LAST = 0x18;
 
 export type IIOBank = 'qspi' | 'bank0';
 
-export class RPPADS<ChipType extends IRPChip = IRPChip>
+export class RP2350PADS<ChipType extends IRPChip = IRPChip>
   extends BasePeripheral<ChipType>
   implements Peripheral
 {

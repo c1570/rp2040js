@@ -11,9 +11,9 @@
 //
 // Usage: npx tsx cts2c/cts2c-ensure-parity.ts [firmware.hex] [targetCycles] [coreArch]
 //   Default: demo/cnm64_main.hex, 50000000 cycles, riscv
-//   coreArch: "riscv" (default) or "arm"
+//   coreArch: "riscv" or "arm" (both RP2350, default "riscv") or "rp2040" (RP2040 chip)
 
-import { RP2350 } from '../src';
+import { RP2040, RP2350 } from '../src';
 import { execSync, spawnSync } from 'child_process';
 import { join } from 'path';
 
@@ -21,7 +21,7 @@ const ROOT = join(import.meta.dirname, '..');
 const HARNESS_BIN = join(ROOT, 'build/transpile/rp2350-harness');
 const HARNESS_SRC = join(ROOT, 'cts2c/helper-cts2c-ensure-parity.c');
 
-type CoreArch = 'riscv' | 'arm';
+type CoreArch = 'riscv' | 'arm' | 'rp2040';
 
 // ─── CRC32 (same algorithm as perf-bench.ts / main.c) ─────────────────
 const CRC32_TABLE = (() => {
@@ -61,9 +61,14 @@ interface RegDump {
 // GPIO listener logs would flood the console over hundreds of millions of cycles.
 const noop = () => undefined;
 
-function silenceHostIO(mcu: RP2350) {
+function silenceHostIO(mcu: RP2040 | RP2350) {
   mcu.uart[0].onByte = noop;
-  for (let i = 0; i < 11; i++) mcu.gpio[i].addListener(noop);
+  for (let i = 0; i < mcu.gpio.length; i++) mcu.gpio[i].addListener(noop);
+}
+
+function newMcu(hexFile: string, coreArch: CoreArch): RP2040 | RP2350 {
+  if (coreArch === 'rp2040') return new RP2040({ loadFirmware: hexFile });
+  return new RP2350({ loadFirmware: hexFile, coreArch });
 }
 
 // ─── Node emulator runner ─────────────────────────────────────────────
@@ -74,7 +79,7 @@ function runNode(
   quietUntil: number,
   coreArch: CoreArch
 ): BlockCrc[] {
-  const mcu = new RP2350({ loadFirmware: hexFile, coreArch });
+  const mcu = newMcu(hexFile, coreArch);
   silenceHostIO(mcu);
 
   const results: BlockCrc[] = [];
@@ -112,17 +117,17 @@ function runNode(
 }
 
 // ─── Node register dump ──────────────────────────────────────────────
-// RISC-V has 32 general registers (x0-x31); ARM (Cortex-M33) has only 16
-// (r0-r12, sp, lr, pc) — padded to the same 32-wide dump shape with zeros so
-// the rest of this file's comparison/print logic doesn't need to know which
-// arch it's looking at.
+// RISC-V has 32 general registers (x0-x31); ARM (Cortex-M33 or Cortex-M0+) has
+// only 16 (r0-r12, sp, lr, pc) — padded to the same 32-wide dump shape with
+// zeros so the rest of this file's comparison/print logic doesn't need to know
+// which arch it's looking at.
 function dumpNodeRegs(
   hexFile: string,
   startStep: number,
   count: number,
   coreArch: CoreArch
 ): RegDump[] {
-  const mcu = new RP2350({ loadFirmware: hexFile, coreArch });
+  const mcu = newMcu(hexFile, coreArch);
   silenceHostIO(mcu);
 
   const core = mcu.core[0] as any;
@@ -137,6 +142,8 @@ function dumpNodeRegs(
       const regs: number[] = new Array(32).fill(0);
       if (coreArch === 'arm') {
         for (let i = 0; i < 16; i++) regs[i] = core.regs.r[i] >>> 0;
+      } else if (coreArch === 'rp2040') {
+        for (let i = 0; i < 16; i++) regs[i] = core.registers[i] >>> 0;
       } else {
         for (let i = 0; i < 32; i++) regs[i] = core.registerSet.getRegisterU(i) >>> 0;
       }
@@ -369,8 +376,8 @@ async function main() {
   const hexFile = process.argv[2] || 'demo/cnm64_main.hex';
   const targetCycles = Number(process.argv[3]) || 50_000_000;
   const coreArchArg = process.argv[4] || 'riscv';
-  if (coreArchArg !== 'riscv' && coreArchArg !== 'arm') {
-    console.error(`Invalid coreArch "${coreArchArg}" — expected "riscv" or "arm"`);
+  if (coreArchArg !== 'riscv' && coreArchArg !== 'arm' && coreArchArg !== 'rp2040') {
+    console.error(`Invalid coreArch "${coreArchArg}" — expected "riscv", "arm", or "rp2040"`);
     process.exit(1);
   }
   const coreArch: CoreArch = coreArchArg;

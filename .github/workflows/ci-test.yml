@@ -19,8 +19,8 @@ jobs:
       # Skipped by npm test above (see cts2c/cts2c-parity.spec.ts); run it here with
       # CTS2C_PARITY set. Transpiles src/ to C, compiles it with the runner's gcc, and
       # checks the C build's execution trace still matches Node's for 5M cycles on each
-      # architecture. Kept as its own step so a parity failure is distinguishable from a
-      # unit-test failure at a glance.
+      # chip/architecture (RISC-V, ARM, and RP2040). Kept as its own step so a parity
+      # failure is distinguishable from a unit-test failure at a glance.
       - name: cts2c Node-vs-C parity
         run: npx vitest run cts2c
         env:

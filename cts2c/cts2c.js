@@ -22,6 +22,26 @@ const fs = require('fs');
 const path = require('path');
 const parser = require('@babel/parser');
 
+// ─── Shadow-file redirection ────────────────────────────────────────
+// Set from the `--shadow-dir <dir>` CLI flag (see main()). Every read of a
+// discovered .ts source file goes through readSourceFile() below instead of a
+// bare fs.readFileSync, so a preprocessing pass (e.g. monomorphize-chip-classes.mjs)
+// can substitute a rewritten file's CONTENT while every discovery/collection pass
+// still walks the real on-disk src/ tree by its real path — collectTypes/
+// preRegisterTypes/discoverGenericInstantiations always re-discover files by
+// scanning src/ directly (see findTsFiles/findSrcRoot in main()), independent of
+// the explicit CLI file list, so redirecting by path substitution alone (passing a
+// different path on the CLI) does not reach them; this does.
+let shadowDir = null;
+
+function readSourceFile(filepath) {
+  if (shadowDir) {
+    const shadowPath = path.join(shadowDir, path.basename(filepath));
+    if (fs.existsSync(shadowPath)) return fs.readFileSync(shadowPath, 'utf8');
+  }
+  return fs.readFileSync(filepath, 'utf8');
+}
+
 // Fixed capacity for a class field declared `X[] = []` and only ever grown via
 // `.push()` — cts2c has no resizable-array support, so such a field is
 // modeled as a preallocated slot array plus a `<field>_count` companion struct member
@@ -164,7 +184,7 @@ function walkForGenericCalls(node, contextType) {
 function discoverGenericInstantiations(inputFiles) {
   if (genericFreeFunctionDecls.size === 0) return;
   for (const f of inputFiles) {
-    const src = fs.readFileSync(f, 'utf8');
+    const src = readSourceFile(f);
     const ast = parser.parse(src, {
       sourceType: 'module',
       plugins: ['typescript'],
@@ -225,7 +245,7 @@ function emitGenericFunctionInstantiations(out) {
       // re-emitted once per instantiation, not once per file), so set them explicitly
       // from the declaring file or every TODO marker in here mislabels its origin.
       currentFile = path.relative(process.cwd(), decl.filepath);
-      currentSrcLines = fs.readFileSync(decl.filepath, 'utf8').split('\n');
+      currentSrcLines = readSourceFile(decl.filepath).split('\n');
       const params = fn.params;
       const paramStr = params.map((p) => `${p.type} ${cName(p.name)}`).join(', ') || 'void';
       // `p.tsType` for a ChipType-generic param is still the literal name "ChipType"
@@ -648,7 +668,7 @@ const typedArrayCType = (name) => {
 
 // ─── Pass 0: Pre-register all type names ─────────────────────────────
 function preRegisterTypes(filepath) {
-  const src = fs.readFileSync(filepath, 'utf8');
+  const src = readSourceFile(filepath);
   const ast = parser.parse(src, {
     sourceType: 'module',
     plugins: ['typescript'],
@@ -1171,7 +1191,7 @@ function collectFreeFunctionSignature(fn) {
 
 // ─── Pass 1: Collect types ──────────────────────────────────────────
 function collectTypes(filepath) {
-  const src = fs.readFileSync(filepath, 'utf8');
+  const src = readSourceFile(filepath);
   const ast = parser.parse(src, {
     sourceType: 'module',
     plugins: ['typescript'],
@@ -2348,6 +2368,12 @@ function emitFieldInitializers(classNode, className, out, ctx, params) {
     if (!field?.initNode) continue;
     const initNode = field.initNode;
 
+    // RP2040RTC's `baseline = new Date(...)` — cts2c has no Date support (see the
+    // matching readUint32/writeUint32 override in emitClassImpl). `baseline` is only
+    // ever read back through those two hand-written bodies, which never touch it, so
+    // leaving it NULL (from the surrounding calloc) is safe.
+    if (className === 'RP2040RTC' && fname === 'baseline') continue;
+
     // Inlined typed array: the struct's own calloc already zeroed it.
     if (field.inlineArray && field.isTypedArray) continue;
 
@@ -2819,6 +2845,64 @@ function emitClassImpl(node, out) {
       const nameExpr = info.fields.has('name') ? `self->name` : `"${name}"`;
       out.push(`static ${msig.retType} ${name}_${mname}(${paramStr}) {`);
       out.push(`  fprintf(stderr, "[%s] %s\\n", ${nameExpr}, ${msgParam});`);
+      out.push(`}`);
+      out.push('');
+      continue;
+    }
+
+    // RP2040RTC (rtc.ts) uses `Date` for its wall-clock read/reconstruct logic, which
+    // cts2c has no support for at all (see the `baseline` field-initializer skip in
+    // emitFieldInitializers below for the matching constructor-side half of this).
+    // Rather than teaching cts2c a general Date feature, hand-write these two methods:
+    // the real register bookkeeping (setup0/setup1/ctrl) is preserved, but the actual
+    // Date-backed wall-clock value is stubbed out with a runtime warning instead of
+    // computed — same by-name-override precedent as checkTraceMagic/loadFirmwareFromUF2.
+    if (name === 'RP2040RTC' && (mname === 'readUint32' || mname === 'writeUint32')) {
+      const params = [{ name: 'self', type: `${name}*` }, ...msig.params];
+      const paramStr = params.map((p) => `${p.type} ${cName(p.name)}`).join(', ');
+      out.push(`static ${msig.retType} ${name}_${mname}(${paramStr}) {`);
+      if (mname === 'readUint32') {
+        out.push(`  switch (offset) {`);
+        out.push(`  case RTC_SETUP0: return self->setup0;`);
+        out.push(`  case RTC_SETUP1: return self->setup1;`);
+        out.push(`  case RTC_CTRL: return self->ctrl;`);
+        out.push(`  case IRQ_SETUP_0: return 0;`);
+        out.push(`  case RTC_RTC1:`);
+        out.push(`  case RTC_RTC0:`);
+        out.push(
+          `    fprintf(stderr, "[%s] RTC wall-clock read (offset 0x%x) is stubbed in the C build (no Date support in cts2c) -- returning 0\\n", self->base.name, offset);`
+        );
+        out.push(`    return 0;`);
+        out.push(`  default: break;`);
+        out.push(`  }`);
+        out.push(`  return BasePeripheral__RP2040_readUint32(&self->base, offset);`);
+      } else {
+        out.push(`  switch (offset) {`);
+        out.push(`  case RTC_SETUP0: self->setup0 = value; break;`);
+        out.push(`  case RTC_SETUP1: self->setup1 = value; break;`);
+        out.push(`  case RTC_CTRL:`);
+        out.push(`    if (value & RTC_LOAD_BITS) self->ctrl |= RTC_LOAD_BITS;`);
+        out.push(`    if (value & RTC_ENABLE_BITS) {`);
+        out.push(`      self->ctrl |= RTC_ENABLE_BITS;`);
+        out.push(`      self->ctrl |= RTC_ACTIVE_BITS;`);
+        out.push(`      if (self->ctrl & RTC_LOAD_BITS) {`);
+        out.push(
+          `        fprintf(stderr, "[%s] RTC_LOAD (offset 0x%x) is stubbed in the C build (no Date support in cts2c) -- setup0/setup1 recorded but not applied to wall clock\\n", self->base.name, offset);`
+        );
+        out.push(
+          `        self->baselineNanos = SimulationClock_getNanos(self->base.rp2040->clock);`
+        );
+        out.push(`        self->ctrl &= ~RTC_LOAD_BITS;`);
+        out.push(`      }`);
+        out.push(`    } else {`);
+        out.push(`      self->ctrl &= ~RTC_ENABLE_BITS;`);
+        out.push(`      self->ctrl &= ~RTC_ACTIVE_BITS;`);
+        out.push(`    }`);
+        out.push(`    break;`);
+        out.push(`  default:`);
+        out.push(`    BasePeripheral__RP2040_writeUint32(&self->base, offset, value);`);
+        out.push(`  }`);
+      }
       out.push(`}`);
       out.push('');
       continue;
@@ -6371,7 +6455,7 @@ function emitAllStructDefs(out) {
 
 // Emit only implementations (structs and decls already emitted globally)
 function transpileFileImpls(filepath, out) {
-  const src = fs.readFileSync(filepath, 'utf8');
+  const src = readSourceFile(filepath);
   const ast = parser.parse(src, {
     sourceType: 'module',
     plugins: ['typescript'],
@@ -6388,10 +6472,16 @@ function transpileFileImpls(filepath, out) {
   }
 }
 function main() {
-  const files = process.argv.slice(2);
+  let files = process.argv.slice(2);
   if (files.length === 0) {
-    console.error('Usage: cts2c.js <file1.ts> [file2.ts ...] [-o output.c]');
+    console.error('Usage: cts2c.js <file1.ts> [file2.ts ...] [-o output.c] [--shadow-dir dir]');
     process.exit(1);
+  }
+
+  const shadowDirIdx = files.indexOf('--shadow-dir');
+  if (shadowDirIdx !== -1) {
+    shadowDir = files[shadowDirIdx + 1];
+    files = files.filter((_, i) => i !== shadowDirIdx && i !== shadowDirIdx + 1);
   }
 
   const outFileIdx = files.indexOf('-o');

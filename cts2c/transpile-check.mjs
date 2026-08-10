@@ -24,7 +24,8 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, basename } from 'node:path';
+import { monomorphizeChipClasses } from './monomorphize-chip-classes.mjs';
 
 const ROOT = join(import.meta.dirname, '..');
 const SRC = join(ROOT, 'src');
@@ -71,16 +72,7 @@ const FULL_EXCLUDE = [
   'src/rp2-emu-cli/',
   'src/utils/emulator-controller.ts',
   'src/utils/pio-gpio-dump.ts',
-  'src/rp2040.ts',
   'src/simulator.ts',
-  'src/peripherals/ppb.ts',
-  'src/peripherals/syscfg.ts',
-  // RP2040-only ARM Cortex-M0+ core (RP2350 uses CortexM33Core, or the RISC-V CPU
-  // core — never this one). Explicitly typed to concrete RP2040 (not ChipType-
-  // generic), only ever constructed in rp2040.ts (already excluded above) — so its
-  // methods, which call RP2040_readUint32/writeUint32/etc., link-fail in a harness
-  // that never emits rp2040.ts's own bodies. Dead code for an RP2350-only build.
-  'src/cortex-m0-core.ts',
 ];
 
 let inputFiles;
@@ -94,6 +86,29 @@ if (explicitFiles) {
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
+
+// Class-level ChipType monomorphization (see monomorphize-chip-classes.mjs's own
+// header comment): RPUART/RPI2C/RPPWM/RPADC/RPSPI/RPTimer/RPWatchdog and their nested
+// helpers are constructed by both rp2040.ts and rp2350.ts, but cts2c's class emission
+// unconditionally resolves ChipType to RP2350 — so `this.rp2040.<field>` inside any of
+// them would read RP2350's field offsets out of memory that might actually be laid out
+// as RP2040. Appends an RP2040__-mangled clone of each affected class before cts2c.js
+// sees them; the original declaration is untouched and keeps representing RP2350.
+//
+// Passed to cts2c.js as `--shadow-dir`, not as substituted file paths: cts2c.js's own
+// type-collection pass (collectTypes/preRegisterTypes) always rediscovers every file by
+// walking src/ directly from disk, independent of the CLI file list, so a class defined
+// only under a path outside src/ would never be discovered at all. --shadow-dir instead
+// redirects what CONTENT is read for a given (still real, still src/-rooted) path.
+const monoDir = join(OUT_DIR, 'mono');
+mkdirSync(monoDir, { recursive: true });
+const monomorphized = monomorphizeChipClasses(inputFiles);
+if (monomorphized.size > 0) {
+  console.log(`── monomorphizing ${monomorphized.size} chip-shared peripheral file(s) ──`);
+  for (const [origPath, content] of monomorphized) {
+    writeFileSync(join(monoDir, basename(origPath)), content);
+  }
+}
 // .h, not .c: every emitted function is `static`, so consumers #include it, not link it.
 const cFile = join(OUT_DIR, 'rp2350js-c.h');
 const oFile = join(OUT_DIR, `${label}.o`);
@@ -106,10 +121,20 @@ writeFileSync(manifestFile, inputFiles.map((f) => relative(ROOT, f)).join('\n') 
 console.log(`── cts2c: transpiling ${inputFiles.length} file(s) [${label}] ──`);
 let cts2cOk = true;
 try {
-  execFileSync('node', [join(ROOT, 'cts2c', 'cts2c.js'), ...inputFiles, '-o', cFile], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
+  execFileSync(
+    'node',
+    [
+      join(ROOT, 'cts2c', 'cts2c.js'),
+      ...inputFiles,
+      '-o',
+      cFile,
+      ...(monomorphized.size > 0 ? ['--shadow-dir', monoDir] : []),
+    ],
+    {
+      cwd: ROOT,
+      stdio: 'inherit',
+    }
+  );
 } catch (e) {
   cts2cOk = false;
   console.error(`cts2c.js failed: ${e.message}`);
