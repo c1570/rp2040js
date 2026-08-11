@@ -1,8 +1,8 @@
-import { RP2040 } from '../rp2040';
+import { IRPChip } from '../rpchip';
 
-export interface IGDBTarget {
+export interface IGDBTarget<ChipType extends IRPChip = IRPChip> {
   readonly executing: boolean;
-  rp2040: RP2040;
+  rpchip: ChipType;
 
   execute(): void;
   stop(): void;

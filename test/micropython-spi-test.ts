@@ -1,6 +1,8 @@
 import fs from 'fs';
 import minimist from 'minimist';
-import { GPIOPinState, Simulator } from '../src';
+import { GPIOPinState } from '../src';
+import { Simulator } from '../src/simulator';
+import { RP2040 } from '../src/rp2040';
 import { ConsoleLogger, LogLevel } from '../src/utils/logging';
 import { bootromB1 } from '../src/bootroms';
 import { loadUF2 } from '../src/utils/load-uf2';
@@ -8,8 +10,8 @@ import { loadMicropythonFlashImage } from '../demo/load-flash';
 
 const args = minimist(process.argv.slice(2));
 
-const simulator = new Simulator();
-const mcu = simulator.rp2040;
+const simulator = new Simulator(new RP2040());
+const mcu = simulator.rpchip;
 mcu.loadBootrom(bootromB1);
 mcu.logger = new ConsoleLogger(LogLevel.Error);
 

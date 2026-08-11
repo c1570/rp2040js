@@ -15,9 +15,9 @@ export class RPReset<ChipType extends IRPChip = IRPChip>
   private reset_done: number = 0x1ffffff;
   private reset_mask: number = 0x1ffffff;
 
-  constructor(protected rp2040: ChipType, readonly name: string) {
-    super(rp2040, name);
-    if (rp2040 instanceof RP2350) {
+  constructor(protected rpchip: ChipType, readonly name: string) {
+    super(rpchip, name);
+    if (rpchip instanceof RP2350) {
       this.reset_done = this.reset_mask = 0x1fffffff;
     }
   }

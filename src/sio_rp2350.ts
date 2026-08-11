@@ -52,13 +52,13 @@ const SPINLOCK31 = 0x17c;
  * implementing AlarmCallback itself) since there are two per-core alarms. */
 class MtimecmpAlarmCallback implements AlarmCallback {
   constructor(
-    private readonly rp2040: RP2350,
+    private readonly rpchip: RP2350,
     private readonly sio_mtimecmp_irq: number,
     private readonly core: number
   ) {}
 
   fire() {
-    this.rp2040.setInterruptCore(this.sio_mtimecmp_irq, true, this.core);
+    this.rpchip.setInterruptCore(this.sio_mtimecmp_irq, true, this.core);
   }
 }
 
@@ -79,7 +79,7 @@ export class RP2350SIO {
   private readonly mtimecmpHigh: [number, number] = [0, 0];
 
   constructor(
-    private readonly rp2040: RP2350,
+    private readonly rpchip: RP2350,
     readonly sio_proc0_irq: number,
     readonly sio_proc1_irq: number,
     readonly sio_mtimecmp_irq: number = sio_proc0_irq
@@ -87,23 +87,23 @@ export class RP2350SIO {
     const rxFIFO = new FIFO(8);
     const txFIFO = new FIFO(8);
     this.sioCore = [
-      new RPSIOCore(rp2040, rxFIFO, txFIFO, sio_proc0_irq, sio_proc1_irq, 0, 1),
-      new RPSIOCore(rp2040, txFIFO, rxFIFO, sio_proc1_irq, sio_proc0_irq, 1, 0),
+      new RPSIOCore(rpchip, rxFIFO, txFIFO, sio_proc0_irq, sio_proc1_irq, 0, 1),
+      new RPSIOCore(rpchip, txFIFO, rxFIFO, sio_proc1_irq, sio_proc0_irq, 1, 0),
     ];
 
-    this.mtimeTimer = new Timer32('SIO_mtime', rp2040.clock, MTIME_FREQUENCY);
+    this.mtimeTimer = new Timer32('SIO_mtime', rpchip.clock, MTIME_FREQUENCY);
     this.mtimeTimer.mode = TimerMode.Increment;
     this.mtimecmpAlarm = [
-      this.createMtimecmpAlarm(rp2040, sio_mtimecmp_irq, 0),
-      this.createMtimecmpAlarm(rp2040, sio_mtimecmp_irq, 1),
+      this.createMtimecmpAlarm(rpchip, sio_mtimecmp_irq, 0),
+      this.createMtimecmpAlarm(rpchip, sio_mtimecmp_irq, 1),
     ];
   }
 
-  private createMtimecmpAlarm(rp2040: RP2350, sio_mtimecmp_irq: number, core: number) {
+  private createMtimecmpAlarm(rpchip: RP2350, sio_mtimecmp_irq: number, core: number) {
     const alarm = new Timer32PeriodicAlarm(
       `SIO_mtimecmp_core${core}`,
       this.mtimeTimer,
-      new MtimecmpAlarmCallback(rp2040, sio_mtimecmp_irq, core)
+      new MtimecmpAlarmCallback(rpchip, sio_mtimecmp_irq, core)
     );
     alarm.target = 0xffffffff; // matches MTIMECMP reset value
     alarm.enable = true;
@@ -122,11 +122,11 @@ export class RP2350SIO {
     }
     switch (offset) {
       case GPIO_IN:
-        return this.rp2040.gpioValues(0);
+        return this.rpchip.gpioValues(0);
       case GPIO_HI_IN: {
         // RP2350: QSPI pins at bits 31:26, GPIO32+ at bits 25:0.
         // QSPI_SCLK=bit31, QSPI_SS=bit27, QSPI_SD0=bit28, QSPI_SD1=bit29.
-        const { qspi } = this.rp2040;
+        const { qspi } = this.rpchip;
         let result = 0;
         for (let qspiIndex = 0; qspiIndex < qspi.length; qspiIndex++) {
           if (qspi[qspiIndex].inputValue) {
@@ -134,7 +134,7 @@ export class RP2350SIO {
           }
         }
         result <<= 26;
-        result |= this.rp2040.gpioValues(32);
+        result |= this.rpchip.gpioValues(32);
         return result;
       }
       case GPIO_OUT:
@@ -252,7 +252,7 @@ export class RP2350SIO {
         // Writing mtimecmp clears the (level-sensitive) interrupt condition
         // until mtime reaches the new target — matches real hardware, and is
         // how firmware acknowledges/reschedules the tick after each fire.
-        this.rp2040.setInterruptCore(this.sio_mtimecmp_irq, false, cpuCore);
+        this.rpchip.setInterruptCore(this.sio_mtimecmp_irq, false, cpuCore);
         this.mtimecmpAlarm[cpuCore].target = value >>> 0;
         break;
       default:
@@ -262,7 +262,7 @@ export class RP2350SIO {
 
     let pinsToUpdate =
       (this.gpioValue ^ prevGpioValue) | (this.gpioOutputEnable ^ prevGpioOutputEnable);
-    const { gpio } = this.rp2040;
+    const { gpio } = this.rpchip;
     if (pinsToUpdate) {
       for (let gpioIndex = 0; gpioIndex < 32; gpioIndex++) {
         if (pinsToUpdate & (1 << gpioIndex)) {

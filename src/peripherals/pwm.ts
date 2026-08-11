@@ -296,14 +296,14 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
   implements Peripheral
 {
   readonly channels = [
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 0),
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 1),
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 2),
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 3),
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 4),
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 5),
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 6),
-    new PWMChannel(this, this.rp2040.clock as SimulationClock, 7),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 0),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 1),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 2),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 3),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 4),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 5),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 6),
+    new PWMChannel(this, this.rpchip.clock as SimulationClock, 7),
   ];
   private intRaw = 0;
   private intEnable = 0;
@@ -313,12 +313,12 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
   gpioDirection: Uint32 = 0;
 
   constructor(
-    readonly rp2040: ChipType,
+    readonly rpchip: ChipType,
     name: string,
     readonly pwm_wrap_irq: number,
     readonly pwm_dreq_base: number
   ) {
-    super(rp2040, name);
+    super(rpchip, name);
   }
 
   get intStatus() {
@@ -389,7 +389,7 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
   }
 
   get clockFreq() {
-    return this.rp2040.clkSys;
+    return this.rpchip.clkSys;
   }
 
   channelInterrupt(index: number) {
@@ -397,11 +397,11 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
     this.checkInterrupts();
 
     // We also set the DMA Request (DREQ) for the channel
-    this.rp2040.dma_setDREQ(this.pwm_dreq_base + index);
+    this.rpchip.dma_setDREQ(this.pwm_dreq_base + index);
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(this.pwm_wrap_irq, !!this.intStatus);
+    this.rpchip.setInterrupt(this.pwm_wrap_irq, !!this.intStatus);
   }
 
   gpioSet(index: number, value: boolean) {
@@ -409,7 +409,7 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
     const newGpioValue = value ? this.gpioValue | bit : this.gpioValue & ~bit;
     if (this.gpioValue != newGpioValue) {
       this.gpioValue = newGpioValue;
-      this.rp2040.gpio[index].checkForUpdates();
+      this.rpchip.gpio[index].checkForUpdates();
     }
   }
 
@@ -421,12 +421,12 @@ export class RPPWM<ChipType extends IRPChip = IRPChip>
       (output ? this.gpioDirection | bit : this.gpioDirection & ~bit) >>> 0;
     if (this.gpioDirection != newGpioDirection) {
       this.gpioDirection = newGpioDirection;
-      this.rp2040.gpio[index].checkForUpdates();
+      this.rpchip.gpio[index].checkForUpdates();
     }
   }
 
   gpioRead(index: number) {
-    return this.rp2040.gpio[index].inputValue;
+    return this.rpchip.gpio[index].inputValue;
   }
 
   gpioOnInput(index: number) {

@@ -69,7 +69,7 @@ export class RPSIOCore<ChipType extends IRPChip = IRPChip> {
   WOF = false;
 
   constructor(
-    private readonly rp2040: ChipType,
+    private readonly rpchip: ChipType,
     private readonly rxFIFO: FIFO,
     private readonly txFIFO: FIFO,
     private readonly sio_interrupt: number,
@@ -192,7 +192,7 @@ export class RPSIOCore<ChipType extends IRPChip = IRPChip> {
       case FIFO_RD:
         if (this.rxFIFO.empty) {
           this.ROE = true;
-          this.rp2040.setInterruptCore(this.sio_interrupt, true, this.cpuCore);
+          this.rpchip.setInterruptCore(this.sio_interrupt, true, this.cpuCore);
           return 0;
         }
         return this.rxFIFO.pull();
@@ -314,16 +314,16 @@ export class RPSIOCore<ChipType extends IRPChip = IRPChip> {
           this.ROE = false;
         }
         if (!this.WOF && !this.ROE && this.rxFIFO.empty) {
-          this.rp2040.setInterruptCore(this.sio_interrupt, false, this.cpuCore);
+          this.rpchip.setInterruptCore(this.sio_interrupt, false, this.cpuCore);
         }
         break;
       case FIFO_WR:
         if (this.txFIFO.full) {
           this.WOF = true;
-          this.rp2040.setInterruptCore(this.sio_interrupt, true, this.cpuCore);
+          this.rpchip.setInterruptCore(this.sio_interrupt, true, this.cpuCore);
         } else {
           this.txFIFO.push(value);
-          this.rp2040.setInterruptCore(this.sio_interrupt_other_core, true, this.cpuCoreOther);
+          this.rpchip.setInterruptCore(this.sio_interrupt_other_core, true, this.cpuCoreOther);
         }
         break;
       default:
@@ -350,6 +350,6 @@ export class RPSIOCore<ChipType extends IRPChip = IRPChip> {
       }
     }
     this.divCSR = 0b11;
-    this.rp2040.core[this.cpuCore].addCycles(8);
+    this.rpchip.core[this.cpuCore].addCycles(8);
   }
 }

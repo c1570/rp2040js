@@ -14,10 +14,10 @@ export class RPClocks<ChipType extends IRPChip = IRPChip>
   sysCtrl = 0;
   clkFc0StatusOffset = 0;
 
-  constructor(rp2040: ChipType, name: string) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string) {
+    super(rpchip, name);
     // Dynamic switch case offset — use if/else instead for C compatibility
-    if (rp2040.identifier === 'rp2350') {
+    if (rpchip.identifier === 'rp2350') {
       this.clkFc0StatusOffset = 0xa4;
     } else {
       this.clkFc0StatusOffset = 0x98;

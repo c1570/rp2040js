@@ -49,7 +49,7 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
   private readonly listeners: GPIOPinListener[] = [];
 
   constructor(
-    readonly rp2040: ChipType,
+    readonly rpchip: ChipType,
     readonly index: number,
     readonly name: string = index.toString()
   ) {}
@@ -115,11 +115,11 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
   }
 
   get outputEnable() {
-    return applyOverride(this.rp2040.gpioRawOutputEnable(this.index), this.outputEnableOverride);
+    return applyOverride(this.rpchip.gpioRawOutputEnable(this.index), this.outputEnableOverride);
   }
 
   get outputValue() {
-    return applyOverride(this.rp2040.gpioRawOutputValue(this.index), this.outputOverride);
+    return applyOverride(this.rpchip.gpioRawOutputValue(this.index), this.outputOverride);
   }
 
   /**
@@ -131,9 +131,9 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
     const inToPeri = this.inputValue ? 1 << 19 : 0;
     const inFromPad = this.rawInputValue ? 1 << 17 : 0;
     const oeToPad = this.outputEnable ? 1 << 13 : 0;
-    const oeFromPeri = this.rp2040.gpioRawOutputEnable(this.index) ? 1 << 12 : 0;
+    const oeFromPeri = this.rpchip.gpioRawOutputEnable(this.index) ? 1 << 12 : 0;
     const outToPad = this.outputValue ? 1 << 9 : 0;
-    const outFromPeri = this.rp2040.gpioRawOutputValue(this.index) ? 1 << 8 : 0;
+    const outFromPeri = this.rpchip.gpioRawOutputValue(this.index) ? 1 << 8 : 0;
     return (
       irqToProc | irqFromPad | inToPeri | inFromPad | oeToPad | oeFromPeri | outToPad | outFromPeri
     );
@@ -165,9 +165,9 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
       this.irqStatus &= ~IRQ_LEVEL_HIGH;
     }
     if (this.irqValue !== prevIrqValue) {
-      this.rp2040.updateIOInterrupt();
+      this.rpchip.updateIOInterrupt();
     }
-    this.rp2040.gpioInputValueHasBeenSet(this.index);
+    this.rpchip.gpioInputValueHasBeenSet(this.index);
   }
 
   checkForUpdates() {
@@ -187,11 +187,11 @@ export class GPIOPin<ChipType extends IRPChip = IRPChip> {
   updateIRQValue(value: number) {
     if (value & IRQ_EDGE_LOW && this.irqStatus & IRQ_EDGE_LOW) {
       this.irqStatus &= ~IRQ_EDGE_LOW;
-      this.rp2040.updateIOInterrupt();
+      this.rpchip.updateIOInterrupt();
     }
     if (value & IRQ_EDGE_HIGH && this.irqStatus & IRQ_EDGE_HIGH) {
       this.irqStatus &= ~IRQ_EDGE_HIGH;
-      this.rp2040.updateIOInterrupt();
+      this.rpchip.updateIOInterrupt();
     }
   }
 

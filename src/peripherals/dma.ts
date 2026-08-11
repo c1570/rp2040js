@@ -144,8 +144,8 @@ export class RPDMAChannel<ChipType extends IRPChip = IRPChip> implements AlarmCa
   private ringMask = 0;
   private transferAlarm: IAlarm;
 
-  constructor(readonly dma: RPDMA, readonly rp2040: ChipType, readonly index: number) {
-    this.transferAlarm = rp2040.clock.createAlarm(this);
+  constructor(readonly dma: RPDMA, readonly rpchip: ChipType, readonly index: number) {
+    this.transferAlarm = rpchip.clock.createAlarm(this);
     this.reset();
   }
 
@@ -169,30 +169,30 @@ export class RPDMAChannel<ChipType extends IRPChip = IRPChip> implements AlarmCa
   }
 
   transfer8() {
-    const { rp2040 } = this;
-    rp2040.writeUint8(this.writeAddr, rp2040.readUint8(this.readAddr));
+    const { rpchip } = this;
+    rpchip.writeUint8(this.writeAddr, rpchip.readUint8(this.readAddr));
   }
 
   transfer16() {
-    const { rp2040 } = this;
-    rp2040.writeUint16(this.writeAddr, rp2040.readUint16(this.readAddr));
+    const { rpchip } = this;
+    rpchip.writeUint16(this.writeAddr, rpchip.readUint16(this.readAddr));
   }
 
   transferSwap16() {
-    const { rp2040 } = this;
-    const input = rp2040.readUint16(this.readAddr);
-    rp2040.writeUint16(this.writeAddr, ((input & 0xff) << 8) | (input >> 8));
+    const { rpchip } = this;
+    const input = rpchip.readUint16(this.readAddr);
+    rpchip.writeUint16(this.writeAddr, ((input & 0xff) << 8) | (input >> 8));
   }
 
   transfer32() {
-    const { rp2040 } = this;
-    rp2040.writeUint32(this.writeAddr, rp2040.readUint32(this.readAddr));
+    const { rpchip } = this;
+    rpchip.writeUint32(this.writeAddr, rpchip.readUint32(this.readAddr));
   }
 
   transferSwap32() {
-    const { rp2040 } = this;
-    const input = rp2040.readUint32(this.readAddr);
-    rp2040.writeUint32(
+    const { rpchip } = this;
+    const input = rpchip.readUint32(this.readAddr);
+    rpchip.writeUint32(
       this.writeAddr,
       ((input & 0x000000ff) << 24) |
         ((input & 0x0000ff00) << 8) |
@@ -390,18 +390,18 @@ export class RPDMA<ChipType extends IRPChip = IRPChip>
   implements Peripheral
 {
   readonly channels: RPDMAChannel[] = [
-    new RPDMAChannel(this, this.rp2040, 0),
-    new RPDMAChannel(this, this.rp2040, 1),
-    new RPDMAChannel(this, this.rp2040, 2),
-    new RPDMAChannel(this, this.rp2040, 3),
-    new RPDMAChannel(this, this.rp2040, 4),
-    new RPDMAChannel(this, this.rp2040, 5),
-    new RPDMAChannel(this, this.rp2040, 6),
-    new RPDMAChannel(this, this.rp2040, 7),
-    new RPDMAChannel(this, this.rp2040, 8),
-    new RPDMAChannel(this, this.rp2040, 9),
-    new RPDMAChannel(this, this.rp2040, 10),
-    new RPDMAChannel(this, this.rp2040, 11),
+    new RPDMAChannel(this, this.rpchip, 0),
+    new RPDMAChannel(this, this.rpchip, 1),
+    new RPDMAChannel(this, this.rpchip, 2),
+    new RPDMAChannel(this, this.rpchip, 3),
+    new RPDMAChannel(this, this.rpchip, 4),
+    new RPDMAChannel(this, this.rpchip, 5),
+    new RPDMAChannel(this, this.rpchip, 6),
+    new RPDMAChannel(this, this.rpchip, 7),
+    new RPDMAChannel(this, this.rpchip, 8),
+    new RPDMAChannel(this, this.rpchip, 9),
+    new RPDMAChannel(this, this.rpchip, 10),
+    new RPDMAChannel(this, this.rpchip, 11),
   ];
 
   intRaw = 0;
@@ -416,8 +416,8 @@ export class RPDMA<ChipType extends IRPChip = IRPChip>
 
   readonly dreq: boolean[] = Array(DREQChannel.DREQ_MAX);
 
-  constructor(readonly rp2040: ChipType, name: string, readonly dma_irq_base: number) {
-    super(rp2040, name);
+  constructor(readonly rpchip: ChipType, name: string, readonly dma_irq_base: number) {
+    super(rpchip, name);
   }
 
   get intStatus0() {
@@ -571,11 +571,11 @@ export class RPDMA<ChipType extends IRPChip = IRPChip>
     if (divisor === 0) {
       return 0;
     }
-    return ((dividend / divisor) * 1e6) / this.rp2040.clkSys;
+    return ((dividend / divisor) * 1e6) / this.rpchip.clkSys;
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(this.dma_irq_base + 0, !!this.intStatus0);
-    this.rp2040.setInterrupt(this.dma_irq_base + 1, !!this.intStatus1);
+    this.rpchip.setInterrupt(this.dma_irq_base + 0, !!this.intStatus0);
+    this.rpchip.setInterrupt(this.dma_irq_base + 1, !!this.intStatus1);
   }
 }

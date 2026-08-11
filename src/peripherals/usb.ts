@@ -164,9 +164,9 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
     return (this.intRaw & this.intEnable) | this.intForce;
   }
 
-  constructor(readonly rp2040: ChipType, name: string, readonly usbctrl_irq: number) {
-    super(rp2040, name);
-    const clock = rp2040.clock;
+  constructor(readonly rpchip: ChipType, name: string, readonly usbctrl_irq: number) {
+    super(rpchip, name);
+    const clock = rpchip.clock;
     for (let i = 0; i < ENDPOINT_COUNT; ++i) {
       const readAlarm = new USBEndpointAlarm(this, i, false);
       readAlarm.clockAlarm = clock.createAlarm(readAlarm);
@@ -249,7 +249,7 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
 
   private readEndpointControlReg(endpoint: number, out: boolean) {
     const controlRegOffset = EP1_IN_CONTROL + 8 * (endpoint - 1) + (out ? 4 : 0);
-    return this.rp2040.usbDPRAMView.getUint32(controlRegOffset, true);
+    return this.rpchip.usbDPRAMView.getUint32(controlRegOffset, true);
   }
 
   private getEndpointBufferOffset(endpoint: number, out: boolean) {
@@ -284,13 +284,13 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
           } buffer=${bufferOffset.toString(16)} length=${bufferLength}`
         );
         value &= ~(USB_BUF_CTRL_AVAILABLE << USB_BUF1_SHIFT);
-        this.rp2040.usbDPRAMView.setUint32(offset, value, true);
+        this.rpchip.usbDPRAMView.setUint32(offset, value, true);
         if (bufferOut) {
           this.onEndpointRead?.(endpoint, bufferLength);
         } else {
           value &= ~(USB_BUF_CTRL_FULL << USB_BUF1_SHIFT);
-          this.rp2040.usbDPRAMView.setUint32(offset, value, true);
-          const buffer = this.rp2040.usbDPRAM.slice(bufferOffset, bufferOffset + bufferLength);
+          this.rpchip.usbDPRAMView.setUint32(offset, value, true);
+          const buffer = this.rpchip.usbDPRAM.slice(bufferOffset, bufferOffset + bufferLength);
           this.indicateBufferReady(endpoint, false);
           this.endpointWriteAlarms[endpoint].schedule(buffer, this.writeDelayMicroseconds * 1000);
         }
@@ -304,13 +304,13 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
         } buffer=${bufferOffset.toString(16)} length=${bufferLength}`
       );
       value &= ~USB_BUF_CTRL_AVAILABLE;
-      this.rp2040.usbDPRAMView.setUint32(offset, value, true);
+      this.rpchip.usbDPRAMView.setUint32(offset, value, true);
       if (bufferOut) {
         this.onEndpointRead?.(endpoint, bufferLength);
       } else {
         value &= ~USB_BUF_CTRL_FULL;
-        this.rp2040.usbDPRAMView.setUint32(offset, value, true);
-        const buffer = this.rp2040.usbDPRAM.slice(bufferOffset, bufferOffset + bufferLength);
+        this.rpchip.usbDPRAMView.setUint32(offset, value, true);
+        const buffer = this.rpchip.usbDPRAM.slice(bufferOffset, bufferOffset + bufferLength);
         if (interrupt || !doubleBuffer) {
           this.indicateBufferReady(endpoint, false);
         }
@@ -326,19 +326,19 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
   finishRead(endpoint: number, buffer: Uint8Array) {
     const bufferOffset = this.getEndpointBufferOffset(endpoint, true);
     const bufControlReg = EP0_OUT_BUFFER_CONTROL + endpoint * 8;
-    let bufControl = this.rp2040.usbDPRAMView.getUint32(bufControlReg, true);
+    let bufControl = this.rpchip.usbDPRAMView.getUint32(bufControlReg, true);
     const requestedLength = bufControl & USB_BUF_CTRL_LEN_MASK;
     const newLength = Math.min(buffer.length, requestedLength);
     bufControl |= USB_BUF_CTRL_FULL;
     bufControl = (bufControl & ~USB_BUF_CTRL_LEN_MASK) | (newLength & USB_BUF_CTRL_LEN_MASK);
-    this.rp2040.usbDPRAMView.setUint32(bufControlReg, bufControl, true);
-    this.rp2040.usbDPRAM.set(buffer.subarray(0, newLength), bufferOffset);
+    this.rpchip.usbDPRAMView.setUint32(bufControlReg, bufControl, true);
+    this.rpchip.usbDPRAM.set(buffer.subarray(0, newLength), bufferOffset);
     this.indicateBufferReady(endpoint, true);
   }
 
   private checkInterrupts() {
     const { intStatus } = this;
-    this.rp2040.setInterrupt(this.usbctrl_irq, !!intStatus);
+    this.rpchip.setInterrupt(this.usbctrl_irq, !!intStatus);
   }
 
   resetDevice() {
@@ -346,7 +346,7 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
   }
 
   sendSetupPacket(setupPacket: Uint8Array) {
-    this.rp2040.usbDPRAM.set(setupPacket);
+    this.rpchip.usbDPRAM.set(setupPacket);
     this.sieStatus |= SIE_SETUP_REC;
     this.sieStatusUpdated();
   }

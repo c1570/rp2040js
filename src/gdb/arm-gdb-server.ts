@@ -10,6 +10,7 @@
 
 import { SYSM_CONTROL, SYSM_MSP, SYSM_PRIMASK, SYSM_PSP } from '../cortex-m0-core';
 import { CortexM0Core } from '../cortex-m0-core';
+import { RP2040 } from '../rp2040';
 import { GDBServer } from './gdb-server';
 import { IGDBTarget } from './gdb-target';
 import { GDBConnection } from './gdb-connection';
@@ -80,16 +81,16 @@ const targetXML = `<?xml version="1.0"?>
 </target>`;
 
 export class ArmGDBServer extends GDBServer {
-  constructor(readonly target: IGDBTarget) {
-    super(target.rp2040, () => target.stop());
+  constructor(readonly target: IGDBTarget<RP2040>) {
+    super(target.rpchip, () => target.stop());
   }
 
-  private get rp2040() {
-    return this.target.rp2040;
+  private get rpchip() {
+    return this.target.rpchip;
   }
 
   private get core(): CortexM0Core {
-    return this.rp2040.core[this.currentThread - 1];
+    return this.rpchip.core[this.currentThread - 1];
   }
 
   protected readRegister(index: number): number {
@@ -140,7 +141,7 @@ export class ArmGDBServer extends GDBServer {
   }
 
   processGDBMessage(cmd: string): string | void {
-    const { rp2040 } = this;
+    const { rpchip } = this;
 
     switch (cmd[0]) {
       case '?':
@@ -218,8 +219,8 @@ export class ArmGDBServer extends GDBServer {
 
           // Step takes priority (returns a synchronous stop reply)
           if (stepTid > 0) {
-            const stepCore = rp2040.core[stepTid - 1];
-            rp2040.currentCore = stepTid - 1;
+            const stepCore = rpchip.core[stepTid - 1];
+            rpchip.currentCore = stepTid - 1;
             stepCore.executeInstruction();
             this.haltedCore = stepTid - 1;
             const regStatus = [];
@@ -237,12 +238,12 @@ export class ArmGDBServer extends GDBServer {
             const hasCore1 = allThreads || continueTids.includes(2);
             if (hasCore0 && hasCore1) {
               // If one core is in WFI, step only the other
-              if (rp2040.core[0].waiting && !rp2040.core[1].waiting) this.singleCore = 1;
-              else if (rp2040.core[1].waiting && !rp2040.core[0].waiting) this.singleCore = 0;
+              if (rpchip.core[0].waiting && !rpchip.core[1].waiting) this.singleCore = 1;
+              else if (rpchip.core[1].waiting && !rpchip.core[0].waiting) this.singleCore = 0;
               else this.singleCore = -1;
             } else if (hasCore0) {
               this.currentThread = 1;
-              if (rp2040.core[0].waiting) {
+              if (rpchip.core[0].waiting) {
                 this.haltedCore = 0;
                 setTimeout(() => this.notifyBreakpoint(1), 0);
                 return;
@@ -250,7 +251,7 @@ export class ArmGDBServer extends GDBServer {
               this.singleCore = 0;
             } else {
               this.currentThread = 2;
-              if (rp2040.core[1].waiting) {
+              if (rpchip.core[1].waiting) {
                 this.haltedCore = 1;
                 setTimeout(() => this.notifyBreakpoint(2), 0);
                 return;
@@ -307,7 +308,7 @@ export class ArmGDBServer extends GDBServer {
         let result = '';
         for (let i = 0; i < length; i++) {
           try {
-            result += encodeHexByte(rp2040.readUint8(address + i));
+            result += encodeHexByte(rpchip.readUint8(address + i));
           } catch {
             result += 'ff';
           }
@@ -321,7 +322,7 @@ export class ArmGDBServer extends GDBServer {
         const length = parseInt(params[1], 16);
         const data = decodeHexBuf(params[2].substring(0, length * 2));
         for (let i = 0; i < data.length; i++) {
-          rp2040.writeUint8(address + i, data[i]);
+          rpchip.writeUint8(address + i, data[i]);
         }
         return gdbMessage('OK');
       }
@@ -333,7 +334,7 @@ export class ArmGDBServer extends GDBServer {
         const address = parseInt(header[0], 16);
         const data = unescapeBinary(cmd.substring(colonIdx + 1));
         for (let i = 0; i < data.length; i++) {
-          rp2040.writeUint8(address + i, data[i]);
+          rpchip.writeUint8(address + i, data[i]);
         }
         return gdbMessage('OK');
       }
@@ -384,8 +385,8 @@ export class ArmGDBServer extends GDBServer {
         this.notifyBreakpoint(coreId + 1);
       };
     };
-    setupBreak(this.rp2040.core[0], 0);
-    setupBreak(this.rp2040.core[1], 1);
+    setupBreak(this.rpchip.core[0], 0);
+    setupBreak(this.rpchip.core[1], 1);
   }
 
   private handleMonitor(hexCmd: string): string {
@@ -413,12 +414,12 @@ export class ArmGDBServer extends GDBServer {
   }
 
   private dumpPio(instance: number): string {
-    const body = formatPioDump(this.rp2040, instance >= 0 ? instance : undefined) + '\n';
+    const body = formatPioDump(this.rpchip, instance >= 0 ? instance : undefined) + '\n';
     return gdbMessage('O' + encodeHexBuf(new TextEncoder().encode(body))) + gdbMessage('OK');
   }
 
   private dumpGpio(): string {
-    const body = formatGpioDump(this.rp2040) + '\n';
+    const body = formatGpioDump(this.rpchip) + '\n';
     return gdbMessage('O' + encodeHexBuf(new TextEncoder().encode(body))) + gdbMessage('OK');
   }
 }

@@ -9,6 +9,7 @@
 import { describe, expect, test, beforeAll, beforeEach } from 'vitest';
 import { spawn } from 'child_process';
 import { Simulator } from '../../simulator';
+import { RP2040 } from '../../rp2040';
 import { ArmGDBServer } from '../arm-gdb-server';
 import { GDBTCPServer } from '../gdb-tcp-server';
 import * as fs from 'fs';
@@ -72,20 +73,20 @@ async function runGdbSession(port: number, commands: string[]): Promise<string> 
 }
 
 describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
-  let sim: Simulator;
+  let sim: Simulator<RP2040>;
   let gdbServer: GDBTCPServer;
   let armServer: ArmGDBServer;
   let port: number;
 
   beforeAll(() => {
-    sim = new Simulator();
-    sim.rp2040.core1.waiting = true;
+    sim = new Simulator(new RP2040());
+    sim.rpchip.core1.waiting = true;
 
     // Load a small program: NOP loop (Thumb)
     // MOV R8, R8 (NOP) = 0x46c0, B . = 0xe7fe
-    sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-    sim.rp2040.writeUint16(SCRATCH + 2, 0xe7fe); // B . (branch to self)
-    sim.rp2040.core0.PC = SCRATCH;
+    sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+    sim.rpchip.writeUint16(SCRATCH + 2, 0xe7fe); // B . (branch to self)
+    sim.rpchip.core0.PC = SCRATCH;
 
     armServer = new ArmGDBServer(sim);
     gdbServer = new GDBTCPServer(armServer, 0);
@@ -100,8 +101,8 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
   });
 
   test('connect and read registers', async () => {
-    sim.rp2040.core0.registers[1] = 0xdeadbeef;
-    sim.rp2040.core0.PC = SCRATCH;
+    sim.rpchip.core0.registers[1] = 0xdeadbeef;
+    sim.rpchip.core0.PC = SCRATCH;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -114,7 +115,7 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
   });
 
   test('read and write memory', async () => {
-    sim.rp2040.writeUint32(SCRATCH, 0xcafef00d);
+    sim.rpchip.writeUint32(SCRATCH, 0xcafef00d);
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -126,13 +127,13 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
 
     expect(output).toContain('cafef00d');
     expect(output).toContain('12345678');
-    expect(sim.rp2040.readUint32(SCRATCH)).toBe(0x12345678);
+    expect(sim.rpchip.readUint32(SCRATCH)).toBe(0x12345678);
   });
 
   test('single-step and verify pc advance', async () => {
     // Restore NOP (previous test may have overwritten memory)
-    sim.rp2040.writeUint16(SCRATCH, 0x46c0); // MOV R8, R8 (NOP, 2 bytes)
-    sim.rp2040.core0.PC = SCRATCH;
+    sim.rpchip.writeUint16(SCRATCH, 0x46c0); // MOV R8, R8 (NOP, 2 bytes)
+    sim.rpchip.core0.PC = SCRATCH;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -149,9 +150,9 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
 
   test('set breakpoint and continue', async () => {
     // NOP loop: NOP at SCRATCH, B . at SCRATCH+2
-    sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-    sim.rp2040.writeUint16(SCRATCH + 2, 0xe7fe); // B . (branch to self)
-    sim.rp2040.core0.PC = SCRATCH;
+    sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+    sim.rpchip.writeUint16(SCRATCH + 2, 0xe7fe); // B . (branch to self)
+    sim.rpchip.core0.PC = SCRATCH;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -170,11 +171,11 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
     //   SCRATCH+0: MOVS R5, #0       ; r5 = 0        (0x2500)
     //   SCRATCH+2: ADDS R5, #1       ; r5 += 1       (0x3501)  <-- breakpoint
     //   SCRATCH+4: B   SCRATCH+2     ; loop back     (0xe7fd = B -6)
-    sim.rp2040.writeUint16(SCRATCH, 0x2500); // MOVS R5, #0
-    sim.rp2040.writeUint16(SCRATCH + 2, 0x3501); // ADDS R5, #1
-    sim.rp2040.writeUint16(SCRATCH + 4, 0xe7fd); // B -6 (back to SCRATCH+2)
-    sim.rp2040.core0.PC = SCRATCH;
-    sim.rp2040.core0.registers[5] = 0;
+    sim.rpchip.writeUint16(SCRATCH, 0x2500); // MOVS R5, #0
+    sim.rpchip.writeUint16(SCRATCH + 2, 0x3501); // ADDS R5, #1
+    sim.rpchip.writeUint16(SCRATCH + 4, 0xe7fd); // B -6 (back to SCRATCH+2)
+    sim.rpchip.core0.PC = SCRATCH;
+    sim.rpchip.core0.registers[5] = 0;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -213,12 +214,12 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
     //   SCRATCH+0: MOVS R5, #42      ; r5 = 42       (0x252a)
     //   SCRATCH+2: ADDS R6, R5, #1   ; r6 = r5 + 1   (0x1c6e)  <-- breakpoint
     //   SCRATCH+4: B   SCRATCH+2     ; loop back     (0xe7fd)
-    sim.rp2040.writeUint16(SCRATCH, 0x252a); // MOVS R5, #42
-    sim.rp2040.writeUint16(SCRATCH + 2, 0x1c6e); // ADDS R6, R5, #1
-    sim.rp2040.writeUint16(SCRATCH + 4, 0xe7fd); // B -6
-    sim.rp2040.core0.PC = SCRATCH;
-    sim.rp2040.core0.registers[5] = 0;
-    sim.rp2040.core0.registers[6] = 0;
+    sim.rpchip.writeUint16(SCRATCH, 0x252a); // MOVS R5, #42
+    sim.rpchip.writeUint16(SCRATCH + 2, 0x1c6e); // ADDS R6, R5, #1
+    sim.rpchip.writeUint16(SCRATCH + 4, 0xe7fd); // B -6
+    sim.rpchip.core0.PC = SCRATCH;
+    sim.rpchip.core0.registers[5] = 0;
+    sim.rpchip.core0.registers[6] = 0;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -253,12 +254,12 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
   });
 
   test('switch to core 1 and read/write registers', async () => {
-    sim.rp2040.core1.waiting = false;
-    sim.rp2040.core0.registers[5] = 0x11111111;
-    sim.rp2040.core1.registers[5] = 0x22222222;
+    sim.rpchip.core1.waiting = false;
+    sim.rpchip.core0.registers[5] = 0x11111111;
+    sim.rpchip.core1.registers[5] = 0x22222222;
     // Park both cores so continue/step don't interfere
-    sim.rp2040.core0.waiting = true;
-    sim.rp2040.core1.waiting = true;
+    sim.rpchip.core0.waiting = true;
+    sim.rpchip.core1.waiting = true;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -278,16 +279,16 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
     expect(prints![0]).toMatch(/0x11111111/i); // core 0 r5
     expect(prints![1]).toMatch(/0x22222222/i); // core 1 r5
     expect(prints![2]).toMatch(/0xdeadbeef/i); // core 1 r5 after write
-    expect(sim.rp2040.core1.registers[5]).toBe(0xdeadbeef);
-    expect(sim.rp2040.core0.registers[5]).toBe(0x11111111);
+    expect(sim.rpchip.core1.registers[5]).toBe(0xdeadbeef);
+    expect(sim.rpchip.core0.registers[5]).toBe(0x11111111);
   });
 
   test('single-step core 1 independently', async () => {
-    sim.rp2040.core1.waiting = false;
-    sim.rp2040.core0.waiting = true;
-    sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-    const core0Pc = sim.rp2040.core0.PC;
-    sim.rp2040.core1.PC = SCRATCH;
+    sim.rpchip.core1.waiting = false;
+    sim.rpchip.core0.waiting = true;
+    sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+    const core0Pc = sim.rpchip.core0.PC;
+    sim.rpchip.core1.PC = SCRATCH;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,
@@ -298,29 +299,29 @@ describe.skipIf(!gdbAvailable)('ARM GDB integration (real gdb binary)', () => {
     ]);
 
     // Core 1 should have advanced by 2 (Thumb NOP)
-    expect(sim.rp2040.core1.PC).toBe(SCRATCH + 2);
+    expect(sim.rpchip.core1.PC).toBe(SCRATCH + 2);
     // Core 0 should not have moved
-    expect(sim.rp2040.core0.PC).toBe(core0Pc);
+    expect(sim.rpchip.core0.PC).toBe(core0Pc);
   });
 
   test('breakpoint on core 1 while both cores run', async () => {
     // Both cores run loops at different addresses
     // Core 0: loop at SCRATCH (0x20000000)
     // Core 1: loop at SCRATCH+0x100 (0x20000100)
-    sim.rp2040.core1.waiting = false;
-    sim.rp2040.core0.waiting = false;
+    sim.rpchip.core1.waiting = false;
+    sim.rpchip.core0.waiting = false;
 
     // Core 0 program: ADDS R5, #1 then B .
-    sim.rp2040.writeUint16(SCRATCH, 0x3501); // ADDS R5, #1
-    sim.rp2040.writeUint16(SCRATCH + 2, 0xe7fd); // B -6
-    sim.rp2040.core0.PC = SCRATCH;
-    sim.rp2040.core0.registers[5] = 0;
+    sim.rpchip.writeUint16(SCRATCH, 0x3501); // ADDS R5, #1
+    sim.rpchip.writeUint16(SCRATCH + 2, 0xe7fd); // B -6
+    sim.rpchip.core0.PC = SCRATCH;
+    sim.rpchip.core0.registers[5] = 0;
 
     // Core 1 program: ADDS R6, #1 then B .
-    sim.rp2040.writeUint16(SCRATCH + 0x100, 0x3601); // ADDS R6, #1
-    sim.rp2040.writeUint16(SCRATCH + 0x102, 0xe7fd); // B -6
-    sim.rp2040.core1.PC = SCRATCH + 0x100;
-    sim.rp2040.core1.registers[6] = 0;
+    sim.rpchip.writeUint16(SCRATCH + 0x100, 0x3601); // ADDS R6, #1
+    sim.rpchip.writeUint16(SCRATCH + 0x102, 0xe7fd); // B -6
+    sim.rpchip.core1.PC = SCRATCH + 0x100;
+    sim.rpchip.core1.registers[6] = 0;
 
     const output = await runGdbSession(port, [
       `target remote :${port}`,

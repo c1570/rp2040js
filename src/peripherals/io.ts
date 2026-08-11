@@ -12,22 +12,22 @@ export class RPIO<ChipType extends IRPChip = IRPChip>
   extends BasePeripheral<ChipType>
   implements Peripheral
 {
-  constructor(rp2040: ChipType, name: string) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string) {
+    super(rpchip, name);
   }
 
   readUint32(offset: number) {
     if (offset <= GPIO_CTRL_LAST) {
       // Inlined (not a getPinFromOffset() helper): cts2c would heap-allocate the
       // returned object per call, and this is a hot path (every GPIO register access).
-      const gpio = this.rp2040.gpio[offset >>> 3];
+      const gpio = this.rpchip.gpio[offset >>> 3];
       const isCtrl = !!(offset & 0x4);
       return isCtrl ? gpio.ctrl : gpio.status;
     }
     if (offset >= INTR0 && offset <= PROC0_INTS3) {
       const startIndex = (offset & 0xf) * 2;
       const register = offset & ~0xf;
-      const { gpio } = this.rp2040;
+      const { gpio } = this.rpchip;
       let result = 0;
       for (let index = 7; index >= 0; index--) {
         const pin = gpio[index + startIndex];
@@ -57,7 +57,7 @@ export class RPIO<ChipType extends IRPChip = IRPChip>
 
   writeUint32(offset: number, value: number) {
     if (offset <= GPIO_CTRL_LAST) {
-      const gpio = this.rp2040.gpio[offset >>> 3];
+      const gpio = this.rpchip.gpio[offset >>> 3];
       const isCtrl = !!(offset & 0x4);
       if (isCtrl) {
         gpio.ctrl = value;
@@ -68,7 +68,7 @@ export class RPIO<ChipType extends IRPChip = IRPChip>
     if (offset >= INTR0 && offset <= PROC0_INTS3) {
       const startIndex = (offset & 0xf) * 2;
       const register = offset & ~0xf;
-      const { gpio } = this.rp2040;
+      const { gpio } = this.rpchip;
       for (let index = 0; index < 8; index++) {
         const pin = gpio[index + startIndex];
         if (!pin) {
@@ -83,13 +83,13 @@ export class RPIO<ChipType extends IRPChip = IRPChip>
           case PROC0_INTE0:
             if (pin.irqEnableMask !== pinValue) {
               pin.irqEnableMask = pinValue;
-              this.rp2040.updateIOInterrupt();
+              this.rpchip.updateIOInterrupt();
             }
             break;
           case PROC0_INTF0:
             if (pin.irqForceMask !== pinValue) {
               pin.irqForceMask = pinValue;
-              this.rp2040.updateIOInterrupt();
+              this.rpchip.updateIOInterrupt();
             }
             break;
         }

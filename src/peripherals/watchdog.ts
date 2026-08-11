@@ -61,13 +61,13 @@ export class RPWatchdog<ChipType extends IRPChip = IRPChip>
 
   /** Called when the watchdog triggers - override with your own soft reset implementation */
   onWatchdogTrigger = () => {
-    this.rp2040.logger.warn(this.name, 'Watchdog triggered, but no reset handler provided');
+    this.rpchip.logger.warn(this.name, 'Watchdog triggered, but no reset handler provided');
   };
 
   // User provided
-  constructor(rp2040: ChipType, name: string) {
-    super(rp2040, name);
-    this.timer = new Timer32('RPWatchdog_timer', rp2040.clock as SimulationClock, TICK_FREQUENCY);
+  constructor(rpchip: ChipType, name: string) {
+    super(rpchip, name);
+    this.timer = new Timer32('RPWatchdog_timer', rpchip.clock as SimulationClock, TICK_FREQUENCY);
     this.timer.mode = TimerMode.Decrement;
     this.timer.enable = false;
     // 24-bit down-counter, not Timer32's 32-bit default (same as SysTick in

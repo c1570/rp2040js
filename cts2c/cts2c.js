@@ -2890,7 +2890,7 @@ function emitClassImpl(node, out) {
           `        fprintf(stderr, "[%s] RTC_LOAD (offset 0x%x) is stubbed in the C build (no Date support in cts2c) -- setup0/setup1 recorded but not applied to wall clock\\n", self->base.name, offset);`
         );
         out.push(
-          `        self->baselineNanos = SimulationClock_getNanos(self->base.rp2040->clock);`
+          `        self->baselineNanos = SimulationClock_getNanos(self->base.rpchip->clock);`
         );
         out.push(`        self->ctrl &= ~RTC_LOAD_BITS;`);
         out.push(`      }`);

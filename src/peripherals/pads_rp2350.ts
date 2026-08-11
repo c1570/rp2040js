@@ -20,16 +20,16 @@ export class RP2350PADS<ChipType extends IRPChip = IRPChip>
   private readonly firstPadRegister = this.bank === 'qspi' ? QSPI_FIRST : BANK0_FIRST;
   private readonly lastPadRegister = this.bank === 'qspi' ? QSPI_LAST : BANK0_LAST;
 
-  constructor(rp2040: ChipType, name: string, readonly bank: IIOBank) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string, readonly bank: IIOBank) {
+    super(rpchip, name);
   }
 
   getPinFromOffset(offset: number): GPIOPin {
     const gpioIndex = (offset - this.firstPadRegister) >>> 2;
     if (this.bank === 'qspi') {
-      return this.rp2040.qspi[gpioIndex];
+      return this.rpchip.qspi[gpioIndex];
     } else {
-      return this.rp2040.gpio[gpioIndex];
+      return this.rpchip.gpio[gpioIndex];
     }
   }
 

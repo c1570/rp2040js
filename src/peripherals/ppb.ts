@@ -60,13 +60,13 @@ export class RPPPB<ChipType extends IRPChip = IRPChip>
   systickReload = 0;
   readonly systickTimer = new Timer32(
     'PPB_systick_timer',
-    this.rp2040.clock as SimulationClock,
-    this.rp2040.clkSys
+    this.rpchip.clock as SimulationClock,
+    this.rpchip.clkSys
   );
   readonly systickAlarm = new Timer32PeriodicAlarm('PPB_systick_alarm', this.systickTimer, this);
 
-  constructor(rp2040: ChipType, name: string) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string) {
+    super(rpchip, name);
     this.systickTimer.top = 0xffffff;
     this.systickTimer.mode = TimerMode.Decrement;
     this.systickAlarm.target = 0;
@@ -77,9 +77,9 @@ export class RPPPB<ChipType extends IRPChip = IRPChip>
   fire() {
     this.systickCountFlag = true;
     if (this.systickIntEnable) {
-      const rp2040 = this.rp2040 as unknown as RP2040;
-      rp2040.core0.pendingSystick = true;
-      rp2040.core0.interruptsUpdated = true;
+      const rpchip = this.rpchip as unknown as RP2040;
+      rpchip.core0.pendingSystick = true;
+      rpchip.core0.interruptsUpdated = true;
     }
     this.systickTimer.set(this.systickReload);
   }
@@ -91,8 +91,8 @@ export class RPPPB<ChipType extends IRPChip = IRPChip>
   }
 
   readUint32ViaCore(offset: number, _core: number) {
-    const rp2040 = this.rp2040 as unknown as RP2040;
-    const core = rp2040.core[_core];
+    const rpchip = this.rpchip as unknown as RP2040;
+    const core = rpchip.core[_core];
 
     switch (offset) {
       case CPUID:
@@ -174,8 +174,8 @@ export class RPPPB<ChipType extends IRPChip = IRPChip>
   }
 
   writeUint32ViaCore(offset: number, value: number, _core: number) {
-    const rp2040 = this.rp2040 as unknown as RP2040;
-    const core = rp2040.core[_core];
+    const rpchip = this.rpchip as unknown as RP2040;
+    const core = rpchip.core[_core];
 
     const hardwareInterruptMask = (1 << MAX_HARDWARE_IRQ) - 1;
 

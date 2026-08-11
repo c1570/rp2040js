@@ -32,7 +32,7 @@ export class RP2350PLL<ChipType extends IRPChip = IRPChip>
     const postdiv1 = (this.reg[0xc] >> 16) & 7;
     this.foutpostdiv = ((FREF / refdiv) * fbdiv) / (postdiv1 * postdiv2);
     if (handled) {
-      this.rp2040.logger.info(
+      this.rpchip.logger.info(
         this.name,
         `PLL write ${value} to 0x${offset.toString(16)}, foutpostdiv = ${this.foutpostdiv}`
       );

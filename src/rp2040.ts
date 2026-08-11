@@ -165,13 +165,6 @@ export class RP2040 implements IRPChip {
     0x50300: this.pio[1],
   };
 
-  // Debugging
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public onBreak = (code: number) => {
-    // TODO: raise HardFault exception
-    // console.error('Breakpoint!', code);
-  };
-
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
   public onTrace = (coreNumber: number, pc: number, tag: string) => {};
 

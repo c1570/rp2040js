@@ -14,7 +14,7 @@
 //           chasing), simulator.ts (an RP2040-based demo/debug harness — unused anywhere in
 //           src/, out of scope like rp2040.ts), and ppb.ts/syscfg.ts (RP2040-only
 //           peripherals — RP2350 has its own ppb_rp2350.ts/syscfg_rp2350.ts. Both do
-//           `this.rp2040 as unknown as RP2040` then index a field on the cast result; cts2c
+//           `this.rpchip as unknown as RP2040` then index a field on the cast result; cts2c
 //           doesn't resolve field access through that cast pattern yet, degrading to
 //           int32_t. Not worth chasing until cts2c builds a real IRPChip vtable-value at
 //           cast sites)
@@ -90,7 +90,7 @@ mkdirSync(OUT_DIR, { recursive: true });
 // Class-level ChipType monomorphization (see monomorphize-chip-classes.mjs's own
 // header comment): RPUART/RPI2C/RPPWM/RPADC/RPSPI/RPTimer/RPWatchdog and their nested
 // helpers are constructed by both rp2040.ts and rp2350.ts, but cts2c's class emission
-// unconditionally resolves ChipType to RP2350 — so `this.rp2040.<field>` inside any of
+// unconditionally resolves ChipType to RP2350 — so `this.rpchip.<field>` inside any of
 // them would read RP2350's field offsets out of memory that might actually be laid out
 // as RP2040. Appends an RP2040__-mangled clone of each affected class before cts2c.js
 // sees them; the original declaration is untouched and keeps representing RP2350.

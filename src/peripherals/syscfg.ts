@@ -13,9 +13,9 @@ export class RP2040SysCfg<ChipType extends IRPChip = IRPChip>
   readUint32(offset: number) {
     switch (offset) {
       case PROC0_NMI_MASK:
-        return (this.rp2040 as unknown as RP2040).core0.interruptNMIMask;
+        return (this.rpchip as unknown as RP2040).core0.interruptNMIMask;
       case PROC1_NMI_MASK:
-        return (this.rp2040 as unknown as RP2040).core1.interruptNMIMask;
+        return (this.rpchip as unknown as RP2040).core1.interruptNMIMask;
     }
     return super.readUint32(offset);
   }
@@ -23,10 +23,10 @@ export class RP2040SysCfg<ChipType extends IRPChip = IRPChip>
   writeUint32(offset: number, value: number) {
     switch (offset) {
       case PROC0_NMI_MASK:
-        (this.rp2040 as unknown as RP2040).core0.interruptNMIMask = value;
+        (this.rpchip as unknown as RP2040).core0.interruptNMIMask = value;
         break;
       case PROC1_NMI_MASK:
-        (this.rp2040 as unknown as RP2040).core1.interruptNMIMask = value;
+        (this.rpchip as unknown as RP2040).core1.interruptNMIMask = value;
         break;
 
       default:

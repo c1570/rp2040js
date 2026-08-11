@@ -40,15 +40,15 @@ export class RPSIO {
   readonly sioCore: [RPSIOCore, RPSIOCore];
 
   constructor(
-    private readonly rp2040: RP2040,
+    private readonly rpchip: RP2040,
     readonly sio_proc0_irq: number,
     readonly sio_proc1_irq: number
   ) {
     const rxFIFO = new FIFO(8);
     const txFIFO = new FIFO(8);
     this.sioCore = [
-      new RPSIOCore(rp2040, rxFIFO, txFIFO, sio_proc0_irq, sio_proc1_irq, 0, 1),
-      new RPSIOCore(rp2040, txFIFO, rxFIFO, sio_proc1_irq, sio_proc0_irq, 1, 0),
+      new RPSIOCore(rpchip, rxFIFO, txFIFO, sio_proc0_irq, sio_proc1_irq, 0, 1),
+      new RPSIOCore(rpchip, txFIFO, rxFIFO, sio_proc1_irq, sio_proc0_irq, 1, 0),
     ];
   }
 
@@ -64,9 +64,9 @@ export class RPSIO {
     }
     switch (offset) {
       case GPIO_IN:
-        return this.rp2040.gpioValues(0);
+        return this.rpchip.gpioValues(0);
       case GPIO_HI_IN: {
-        const { qspi } = this.rp2040;
+        const { qspi } = this.rpchip;
         let result = 0;
         for (let qspiIndex = 0; qspiIndex < qspi.length; qspiIndex++) {
           if (qspi[qspiIndex].inputValue) {
@@ -169,7 +169,7 @@ export class RPSIO {
     const pinsToUpdate =
       (this.gpioValue ^ prevGpioValue) | (this.gpioOutputEnable ^ prevGpioOutputEnable);
     if (pinsToUpdate) {
-      const { gpio } = this.rp2040;
+      const { gpio } = this.rpchip;
       for (let gpioIndex = 0; gpioIndex < gpio.length; gpioIndex++) {
         if (pinsToUpdate & (1 << gpioIndex)) {
           gpio[gpioIndex].checkForUpdates();

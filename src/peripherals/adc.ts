@@ -169,18 +169,18 @@ export class RPADC<ChipType extends IRPChip = IRPChip>
   }
 
   constructor(
-    rp2040: ChipType,
+    rpchip: ChipType,
     name: string,
     readonly adc_interrupt: number,
     readonly adc_dreq: number
   ) {
-    super(rp2040, name);
-    this.sampleAlarm = this.rp2040.clock.createAlarm(new ADCSampleAlarm(this));
-    this.multiShotAlarm = this.rp2040.clock.createAlarm(new ADCMultiShotAlarm(this));
+    super(rpchip, name);
+    this.sampleAlarm = this.rpchip.clock.createAlarm(new ADCSampleAlarm(this));
+    this.multiShotAlarm = this.rpchip.clock.createAlarm(new ADCMultiShotAlarm(this));
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(this.adc_interrupt, !!this.intStatus);
+    this.rpchip.setInterrupt(this.adc_interrupt, !!this.intStatus);
   }
 
   startADCRead() {
@@ -192,9 +192,9 @@ export class RPADC<ChipType extends IRPChip = IRPChip>
     if (this.fcs & FCS_DREQ_EN) {
       const thres = (this.fcs >> FCS_THRESH_SHIFT) & FCS_THRES_MASK;
       if (this.fifo.itemCount >= thres) {
-        this.rp2040.dma_setDREQ(this.adc_dreq);
+        this.rpchip.dma_setDREQ(this.adc_dreq);
       } else {
-        this.rp2040.dma_clearDREQ(this.adc_dreq);
+        this.rpchip.dma_clearDREQ(this.adc_dreq);
       }
     }
   }

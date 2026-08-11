@@ -111,13 +111,13 @@ export class CortexM0Core implements ICpuCore {
     void blx;
   };
 
-  constructor(readonly rp2040: RP2040, readonly coreLabel: string, readonly coreNumber: number) {
+  constructor(readonly rpchip: RP2040, readonly coreLabel: string, readonly coreNumber: number) {
     this.SP = 0xfffffffc;
     this.bankedSP = 0xfffffffc;
   }
 
   get logger() {
-    return this.rp2040.logger;
+    return this.rpchip.logger;
   }
 
   get coreIndex() {
@@ -135,8 +135,8 @@ export class CortexM0Core implements ICpuCore {
   }
 
   reset() {
-    this.SP = this.rp2040.readUint32(this.VTOR);
-    this.PC = this.rp2040.readUint32(this.VTOR + 4) & 0xfffffffe;
+    this.SP = this.rpchip.readUint32(this.VTOR);
+    this.PC = this.rpchip.readUint32(this.VTOR + 4) & 0xfffffffe;
     this.cycles = 0;
   }
 
@@ -222,27 +222,27 @@ export class CortexM0Core implements ICpuCore {
   }
 
   readUint32(address: number) {
-    return this.rp2040.readUint32(address);
+    return this.rpchip.readUint32(address);
   }
 
   readUint16(address: number) {
-    return this.rp2040.readUint16(address);
+    return this.rpchip.readUint16(address);
   }
 
   readUint8(address: number) {
-    return this.rp2040.readUint8(address);
+    return this.rpchip.readUint8(address);
   }
 
   writeUint32(address: number, value: number) {
-    this.rp2040.writeUint32(address, value);
+    this.rpchip.writeUint32(address, value);
   }
 
   writeUint16(address: number, value: number) {
-    this.rp2040.writeUint16(address, value);
+    this.rpchip.writeUint16(address, value);
   }
 
   writeUint8(address: number, value: number) {
-    this.rp2040.writeUint8(address, value);
+    this.rpchip.writeUint8(address, value);
   }
 
   switchStack(stack: StackPointerBank) {
@@ -767,7 +767,7 @@ export class CortexM0Core implements ICpuCore {
           if (ch == 0) break;
           profTag = profTag + String.fromCharCode(ch);
         }
-        this.rp2040.onTrace(this.coreNumber, this.PC, profTag);
+        this.rpchip.onTrace(this.coreNumber, this.PC, profTag);
       }
 
       let imm11 = (opcode & 0x7ff) << 1;

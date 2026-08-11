@@ -195,12 +195,12 @@ export class RPI2C<ChipType extends IRPChip = IRPChip>
     return this.control & IC_10BITADDR_MASTER ? 10 : 7;
   }
 
-  constructor(rp2040: ChipType, name: string, readonly irq: number) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string, readonly irq: number) {
+    super(rpchip, name);
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(this.irq, !!this.intStatus);
+    this.rpchip.setInterrupt(this.irq, !!this.intStatus);
   }
 
   protected clearInterrupts(mask: number) {

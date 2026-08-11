@@ -49,10 +49,10 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
   private paused = false;
   private intRegBase = 0;
 
-  constructor(rp2040: ChipType, name: string, readonly timer_irq_base: number) {
-    super(rp2040, name);
-    this.clock = rp2040.clock;
-    switch (rp2040.identifier) {
+  constructor(rpchip: ChipType, name: string, readonly timer_irq_base: number) {
+    super(rpchip, name);
+    this.clock = rpchip.clock;
+    switch (rpchip.identifier) {
       case 'rp2040':
         this.intRegBase = 0x34;
         break;
@@ -191,7 +191,7 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
   private checkInterrupts() {
     const { intStatus } = this;
     for (let i = 0; i < this.alarms.length; i++) {
-      this.rp2040.setInterrupt(this.timer_irq_base + i, !!(intStatus & (1 << i)));
+      this.rpchip.setInterrupt(this.timer_irq_base + i, !!(intStatus & (1 << i)));
     }
   }
 

@@ -42,7 +42,7 @@ export interface Peripheral {
 export class BasePeripheral<ChipType extends IRPChip = IRPChip> implements Peripheral {
   protected rawWriteValue = 0;
 
-  constructor(protected rp2040: ChipType, readonly name: string) {}
+  constructor(protected rpchip: ChipType, readonly name: string) {}
 
   byteAddressable() {
     return false;
@@ -79,19 +79,19 @@ export class BasePeripheral<ChipType extends IRPChip = IRPChip> implements Perip
   }
 
   debug(msg: string) {
-    this.rp2040.logger.debug(this.name, msg);
+    this.rpchip.logger.debug(this.name, msg);
   }
 
   info(msg: string) {
-    this.rp2040.logger.info(this.name, msg);
+    this.rpchip.logger.info(this.name, msg);
   }
 
   warn(msg: string) {
-    this.rp2040.logger.warn(this.name, msg);
+    this.rpchip.logger.warn(this.name, msg);
   }
 
   error(msg: string) {
-    this.rp2040.logger.error(this.name, msg);
+    this.rpchip.logger.error(this.name, msg);
   }
 }
 

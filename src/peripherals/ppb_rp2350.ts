@@ -208,7 +208,7 @@ export interface M33CoreState {
 class SystickAlarmCallback implements AlarmCallback {
   constructor(
     private readonly ppb: RPPPB2350,
-    private readonly rp2040: RP2350,
+    private readonly rpchip: RP2350,
     private readonly systickTimer: Timer32,
     private readonly coreIndex: number
   ) {}
@@ -219,7 +219,7 @@ class SystickAlarmCallback implements AlarmCallback {
     if (st.systickIntEnable) {
       st.pendingSystick = true;
       // Notify the core — it will check pendingSystick on each step.
-      const core = this.rp2040.core[this.coreIndex];
+      const core = this.rpchip.core[this.coreIndex];
       core.interruptsUpdated = true;
     }
     this.systickTimer.set(st.systickReload);
@@ -238,8 +238,8 @@ export class RPPPB2350<ChipType extends IRPChip = IRPChip> extends BasePeriphera
   private makeCoreState(coreIndex: number): M33CoreState {
     const systickTimer = new Timer32(
       'M33_SysTick',
-      this.rp2040.clock as SimulationClock,
-      this.rp2040.clkSys
+      this.rpchip.clock as SimulationClock,
+      this.rpchip.clkSys
     );
     systickTimer.top = 0xffffff;
     systickTimer.mode = TimerMode.Decrement;
@@ -258,7 +258,7 @@ export class RPPPB2350<ChipType extends IRPChip = IRPChip> extends BasePeriphera
     const systickAlarm = new Timer32PeriodicAlarm(
       'M33_SysTick_Alarm',
       systickTimer,
-      new SystickAlarmCallback(this, this.rp2040 as unknown as RP2350, systickTimer, coreIndex)
+      new SystickAlarmCallback(this, this.rpchip as unknown as RP2350, systickTimer, coreIndex)
     );
     systickAlarm.target = 0;
     systickAlarm.enable = true;
@@ -633,13 +633,13 @@ export class RPPPB2350<ChipType extends IRPChip = IRPChip> extends BasePeriphera
     // Cast to CortexM33Core directly (RP2350's cores are always that concrete type)
     // rather than an anonymous shape — cts2c needs a real, known class to resolve
     // field access against, not an inline type.
-    const coreObj = this.rp2040.core[core] as unknown as CortexM33Core;
+    const coreObj = this.rpchip.core[core] as unknown as CortexM33Core;
     return coreObj.regs;
   }
 
   /** Same reasoning as coreRegs() — ICpuCore has no `interruptsUpdated` property. */
   private markInterruptsUpdated(core: number) {
-    const coreObj = this.rp2040.core[core] as unknown as CortexM33Core;
+    const coreObj = this.rpchip.core[core] as unknown as CortexM33Core;
     coreObj.interruptsUpdated = true;
   }
 

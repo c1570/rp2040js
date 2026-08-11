@@ -7,18 +7,19 @@
 
 import { describe, expect, test, beforeEach } from 'vitest';
 import { Simulator } from '../../simulator';
+import { RP2040 } from '../../rp2040';
 import { ArmGDBServer } from '../arm-gdb-server';
 import { decodeHexUint32 } from '../gdb-utils';
 
 const SCRATCH = 0x20000000;
 
 describe('ARM GDB Server', () => {
-  let sim: Simulator;
+  let sim: Simulator<RP2040>;
   let server: ArmGDBServer;
 
   beforeEach(() => {
-    sim = new Simulator();
-    sim.rp2040.core1.waiting = true;
+    sim = new Simulator(new RP2040());
+    sim.rpchip.core1.waiting = true;
     server = new ArmGDBServer(sim);
   });
 
@@ -104,8 +105,8 @@ describe('ARM GDB Server', () => {
 
   describe('register access', () => {
     test('read all registers (g)', () => {
-      sim.rp2040.core0.registers[1] = 0xdeadbeef;
-      sim.rp2040.core0.PC = 0x20000100;
+      sim.rpchip.core0.registers[1] = 0xdeadbeef;
+      sim.rpchip.core0.PC = 0x20000100;
 
       const r = payload(server.processGDBMessage('g'));
       const regs = decodeRegs(r);
@@ -116,19 +117,19 @@ describe('ARM GDB Server', () => {
     });
 
     test('read single register (p)', () => {
-      sim.rp2040.core0.registers[5] = 0x12345678;
+      sim.rpchip.core0.registers[5] = 0x12345678;
       const r = payload(server.processGDBMessage('p05'));
       expect(decodeHexUint32(r)).toBe(0x12345678);
     });
 
     test('read pc register', () => {
-      sim.rp2040.core0.PC = 0x20000100;
+      sim.rpchip.core0.PC = 0x20000100;
       const r = payload(server.processGDBMessage('p0f')); // 0x0f = 15 = pc
       expect(decodeHexUint32(r)).toBe(0x20000100);
     });
 
     test('read xPSR register', () => {
-      sim.rp2040.core0.xPSR = 0x21000000;
+      sim.rpchip.core0.xPSR = 0x21000000;
       const r = payload(server.processGDBMessage('p10')); // 0x10 = 16 = xPSR
       expect(decodeHexUint32(r)).toBe(0x21000000);
     });
@@ -143,24 +144,24 @@ describe('ARM GDB Server', () => {
     test('write single register (P)', () => {
       // 0x12345678 LE = 78563412
       server.processGDBMessage('P05=78563412');
-      expect(sim.rp2040.core0.registers[5]).toBe(0x12345678);
+      expect(sim.rpchip.core0.registers[5]).toBe(0x12345678);
     });
 
     test('write pc register', () => {
       // 0x20000100 LE = 00010020
       server.processGDBMessage('P0f=00010020');
-      expect(sim.rp2040.core0.PC).toBe(0x20000100);
+      expect(sim.rpchip.core0.PC).toBe(0x20000100);
     });
 
     test('write xPSR register', () => {
       // 0x21000000 LE = 00000021
       server.processGDBMessage('P10=00000021');
-      expect(sim.rp2040.core0.xPSR).toBe(0x21000000);
+      expect(sim.rpchip.core0.xPSR).toBe(0x21000000);
     });
 
     test('register access targets selected core', () => {
-      sim.rp2040.core0.registers[1] = 0xaaaaaaaa;
-      sim.rp2040.core1.registers[1] = 0xbbbbbbbb;
+      sim.rpchip.core0.registers[1] = 0xaaaaaaaa;
+      sim.rpchip.core1.registers[1] = 0xbbbbbbbb;
 
       expect(decodeRegs(payload(server.processGDBMessage('g')))[1]).toBe(0xaaaaaaaa);
 
@@ -175,35 +176,35 @@ describe('ARM GDB Server', () => {
 
   describe('memory access', () => {
     test('read memory (m)', () => {
-      sim.rp2040.writeUint32(SCRATCH, 0xdeadbeef);
+      sim.rpchip.writeUint32(SCRATCH, 0xdeadbeef);
       const r = payload(server.processGDBMessage('m20000000,4'));
       expect(r).toBe('efbeadde'); // little-endian
     });
 
     test('write memory (M)', () => {
       server.processGDBMessage('M20000000,4:efbeadde');
-      expect(sim.rp2040.readUint32(SCRATCH)).toBe(0xdeadbeef);
+      expect(sim.rpchip.readUint32(SCRATCH)).toBe(0xdeadbeef);
     });
 
     test('binary write memory (X)', () => {
       server.processGDBMessage('X20000000,4:\xef\xbe\xad\xde');
-      expect(sim.rp2040.readUint32(SCRATCH)).toBe(0xdeadbeef);
+      expect(sim.rpchip.readUint32(SCRATCH)).toBe(0xdeadbeef);
     });
 
     test('binary write with escape sequences (X)', () => {
       // Escaped 0x7d ('}') and 0x23 ('#')
       server.processGDBMessage('X20000000,4:\x41\x7d\x5d\x7d\x03\x42');
-      expect(sim.rp2040.readUint8(SCRATCH)).toBe(0x41);
-      expect(sim.rp2040.readUint8(SCRATCH + 1)).toBe(0x7d);
-      expect(sim.rp2040.readUint8(SCRATCH + 2)).toBe(0x23);
-      expect(sim.rp2040.readUint8(SCRATCH + 3)).toBe(0x42);
+      expect(sim.rpchip.readUint8(SCRATCH)).toBe(0x41);
+      expect(sim.rpchip.readUint8(SCRATCH + 1)).toBe(0x7d);
+      expect(sim.rpchip.readUint8(SCRATCH + 2)).toBe(0x23);
+      expect(sim.rpchip.readUint8(SCRATCH + 3)).toBe(0x42);
     });
 
     test('read memory byte-by-byte', () => {
-      sim.rp2040.writeUint8(SCRATCH, 0x01);
-      sim.rp2040.writeUint8(SCRATCH + 1, 0x02);
-      sim.rp2040.writeUint8(SCRATCH + 2, 0x03);
-      sim.rp2040.writeUint8(SCRATCH + 3, 0x04);
+      sim.rpchip.writeUint8(SCRATCH, 0x01);
+      sim.rpchip.writeUint8(SCRATCH + 1, 0x02);
+      sim.rpchip.writeUint8(SCRATCH + 2, 0x03);
+      sim.rpchip.writeUint8(SCRATCH + 3, 0x04);
       const r = payload(server.processGDBMessage('m20000000,4'));
       expect(r).toBe('01020304');
     });
@@ -235,11 +236,11 @@ describe('ARM GDB Server', () => {
     test('breakpoint triggers halt during execute', () => {
       // Load a simple loop: NOP + B .
       // NOP = 0x46c0 (MOV R8, R8), B . = 0xe7fe
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-      sim.rp2040.writeUint16(SCRATCH + 2, 0xe7fe); // B . (branch to self)
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+      sim.rpchip.writeUint16(SCRATCH + 2, 0xe7fe); // B . (branch to self)
       // Thumb mode: PC has bit 0 clear, instructions at even addresses
-      sim.rp2040.core0.PC = SCRATCH;
-      sim.rp2040.core1.waiting = true;
+      sim.rpchip.core0.PC = SCRATCH;
+      sim.rpchip.core1.waiting = true;
 
       // Set breakpoint at SCRATCH+2
       server.processGDBMessage('Z0,20000002,2');
@@ -249,22 +250,22 @@ describe('ARM GDB Server', () => {
       // The execute loop runs synchronously for the first batch.
       // NOP at SCRATCH, then PC=SCRATCH+2 matches breakpoint.
       expect(server.executing).toBe(false);
-      expect(sim.rp2040.core0.PC).toBe(SCRATCH + 2);
+      expect(sim.rpchip.core0.PC).toBe(SCRATCH + 2);
 
       server.stop();
     });
 
     test('breakpoint on core 1 reports correct thread in stop reply', () => {
       // Core 0: simple loop at SCRATCH
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-      sim.rp2040.writeUint16(SCRATCH + 2, 0xe7fe); // B . (self)
-      sim.rp2040.core0.PC = SCRATCH;
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+      sim.rpchip.writeUint16(SCRATCH + 2, 0xe7fe); // B . (self)
+      sim.rpchip.core0.PC = SCRATCH;
 
       // Core 1: simple loop at SCRATCH+0x100
-      sim.rp2040.writeUint16(SCRATCH + 0x100, 0x46c0); // nop
-      sim.rp2040.writeUint16(SCRATCH + 0x102, 0xe7fe); // B . (self)
-      sim.rp2040.core1.PC = SCRATCH + 0x100;
-      sim.rp2040.core1.waiting = false;
+      sim.rpchip.writeUint16(SCRATCH + 0x100, 0x46c0); // nop
+      sim.rpchip.writeUint16(SCRATCH + 0x102, 0xe7fe); // B . (self)
+      sim.rpchip.core1.PC = SCRATCH + 0x100;
+      sim.rpchip.core1.waiting = false;
 
       // Breakpoint only on core 1's code
       server.processGDBMessage('Z0,20000102,2');
@@ -281,7 +282,7 @@ describe('ARM GDB Server', () => {
       server.execute();
 
       expect(server.executing).toBe(false);
-      expect(sim.rp2040.core1.PC).toBe(SCRATCH + 0x102);
+      expect(sim.rpchip.core1.PC).toBe(SCRATCH + 0x102);
       // The stop reply must report thread 2 (core 1)
       expect(stopReply).toBe('thread:2');
 
@@ -296,43 +297,43 @@ describe('ARM GDB Server', () => {
   describe('single-step (vCont;s)', () => {
     test('step core 0 advances pc by instruction length', () => {
       // NOP (MOV R8, R8) = 0x46c0, 2 bytes in Thumb
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0);
-      sim.rp2040.core0.PC = SCRATCH;
-      sim.rp2040.core1.waiting = true;
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0);
+      sim.rpchip.core0.PC = SCRATCH;
+      sim.rpchip.core1.waiting = true;
 
       const r = payload(server.processGDBMessage('vCont;s:1'));
       expect(r).toContain('T05');
       expect(r).toContain('thread:1');
-      expect(sim.rp2040.core0.PC).toBe(SCRATCH + 2);
+      expect(sim.rpchip.core0.PC).toBe(SCRATCH + 2);
     });
 
     test('step core 1 does not advance core 0', () => {
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-      sim.rp2040.core0.PC = SCRATCH;
-      sim.rp2040.core1.PC = SCRATCH;
-      sim.rp2040.core1.waiting = false;
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+      sim.rpchip.core0.PC = SCRATCH;
+      sim.rpchip.core1.PC = SCRATCH;
+      sim.rpchip.core1.waiting = false;
 
-      const core0PcBefore = sim.rp2040.core0.PC;
+      const core0PcBefore = sim.rpchip.core0.PC;
       server.processGDBMessage('vCont;s:2');
 
-      expect(sim.rp2040.core1.PC).toBe(SCRATCH + 2);
-      expect(sim.rp2040.core0.PC).toBe(core0PcBefore);
+      expect(sim.rpchip.core1.PC).toBe(SCRATCH + 2);
+      expect(sim.rpchip.core0.PC).toBe(core0PcBefore);
     });
 
     test('step without thread ID uses current thread', () => {
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-      sim.rp2040.core0.PC = SCRATCH;
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+      sim.rpchip.core0.PC = SCRATCH;
 
       server.processGDBMessage('Hg1');
       const r = payload(server.processGDBMessage('vCont;s'));
       expect(r).toContain('thread:1');
-      expect(sim.rp2040.core0.PC).toBe(SCRATCH + 2);
+      expect(sim.rpchip.core0.PC).toBe(SCRATCH + 2);
     });
 
     test('step returns register dump for stepped core', () => {
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-      sim.rp2040.core0.PC = SCRATCH;
-      sim.rp2040.core0.registers[3] = 0xcafef00d;
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+      sim.rpchip.core0.PC = SCRATCH;
+      sim.rpchip.core0.registers[3] = 0xcafef00d;
 
       const r = payload(server.processGDBMessage('vCont;s:1'));
       // T05 response contains register values: "03:0df0feca;..."
@@ -346,32 +347,32 @@ describe('ARM GDB Server', () => {
 
   describe('vCont multi-action', () => {
     test('vCont;c:1;c:2 continues both cores', () => {
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-      sim.rp2040.writeUint16(SCRATCH + 2, 0xe7fd); // B -6 (back to SCRATCH+2)
-      sim.rp2040.core0.PC = SCRATCH;
-      sim.rp2040.core1.PC = SCRATCH;
-      sim.rp2040.core1.waiting = false;
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+      sim.rpchip.writeUint16(SCRATCH + 2, 0xe7fd); // B -6 (back to SCRATCH+2)
+      sim.rpchip.core0.PC = SCRATCH;
+      sim.rpchip.core1.PC = SCRATCH;
+      sim.rpchip.core1.waiting = false;
 
       server.processGDBMessage('Z0,20000002,2');
       server.processGDBMessage('vCont;c:1;c:2');
 
       expect(server.executing).toBe(false);
-      expect(sim.rp2040.core0.PC).toBe(SCRATCH + 2);
+      expect(sim.rpchip.core0.PC).toBe(SCRATCH + 2);
       server.stop();
     });
 
     test('vCont;c:1 continues only core 0', () => {
-      sim.rp2040.writeUint16(SCRATCH, 0x46c0); // nop
-      sim.rp2040.core0.PC = SCRATCH;
-      sim.rp2040.core1.PC = 0x20001000;
-      sim.rp2040.core1.waiting = false;
+      sim.rpchip.writeUint16(SCRATCH, 0x46c0); // nop
+      sim.rpchip.core0.PC = SCRATCH;
+      sim.rpchip.core1.PC = 0x20001000;
+      sim.rpchip.core1.waiting = false;
 
       server.processGDBMessage('Z0,20000002,2');
       server.processGDBMessage('vCont;c:1');
 
       expect(server.executing).toBe(false);
-      expect(sim.rp2040.core0.PC).toBe(SCRATCH + 2);
-      expect(sim.rp2040.core1.PC).toBe(0x20001000);
+      expect(sim.rpchip.core0.PC).toBe(SCRATCH + 2);
+      expect(sim.rpchip.core1.PC).toBe(0x20001000);
       server.stop();
     });
   });
@@ -409,19 +410,19 @@ describe('ARM GDB Server', () => {
       } as any);
 
       // BKPT #0 = 0xbe00
-      sim.rp2040.writeUint16(SCRATCH, 0xbe00);
-      sim.rp2040.core0.PC = SCRATCH;
-      sim.rp2040.core1.waiting = true;
+      sim.rpchip.writeUint16(SCRATCH, 0xbe00);
+      sim.rpchip.core0.PC = SCRATCH;
+      sim.rpchip.core1.waiting = true;
 
       // Execute one instruction — BKPT should trigger onBreak
-      sim.rp2040.currentCore = 0;
-      sim.rp2040.core0.executeInstruction();
+      sim.rpchip.currentCore = 0;
+      sim.rpchip.core0.executeInstruction();
 
       // The onBreak callback in ArmGDBServer sets haltedCore and stops
       expect(server.executing).toBe(false);
       expect(halted).toBe(true);
       // breakRewind=2, so PC is rewound to the BKPT instruction
-      expect(sim.rp2040.core0.PC).toBe(SCRATCH);
+      expect(sim.rpchip.core0.PC).toBe(SCRATCH);
     });
   });
 
@@ -467,12 +468,12 @@ describe('ARM GDB Server', () => {
     });
 
     test('monitor pio shows SM state', () => {
-      sim.rp2040.pio[0].machines[0].pc = 3;
-      sim.rp2040.pio[0].machines[0].x = 0x99;
-      sim.rp2040.pio[0].machines[0].inputShiftReg = 0xdeadbeef;
-      sim.rp2040.pio[0].machines[0].inputShiftCount = 16;
-      sim.rp2040.pio[0].machines[0].outputShiftReg = 0xcafef00d;
-      sim.rp2040.pio[0].machines[0].outputShiftCount = 8;
+      sim.rpchip.pio[0].machines[0].pc = 3;
+      sim.rpchip.pio[0].machines[0].x = 0x99;
+      sim.rpchip.pio[0].machines[0].inputShiftReg = 0xdeadbeef;
+      sim.rpchip.pio[0].machines[0].inputShiftCount = 16;
+      sim.rpchip.pio[0].machines[0].outputShiftReg = 0xcafef00d;
+      sim.rpchip.pio[0].machines[0].outputShiftCount = 8;
       const resp = server.processGDBMessage('qRcmd,' + Buffer.from('pio 0').toString('hex'));
       const text = decodeMonitorOutput(resp);
       expect(text).toMatch(/pc=3/);
@@ -493,9 +494,9 @@ describe('ARM GDB Server', () => {
     });
 
     test('monitor gpio shows pin function and values', () => {
-      sim.rp2040.gpio[0].ctrl = 5; // FUNCTION_SIO
-      sim.rp2040.gpio[0].padValue = 0;
-      sim.rp2040.gpio[5].ctrl = 6; // FUNCTION_PIO0
+      sim.rpchip.gpio[0].ctrl = 5; // FUNCTION_SIO
+      sim.rpchip.gpio[0].padValue = 0;
+      sim.rpchip.gpio[5].ctrl = 6; // FUNCTION_PIO0
 
       const resp = server.processGDBMessage('qRcmd,' + Buffer.from('gpio').toString('hex'));
       const text = decodeMonitorOutput(resp);

@@ -110,32 +110,32 @@ export class RPSPI<ChipType extends IRPChip = IRPChip>
     }
 
     const scr = (this.control0 >> SCR_SHIFT) & SCR_MASK;
-    return this.rp2040.clkPeri / (this.clockDivisor * (1 + scr));
+    return this.rpchip.clkPeri / (this.clockDivisor * (1 + scr));
   }
 
   private updateDMATx() {
     if (this.txFIFO.full) {
-      this.rp2040.dma_clearDREQ(this.dreq.tx);
+      this.rpchip.dma_clearDREQ(this.dreq.tx);
     } else {
-      this.rp2040.dma_setDREQ(this.dreq.tx);
+      this.rpchip.dma_setDREQ(this.dreq.tx);
     }
   }
 
   private updateDMARx() {
     if (this.rxFIFO.empty) {
-      this.rp2040.dma_clearDREQ(this.dreq.rx);
+      this.rpchip.dma_clearDREQ(this.dreq.rx);
     } else {
-      this.rp2040.dma_setDREQ(this.dreq.rx);
+      this.rpchip.dma_setDREQ(this.dreq.rx);
     }
   }
 
   constructor(
-    rp2040: ChipType,
+    rpchip: ChipType,
     name: string,
     readonly irq: number,
     readonly dreq: ISPIDMAChannels
   ) {
-    super(rp2040, name);
+    super(rpchip, name);
     this.updateDMATx();
     this.updateDMARx();
   }
@@ -161,7 +161,7 @@ export class RPSPI<ChipType extends IRPChip = IRPChip>
   }
 
   checkInterrupts() {
-    this.rp2040.setInterrupt(this.irq, !!this.intStatus);
+    this.rpchip.setInterrupt(this.irq, !!this.intStatus);
   }
 
   private fifosUpdated() {

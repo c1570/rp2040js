@@ -3,7 +3,7 @@
 // cts2c.js's existing ChipType monomorphization covers free functions only; classes
 // are unconditionally RP2350. That's fine for classes used by one chip, but several
 // classes (RPUART/RPI2C/RPPWM/RPADC/RPSPI/RPTimer/RPWatchdog/etc.) are constructed by
-// BOTH rp2040.ts and rp2350.ts. With ChipType hardcoded to RP2350, `this.rp2040.<f>`
+// BOTH rp2040.ts and rp2350.ts. With ChipType hardcoded to RP2350, `this.rpchip.<f>`
 // accesses would read RP2350 offsets from RP2040-laid-out memory — silent corruption.
 //
 // Rather than thread a class-type override through all of cts2c's class emission, this
@@ -56,7 +56,7 @@ const FILES = [
   { file: 'src/peripherals/pads.ts', classes: ['RPPADS'], mode: 'rp2040-only' },
   { file: 'src/peripherals/sysinfo.ts', classes: ['RP2040SysInfo'], mode: 'rp2040-only' },
   { file: 'src/peripherals/ssi.ts', classes: ['RPSSI'], mode: 'rp2040-only' },
-  // Rest of the "shared" group. Even classes with no own `this.rp2040.<f>` access
+  // Rest of the "shared" group. Even classes with no own `this.rpchip.<f>` access
   // are affected: BasePeripheral's debug/info/warn/error read it, so an unfixed
   // subclass is wrong via inheritance.
   { file: 'src/gpio-pin.ts', classes: ['GPIOPin'], mode: 'shared' },

@@ -20,8 +20,8 @@ const args = minimist(process.argv.slice(2), {
 });
 const expectText = args['expect-text'];
 
-const simulator = new Simulator();
-const mcu = simulator.rp2040;
+const simulator = new Simulator(new RP2040());
+const mcu = simulator.rpchip;
 mcu.logger = new ConsoleLogger(LogLevel.Error);
 
 let imageName: string;
@@ -96,5 +96,5 @@ process.stdin.on('data', (chunk) => {
   }
 });
 
-simulator.rp2040.core0.PC = 0x10000000;
+simulator.rpchip.core0.PC = 0x10000000;
 simulator.execute();

@@ -146,7 +146,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
   // the constructor's `pio` parameter instead.
   private readonly irqTargetScratch: IrqTarget;
 
-  constructor(readonly rp2040: ChipType, readonly pio: RPPIO, readonly index: number) {
+  constructor(readonly rpchip: ChipType, readonly pio: RPPIO, readonly index: number) {
     this.irqTargetScratch = { targetPio: pio, irqBit: 0 };
     this.updateDMARx();
     this.updateDMATx();
@@ -155,18 +155,18 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
   private updateDMATx() {
     this.updateFifoStat();
     if (this.txFIFO.full) {
-      this.rp2040.dma_clearDREQ(this.dreqTx);
+      this.rpchip.dma_clearDREQ(this.dreqTx);
     } else {
-      this.rp2040.dma_setDREQ(this.dreqTx);
+      this.rpchip.dma_setDREQ(this.dreqTx);
     }
   }
 
   private updateDMARx() {
     this.updateFifoStat();
     if (this.rxFIFO.empty) {
-      this.rp2040.dma_clearDREQ(this.dreqRx);
+      this.rpchip.dma_clearDREQ(this.dreqRx);
     } else {
-      this.rp2040.dma_setDREQ(this.dreqRx);
+      this.rpchip.dma_setDREQ(this.dreqRx);
     }
   }
 
@@ -213,7 +213,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
     } else {
       this.pio.machinesRunning &= ~(1 << this.index);
     }
-    this.rp2040.updatePioActiveLists();
+    this.rpchip.updatePioActiveLists();
   }
 
   get enabled() {
@@ -254,7 +254,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
 
       // PIN: branch on input pin
       case 0b110: {
-        const { gpio } = this.rp2040;
+        const { gpio } = this.rpchip;
         const { jmpPin } = this;
         return jmpPin < gpio.length ? gpio[jmpPin].inputValue : false;
       }
@@ -278,7 +278,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
   }
 
   get inPins() {
-    const gpioValues = this.rp2040.gpioValues(this.pio.gpiobase);
+    const gpioValues = this.rpchip.gpioValues(this.pio.gpiobase);
     const { inBase } = this;
     return inBase ? (gpioValues << (32 - inBase)) | (gpioValues >>> inBase) : gpioValues;
   }
@@ -712,8 +712,8 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
         out.irqBit = irqNum;
         return;
       case 1: {
-        const pioCount = this.rp2040.pio.length;
-        const prevPio = this.rp2040.pio[(pio.index + pioCount - 1) % pioCount];
+        const pioCount = this.rpchip.pio.length;
+        const prevPio = this.rpchip.pio[(pio.index + pioCount - 1) % pioCount];
         out.targetPio = prevPio;
         out.irqBit = irqNum;
         return;
@@ -723,7 +723,7 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
         out.irqBit = (irqNum & 4) | ((irqNum + this.index) & 3);
         return;
       case 3: {
-        const nextPio = this.rp2040.pio[(pio.index + 1) % this.rp2040.pio.length];
+        const nextPio = this.rpchip.pio[(pio.index + 1) % this.rpchip.pio.length];
         out.targetPio = nextPio;
         out.irqBit = irqNum;
         return;
@@ -970,8 +970,8 @@ export class StateMachine<ChipType extends IRPChip = IRPChip> {
 
       case WaitType.Pin: {
         if (
-          this.waitIndex < this.rp2040.gpio.length &&
-          this.rp2040.gpio[this.waitIndex + this.pio.gpiobase].inputValue === this.waitPolarity
+          this.waitIndex < this.rpchip.gpio.length &&
+          this.rpchip.gpio[this.waitIndex + this.pio.gpiobase].inputValue === this.waitPolarity
         ) {
           this.waiting = false;
         }
@@ -1023,17 +1023,17 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
 {
   readonly instructions = new Uint32Array(32);
   readonly machines = [
-    new StateMachine(this.rp2040, this, 0),
-    new StateMachine(this.rp2040, this, 1),
-    new StateMachine(this.rp2040, this, 2),
-    new StateMachine(this.rp2040, this, 3),
+    new StateMachine(this.rpchip, this, 0),
+    new StateMachine(this.rpchip, this, 1),
+    new StateMachine(this.rpchip, this, 2),
+    new StateMachine(this.rpchip, this, 3),
   ];
 
   machinesRunning = 0;
   fdebug = 0;
   inputSyncBypass = 0;
   irq = 0;
-  isRp2040 = this.rp2040.identifier == 'rp2040';
+  isRp2040 = this.rpchip.identifier == 'rp2040';
   gpiobase = 0;
   pinValues = 0;
   pinDirections = 0;
@@ -1049,15 +1049,15 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
   irq1IntForce = 0;
 
   constructor(
-    rp2040: ChipType,
+    rpchip: ChipType,
     name: string,
     readonly firstIrq: number,
     readonly index: number,
     readonly dreqRx_base: number,
     readonly dreqTx_base: number
   ) {
-    super(rp2040, name);
-    switch (rp2040.identifier) {
+    super(rpchip, name);
+    switch (rpchip.identifier) {
       case 'rp2040':
         break;
       case 'rp2350':
@@ -1214,8 +1214,8 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
           const clkDivRestart = !!(value & (1 << 26));
 
           // consider "previous" PIO on first for loop
-          const pioCount = this.rp2040.pio.length;
-          let affectedPio = this.rp2040.pio[(this.index + pioCount - 1) % pioCount];
+          const pioCount = this.rpchip.pio.length;
+          let affectedPio = this.rpchip.pio[(this.index + pioCount - 1) % pioCount];
           let affectedMachines = value >>> 16;
           for (let prevNext = 0; prevNext <= 1; prevNext++) {
             for (let index = 0; index < 4; index++) {
@@ -1226,7 +1226,7 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
               }
             }
             // consider "next" PIO on second for loop
-            affectedPio = this.rp2040.pio[(this.index + 1) % pioCount];
+            affectedPio = this.rpchip.pio[(this.index + 1) % pioCount];
             affectedMachines = value >>> 20;
           }
         }
@@ -1276,7 +1276,7 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
         break;
       case RP2350_GPIOBASE:
         // rp2040 has no GPIOBASE register, so it takes the same path as an unknown offset.
-        if (this.rp2040.identifier != 'rp2040') {
+        if (this.rpchip.identifier != 'rp2040') {
           this.gpiobase = value & 16;
         } else {
           super.writeUint32(offset, value);
@@ -1319,8 +1319,8 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
 
   checkInterrupts() {
     const { firstIrq } = this;
-    this.rp2040.setInterrupt(firstIrq, !!this.irq0IntStatus);
-    this.rp2040.setInterrupt(firstIrq + 1, !!this.irq1IntStatus);
+    this.rpchip.setInterrupt(firstIrq, !!this.irq0IntStatus);
+    this.rpchip.setInterrupt(firstIrq + 1, !!this.irq1IntStatus);
   }
 
   irqUpdated() {
@@ -1338,7 +1338,7 @@ export class RPPIO<ChipType extends IRPChip = IRPChip>
       this.oldPinValues = this.pinValues;
 
       // Notify GPIO about the changed pins: Walks only the set bits
-      const { gpio } = this.rp2040;
+      const { gpio } = this.rpchip;
       let remaining = changedPins;
       while (remaining) {
         const lowest = remaining & -remaining;

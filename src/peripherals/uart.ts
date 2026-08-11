@@ -59,12 +59,12 @@ export class RPUART<ChipType extends IRPChip = IRPChip>
   public onBaudRateChange?: (baudRate: number) => void;
 
   constructor(
-    rp2040: ChipType,
+    rpchip: ChipType,
     name: string,
     readonly irq: number,
     readonly dreq: IUARTDMAChannels
   ) {
-    super(rp2040, name);
+    super(rpchip, name);
   }
 
   get enabled() {
@@ -104,7 +104,7 @@ export class RPUART<ChipType extends IRPChip = IRPChip>
   }
 
   get baudRate() {
-    return Math.round(this.rp2040.clkPeri / (this.baudDivider * 16));
+    return Math.round(this.rpchip.clkPeri / (this.baudDivider * 16));
   }
 
   get flags() {
@@ -114,7 +114,7 @@ export class RPUART<ChipType extends IRPChip = IRPChip>
   checkInterrupts() {
     // TODO We should actually implement a proper FIFO for TX
     this.interruptStatus |= UARTTXINTR;
-    this.rp2040.setInterrupt(this.irq, !!(this.interruptStatus & this.interruptMask));
+    this.rpchip.setInterrupt(this.irq, !!(this.interruptStatus & this.interruptMask));
   }
 
   feedByte(value: number) {
@@ -195,9 +195,9 @@ export class RPUART<ChipType extends IRPChip = IRPChip>
       case UARTCR:
         this.ctrlRegister = value;
         if (this.enabled) {
-          this.rp2040.dma_setDREQ(this.dreq.tx);
+          this.rpchip.dma_setDREQ(this.dreq.tx);
         } else {
-          this.rp2040.dma_clearDREQ(this.dreq.tx);
+          this.rpchip.dma_clearDREQ(this.dreq.tx);
         }
         break;
 

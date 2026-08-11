@@ -19,8 +19,8 @@ export class RP2350OTP<ChipType extends IRPChip = IRPChip>
   // Explicit pass-through constructor: cts2c only synthesizes a `_new()` for a class
   // with its own declared constructor — a subclass relying on the parent's implicit
   // constructor would get no allocator at all.
-  constructor(rp2040: ChipType, name: string) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string) {
+    super(rpchip, name);
   }
 
   readUint32(offset: number) {
@@ -46,8 +46,8 @@ export class RP2350OTPData<ChipType extends IRPChip = IRPChip>
   extends BasePeripheral<ChipType>
   implements Peripheral
 {
-  constructor(rp2040: ChipType, name: string, private readonly otp: RP2350OTP) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string, private readonly otp: RP2350OTP) {
+    super(rpchip, name);
   }
 
   readUint32(offset: number) {

@@ -33,8 +33,8 @@ export class RPBUSCTRL<ChipType extends IRPChip = IRPChip>
   readonly perfCtr = [0, 0, 0, 0];
   readonly perfSel = [0x1f, 0x1f, 0x1f, 0x1f];
 
-  constructor(rp2040: ChipType, name: string) {
-    super(rp2040, name);
+  constructor(rpchip: ChipType, name: string) {
+    super(rpchip, name);
   }
 
   readUint32(offset: number) {
