@@ -750,7 +750,7 @@ export class CPU implements ICpuCore {
         this.setRegister(r, Math.imul(a, b));
         break;
       case T_SLL:
-        this.setRegister(r, a << this.getRegisterU(s2));
+        this.setRegister(r, a << b);
         break;
       case T_MULH: {
         let hi = umulh(a >>> 0, b >>> 0);
@@ -760,24 +760,24 @@ export class CPU implements ICpuCore {
         break;
       }
       case T_BSET:
-        this.setRegister(r, a | (1 << (this.getRegisterU(s2) & 31)));
+        this.setRegister(r, a | (1 << (b & 31)));
         break;
       case T_BCLR:
-        this.setRegister(r, a & ~(1 << (this.getRegisterU(s2) & 31)));
+        this.setRegister(r, a & ~(1 << (b & 31)));
         break;
       case T_ROL: {
-        const sh = this.getRegisterU(s2) & 31;
+        const sh = b & 31;
         this.setRegister(r, ((a << sh) | (a >>> (32 - sh))) >>> 0);
         break;
       }
       case T_BINV:
-        this.setRegister(r, a ^ (1 << (this.getRegisterU(s2) & 31)));
+        this.setRegister(r, a ^ (1 << (b & 31)));
         break;
       case T_SLT:
         this.setRegister(r, a < b ? 1 : 0);
         break;
       case T_MULHSU: {
-        const bu = this.getRegisterU(s2);
+        const bu = b >>> 0;
         let hi = umulh(a >>> 0, bu);
         if (a < 0) hi = (hi - bu) | 0;
         this.setRegister(r, hi);
@@ -787,10 +787,10 @@ export class CPU implements ICpuCore {
         this.setRegister(r, ((a << 1) + b) & 0xffffffff);
         break;
       case T_SLTU:
-        this.setRegister(r, this.getRegisterU(s1) < this.getRegisterU(s2) ? 1 : 0);
+        this.setRegister(r, a >>> 0 < b >>> 0 ? 1 : 0);
         break;
       case T_MULHU:
-        this.setRegisterU(r, umulh(this.getRegisterU(s1), this.getRegisterU(s2)));
+        this.setRegisterU(r, umulh(a >>> 0, b >>> 0));
         break;
       case T_XOR:
         this.setRegister(r, a ^ b);
@@ -830,7 +830,7 @@ export class CPU implements ICpuCore {
         break;
       case T_ROR: {
         const sh = b & 31;
-        const u = this.getRegisterU(s1);
+        const u = a >>> 0;
         this.setRegister(r, ((u << (32 - sh)) >>> 0) | (u >>> sh));
         break;
       }
