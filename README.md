@@ -18,8 +18,8 @@ This is a much improved fork of Uri Shaked's [rp2040js](https://github.com/wokwi
 - **GDB interface** ("monitor" outputting PIO/GPIO info; memory watch not supported)
 - **MCP server** and **Agent Skill** for interfacing with coding agents (features similar to GDB); register MCP with, e.g., `opencode mcp add` and `npx ts-node demo/mcp-server.ts`; for skill CLI helper see .opencode/.claude
 - built-in cycle profiler using markers in the RP's firmware
-- on recent PCs, expect about **10M cycles per second** from rp2350js
-- can get **transpiled to C** for 2-8x speed increase ([cts2c](/cts2c/README.md))
+- on recent PCs, expect about **70M cycles per second** (with one RP2040/2350 core busy, all else idle; see `npm run bench:cpu`)
+- can get **transpiled to C** for ~3x speed ([cts2c](/cts2c/README.md), also see releases)
 
 #### Implemented
 
