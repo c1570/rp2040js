@@ -1328,7 +1328,7 @@ function dispatchMultiply(core: CortexM33Core, hw0: number, hw1: number): number
     // UDIV — ARMv8-M without DIV_0_TRP returns 0 on divide-by-zero.
     const divisor = regs.r[rm] >>> 0;
     const dividend = regs.r[rn] >>> 0;
-    regs.r[rd] = divisor === 0 ? 0 : (dividend / divisor) >>> 0;
+    regs.r[rd] = divisor === 0 ? 0 : ((dividend >>> 0) / (divisor >>> 0)) >>> 0;
     return 12;
   }
   if (op === 0b1001) {
