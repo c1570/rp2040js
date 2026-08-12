@@ -218,9 +218,7 @@ export function executeThumb32(
     regs.N = (r & 0x80000000) !== 0;
     regs.Z = r === 0;
     regs.C = a >>> 0 >= b >>> 0;
-    regs.V =
-      (!!(r & 0x80000000) && !(a & 0x80000000) && !!(b & 0x80000000)) ||
-      (!(r & 0x80000000) && !!(a & 0x80000000) && !(b & 0x80000000));
+    regs.V = ((a ^ b) & (a ^ r)) < 0;
     return r;
   };
   const writeRd = (rd: number, value: number) => {
@@ -933,9 +931,7 @@ function addSubFlags(
     regs.N = (r & 0x80000000) !== 0;
     regs.Z = r === 0;
     regs.C = a >>> 0 >= b >>> 0;
-    regs.V =
-      (!!(r & 0x80000000) && !(a & 0x80000000) && !!(b & 0x80000000)) ||
-      (!(r & 0x80000000) && !!(a & 0x80000000) && !(b & 0x80000000));
+    regs.V = ((a ^ b) & (a ^ r)) < 0;
   }
   return r;
 }

@@ -77,9 +77,7 @@ function subFlags(
     core.regs.N = (result & 0x80000000) !== 0;
     core.regs.Z = result === 0;
     core.regs.C = minuend >>> 0 >= subtrahend;
-    core.regs.V =
-      (!!(result & 0x80000000) && !(minuend & 0x80000000) && !!(subtrahend & 0x80000000)) ||
-      (!(result & 0x80000000) && !!(minuend & 0x80000000) && !(subtrahend & 0x80000000));
+    core.regs.V = ((minuend ^ subtrahend) & (minuend ^ result)) < 0;
   }
   return result;
 }
