@@ -82,7 +82,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:micropython-spi": "ts-node test/micropython-spi-test.ts",
-    "bench:cpu": "tsx test/cpu_benchmark/compare.ts",
+    "bench:cpu": "npm run build && tsx test/cpu_benchmark/compare.ts",
     "bin": "node dist/cjs/rp2-emu-cli/rp2-emu.js",
     "bin:dev": "ts-node src/rp2-emu-cli/rp2-emu.ts"
   },

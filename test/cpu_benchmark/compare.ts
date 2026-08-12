@@ -19,7 +19,7 @@ const targetCycles = process.argv[2] || '300000000';
 const C_HEADER = join(ROOT, 'build/transpile/rp2350js-c.h');
 const C_HARNESS_SRC = join(ROOT, 'test/cpu_benchmark/run-bench.c');
 const C_HARNESS_BIN = join(ROOT, 'build/transpile/cpu-bench');
-const TS_RUNNER = join(ROOT, 'test/cpu_benchmark/run-bench.ts');
+const TS_RUNNER = join(ROOT, 'test/cpu_benchmark/run-bench.js');
 
 type ArchResults = { lines: string[]; cyclesPerSec: number };
 type RunnerOutput = { targetCycles: number; results: Record<string, ArchResults> };
@@ -88,8 +88,8 @@ console.log(`\n=== CPU Benchmark Comparison (target ${targetCycles} cycles) ===\
 
 ensureCHarness();
 
-console.log('\n[run] TS emulator...');
-const tsResult = run('npx', ['tsx', TS_RUNNER, targetCycles], { cwd: ROOT });
+console.log('\n[run] TS emulator (compiled)...');
+const tsResult = run('node', [TS_RUNNER, targetCycles], { cwd: ROOT });
 const tsOut = parseJSON<RunnerOutput>(tsResult.stdout);
 
 console.log('[run] C emulator...');
