@@ -266,6 +266,12 @@ export function loadFirmware<ChipType extends IRPChip = IRPChip>(
     );
   }
 
+  if (result.useSram && chip.identifier === 'rp2040') {
+    chip.reset();
+    chip.core[0].PC = result.loadBase;
+    return result;
+  }
+
   // Reset so cores restart at the bootrom vector, which then performs the
   // vectored-boot handoff (SRAM) or flash scan.
   chip.reset();
