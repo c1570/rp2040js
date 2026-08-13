@@ -24,6 +24,7 @@ import { RP2040SysInfo } from './peripherals/sysinfo';
 import { RPTBMAN } from './peripherals/tbman';
 import { RPTimer } from './peripherals/timer';
 import { RPUART } from './peripherals/uart';
+import { RP2040VregAndChipReset } from './peripherals/vreg_rp2040';
 import { RPUSBController } from './peripherals/usb';
 import { RPSIO } from './sio';
 import { RPWatchdog } from './peripherals/watchdog';
@@ -157,7 +158,7 @@ export class RP2040 implements IRPChip {
     0x40058: new RPWatchdog(this, 'WATCHDOG_BASE'),
     0x4005c: new RP2040RTC(this, 'RTC_BASE'),
     0x40060: new UnimplementedPeripheral(this, 'ROSC_BASE'),
-    0x40064: new UnimplementedPeripheral(this, 'VREG_AND_CHIP_RESET_BASE'),
+    0x40064: new RP2040VregAndChipReset(this, 'VREG_AND_CHIP_RESET_BASE'),
     0x4006c: new RPTBMAN(this, 'TBMAN_BASE'),
     0x50000: this.dma,
     0x50110: this.usbCtrl,
