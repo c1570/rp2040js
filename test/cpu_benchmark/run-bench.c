@@ -47,11 +47,8 @@ static BenchResult run_rp2040(const char* hexPath, long long targetCycles) {
   g_result = &r;
   line_len = 0;
 
-  RP2040Options opts = {.loadFirmware = NULL};
+  RP2040Options opts = {.loadFirmware = hexPath};
   RP2040* mcu = RP2040_new(&opts);
-  LoadFirmwareOptions lfo = {.entryPc = 0x10000000};
-  RP2040_loadFirmware(mcu, hexPath, &lfo);
-  mcu->core[1]->waiting = true;
   mcu->uart[0]->onByte_fn = on_uart_byte;
 
   clock_t t0 = clock();

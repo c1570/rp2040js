@@ -18,9 +18,7 @@ const FW = {
 function runOne(coreArch) {
   let mcu;
   if (coreArch === 'rp2040') {
-    mcu = new RP2040();
-    mcu.loadFirmware(FW.rp2040, { entryPc: 0x10000000 });
-    mcu.core[1].waiting = true;
+    mcu = new RP2040({ loadFirmware: FW.rp2040 });
   } else {
     mcu = new RP2350({ coreArch, loadFirmware: FW[coreArch] });
   }
