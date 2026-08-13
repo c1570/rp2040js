@@ -208,6 +208,10 @@ export class RP2040 implements IRPChip {
   reset() {
     for (const c of this.core) c.reset();
     this.pwm.reset();
+
+    // Set QSPI CSn pull-up (checked by bootrom).
+    this.qspi[1].padValue = 0x56; // IE=1, PUE=1, SCHMITT=1
+    this.qspi[1].setInputValue(true);
   }
 
   readUint32(address: Uint32): Uint32 {
