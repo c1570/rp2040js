@@ -584,25 +584,21 @@ export class CortexM0Core implements ICpuCore {
   }
 
   private substractUpdateFlags(minuend: Uint32, subtrahend: Uint32) {
-    const result = minuend - subtrahend;
+    const result = (minuend - subtrahend) >>> 0;
     this.N = !!(result & 0x80000000);
-    this.Z = (result & 0xffffffff) === 0;
+    this.Z = result === 0;
     this.C = minuend >= subtrahend;
-    this.V =
-      (!!(result & 0x80000000) && !(minuend & 0x80000000) && !!(subtrahend & 0x80000000)) ||
-      (!(result & 0x80000000) && !!(minuend & 0x80000000) && !(subtrahend & 0x80000000));
+    this.V = ((minuend ^ subtrahend) & (minuend ^ result)) < 0;
     return result;
   }
 
   private addUpdateFlags(addend1: number, addend2: number) {
-    const unsignedSum = (addend1 + addend2) >>> 0;
-    const signedSum = (addend1 | 0) + (addend2 | 0);
-    const result = addend1 + addend2;
+    const result = (addend1 + addend2) >>> 0;
     this.N = !!(result & 0x80000000);
-    this.Z = (result & 0xffffffff) === 0;
-    this.C = result === unsignedSum ? false : true;
-    this.V = (result | 0) === signedSum ? false : true;
-    return result & 0xffffffff;
+    this.Z = result === 0;
+    this.C = addend1 >>> 0 > 0xffffffff - (addend2 >>> 0);
+    this.V = (~(addend1 ^ addend2) & (addend1 ^ result)) < 0;
+    return result;
   }
 
   cyclesIO(addr: number, write = false) {
