@@ -2199,34 +2199,52 @@ function emitImpl(node, out) {
       // monomorphized instantiation (see "ChipType monomorphization" above) — never
       // under their own bare (generic) name.
       if (genericFreeFunctionDecls.has(name)) break;
-      // checkTraceMagic firmware tracing hook
-      if (name === 'checkTraceMagic') {
+      // checkTraceMagic* firmware tracing hooks (emit allocation-free bodies).
+      const traceMagicHooks = {
+        checkTraceMagic: {
+          check: `RP2350_readUint16(%0->chip, %1) == 0xabcd && RP2350_readUint16(%0->chip, %1 + 2) == 0xffff`,
+          readU8: `RP2350_readUint8(%0->chip, __trace_i)`,
+          tagFrom: `%1 + 4`,
+          fire: `if (%0->chip->onTrace_fn) %0->chip->onTrace_fn(%0->chip->onTrace_ctx, %0->mhartid, %0->pc, __trace_tag);`,
+        },
+        checkTraceMagicM33: {
+          check: `RP2350_readUint16(%0->chip, %1 + 2) == 0xabcd && RP2350_readUint16(%0->chip, %1 + 4) == 0xffff`,
+          readU8: `RP2350_readUint8(%0->chip, __trace_i)`,
+          tagFrom: `%1 + 6`,
+          fire: `if (%0->chip->onTrace_fn) %0->chip->onTrace_fn(%0->chip->onTrace_ctx, %0->coreIndex, %1, __trace_tag);`,
+        },
+        checkTraceMagicM0: {
+          check: `CortexM0Core_readUint16(%0, %1 + 2) == 0xabcd && CortexM0Core_readUint16(%0, %1 + 4) == 0xffff`,
+          readU8: `CortexM0Core_readUint8(%0, __trace_i)`,
+          tagFrom: `%1 + 6`,
+          fire: `if (%0->rpchip->onTrace_fn) %0->rpchip->onTrace_fn(%0->rpchip->onTrace_ctx, %0->coreNumber, CortexM0Core_PC_get(%0), __trace_tag);`,
+        },
+      };
+      if (traceMagicHooks[name]) {
         const fn = freeFunctions.get(name);
         if (fn) {
           const p = fn.params.map((pp) => cName(pp.name));
+          const fill = (s) => s.replace(/%(\d)/g, (_, i) => p[+i]);
+          const hook = traceMagicHooks[name];
           out.push(
             `static ${fn.retType} ${name}(${fn.params
               .map((pp) => `${pp.type} ${cName(pp.name)}`)
               .join(', ')}) {`
           );
-          out.push(
-            `  if (RP2350_readUint16(${p[0]}->chip, ${p[1]}) == 0xabcd && RP2350_readUint16(${p[0]}->chip, ${p[1]} + 2) == 0xffff) {`
-          );
+          out.push(`  if (${fill(hook.check)}) {`);
           out.push(`    char __trace_tag[64];`);
           out.push(`    int __trace_n = 0;`);
           out.push(
-            `    for (int32_t __trace_i = ${p[1]} + 4; __trace_n < (int)sizeof(__trace_tag) - 1; __trace_i++) {`
+            `    for (int32_t __trace_i = ${fill(
+              hook.tagFrom
+            )}; __trace_n < (int)sizeof(__trace_tag) - 1; __trace_i++) {`
           );
-          out.push(
-            `      int32_t __trace_ch = (int32_t)RP2350_readUint8(${p[0]}->chip, __trace_i);`
-          );
+          out.push(`      int32_t __trace_ch = (int32_t)${fill(hook.readU8)};`);
           out.push(`      if (__trace_ch == 0) break;`);
           out.push(`      __trace_tag[__trace_n++] = (char)__trace_ch;`);
           out.push(`    }`);
           out.push(`    __trace_tag[__trace_n] = '\\0';`);
-          out.push(
-            `    if (${p[0]}->chip->onTrace_fn) ${p[0]}->chip->onTrace_fn(${p[0]}->chip->onTrace_ctx, ${p[0]}->mhartid, ${p[0]}->pc, __trace_tag);`
-          );
+          out.push(`    ${fill(hook.fire)}`);
           out.push(`  }`);
           out.push('}');
           out.push('');

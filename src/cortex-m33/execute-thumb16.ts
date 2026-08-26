@@ -117,6 +117,24 @@ function addFlags(core: CortexM33Core, a: number, b: number, carryIn = 0, setFla
  * Execute one Thumb-16 instruction at `opcodePC`. Returns elapsed cycles.
  * The caller has already advanced PC past the 16-bit opcode (PC = opcodePC + 2).
  */
+// Profiler trace magic: a 0xabcd/0xffff marker right after the (2-byte) branch
+// instruction signals that a NUL-terminated trace-tag string follows at
+// opcodePC + 6; onTrace consumes it.
+export function checkTraceMagicM33(core: CortexM33Core, opcodePC: number) {
+  if (
+    core.chip.readUint16(opcodePC + 2) === 0xabcd &&
+    core.chip.readUint16(opcodePC + 4) === 0xffff
+  ) {
+    let profTag = '';
+    for (let i = opcodePC + 6; ; i++) {
+      const ch = core.chip.readUint8(i);
+      if (ch === 0) break;
+      profTag += String.fromCharCode(ch);
+    }
+    core.chip.onTrace(core.coreIndex, opcodePC, profTag);
+  }
+}
+
 export function executeThumb16(core: CortexM33Core, opcodePC: number, opcode: number): number {
   const regs = core.regs;
   let deltaCycles = 1;
@@ -253,18 +271,7 @@ export function executeThumb16(core: CortexM33Core, opcodePC: number, opcode: nu
   // B (unconditional T2)
   else if (opcode >> 11 === 0b11100) {
     // test for profiler trace magic
-    if (
-      core.chip.readUint16(opcodePC + 2) === 0xabcd &&
-      core.chip.readUint16(opcodePC + 4) === 0xffff
-    ) {
-      let profTag = '';
-      for (let i = opcodePC + 6; ; i++) {
-        const ch = core.chip.readUint8(i);
-        if (ch === 0) break;
-        profTag += String.fromCharCode(ch);
-      }
-      core.chip.onTrace(core.coreIndex, opcodePC, profTag);
-    }
+    checkTraceMagicM33(core, opcodePC);
     let imm11 = (opcode & 0x7ff) << 1;
     if (imm11 & (1 << 11)) imm11 = (imm11 & 0x7ff) - 0x800;
     regs.pc = (regs.pc + imm11 + 2) >>> 0;

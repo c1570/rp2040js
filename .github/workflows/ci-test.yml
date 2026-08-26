@@ -25,6 +25,8 @@ jobs:
         run: npx vitest run cts2c
         env:
           CTS2C_PARITY: '1'
+      - name: cts2c helper checks
+        run: gcc -O2 cts2c/helper-checks.c -o /tmp/helper-checks -lm && /tmp/helper-checks
       # Publishes the transpiled emulator and its example driver, so the C build can be
       # used without a Node toolchain. Last step in the job, so nothing is published
       # unless the tests and the parity check above passed; cts2c:full also exits non-zero

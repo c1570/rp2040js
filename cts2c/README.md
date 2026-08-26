@@ -10,7 +10,7 @@ The C version achieves 2-4x the speed of the Node/TS version.
     cts2c-ensure-parity.ts       Node-vs-C CRC32 parity, with divergence bisection
     cts2c-parity.spec.ts         opt-in vitest smoke test wrapping the above
     helper-cts2c-ensure-parity.c C harness the parity check drives
-    helper-bitpun-check.c        standalone check of the hand-written C bodies
+    helper-checks.c              standalone checks of the hand-written C helpers
 
 `demo/emulator-run.c` is a C port of `demo/emulator-run.ts` showing how to drive the
 generated emulator: UART output, GPIO listeners, stepping.
@@ -18,7 +18,7 @@ generated emulator: UART output, GPIO listeners, stepping.
 ## Verifying a change
 
     npm run cts2c:full                              # transpiles + gcc; expect 0 errors
-    gcc -O2 cts2c/helper-bitpun-check.c -o /tmp/b && /tmp/b
+    gcc -O2 cts2c/helper-checks.c -o /tmp/b -lm && /tmp/b
     CTS2C_PARITY=1 npx vitest run cts2c             # 5M-cycle parity, both arches
 
     # more thorough check, takes minutes

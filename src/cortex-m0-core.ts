@@ -755,16 +755,7 @@ export class CortexM0Core implements ICpuCore {
     // B
     else if (opcode >> 11 === 0b11100) {
       // test for profiler trace magic
-      if (this.readUint16(opcodePC + 2) === 0xabcd && this.readUint16(opcodePC + 4) === 0xffff) {
-        let profTag = '';
-        // no loop condition: the tag is NUL-terminated, so `break` below is the exit
-        for (let i = opcodePC + 6; ; i++) {
-          const ch = this.readUint8(i);
-          if (ch == 0) break;
-          profTag = profTag + String.fromCharCode(ch);
-        }
-        this.rpchip.onTrace(this.coreNumber, this.PC, profTag);
-      }
+      checkTraceMagicM0(this, opcodePC);
 
       let imm11 = (opcode & 0x7ff) << 1;
       if (imm11 & (1 << 11)) {
@@ -1383,5 +1374,21 @@ export class CortexM0Core implements ICpuCore {
 
     this.cycles += deltaCycles;
     return deltaCycles;
+  }
+}
+
+// Profiler trace magic: a 0xabcd/0xffff marker right after the (2-byte) branch
+// instruction signals that a NUL-terminated trace-tag string follows at
+// opcodePC + 6; onTrace consumes it.
+export function checkTraceMagicM0(core: CortexM0Core, opcodePC: number) {
+  if (core.readUint16(opcodePC + 2) === 0xabcd && core.readUint16(opcodePC + 4) === 0xffff) {
+    let profTag = '';
+    // no loop condition: the tag is NUL-terminated, so `break` below is the exit
+    for (let i = opcodePC + 6; ; i++) {
+      const ch = core.readUint8(i);
+      if (ch == 0) break;
+      profTag = profTag + String.fromCharCode(ch);
+    }
+    core.rpchip.onTrace(core.coreNumber, core.PC, profTag);
   }
 }
