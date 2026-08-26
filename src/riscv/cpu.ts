@@ -843,7 +843,13 @@ export class CPU implements ICpuCore {
         this.setRegister(r, a | b);
         break;
       case T_REM:
-        this.setRegister(r, b === 0 ? a : a % b);
+        // REM: x % 0 = x, and INT_MIN % -1 = 0 per the RISC-V spec (no trap). JS's
+        // float-based % yields both for free, but the C transpile of `a % b` is a raw
+        // integer idiv, which traps on INT_MIN % -1 (x86) or is UB — hence the explicit
+        // guard, mirroring T_DIV above.
+        if (b === 0) this.setRegister(r, a);
+        else if (a >>> 0 === 0x80000000 && b >>> 0 === 0xffffffff) this.setRegister(r, 0);
+        else this.setRegister(r, a % b);
         this.cycles += 17;
         break;
       case T_MAX:

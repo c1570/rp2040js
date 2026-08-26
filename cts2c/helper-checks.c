@@ -10,6 +10,10 @@
 //    hook bodies: write the 0xabcd/0xffff marker + tag into (virtual) chip memory,
 //    call the hook, and verify the chip's onTrace callback fires exactly once with
 //    the right core number, PC and tag string.
+//  - the transpiled cores' add/sub/mul/div opcodes, run as hand-assembled
+//    instructions on each core (RISC-V, Cortex-M33, Cortex-M0+) with boundary
+//    operands — the cases where a uint-vs-int mixup in the generated C silently
+//    changes the result (see the section comment near the end for details).
 //
 // Exits non-zero and prints a diagnostic on the first mismatch.
 #include "../build/transpile/rp2350js-c.h"
@@ -76,6 +80,54 @@ static void checkStr(const char* label, const char* got, const char* want) {
   } else {
     printf("ok   %s: \"%s\"\n", label, got);
   }
+}
+
+// ─── add/sub/mul/div opcode checks (uint-vs-int traps) ───────────────────
+
+// R-type with rs1=x1, rs2=x2, rd=x5.
+static uint32_t rv_r(uint32_t funct3, uint32_t funct7) {
+  return 0x33u | (5u << 7) | (funct3 << 12) | (1u << 15) | (2u << 20) | (funct7 << 25);
+}
+
+static uint32_t rv_alu(RP2350* mcu, CPU* cpu, uint32_t insn, uint32_t a, uint32_t b) {
+  const uint32_t base = 0x20040000;
+  cpu->regs[1] = (int32_t)a;
+  cpu->regs[2] = (int32_t)b;
+  cpu->regs[5] = 0;
+  RP2350_writeUint32(mcu, base, insn);
+  cpu->pc = (int32_t)base;
+  cpu->next_pc = (int32_t)(base + 4);
+  CPU_executeInstruction(cpu);
+  return (uint32_t)cpu->regs[5];
+}
+
+// Executes a Thumb instruction (w1, plus w2 for 32-bit encodings; pass 0 for
+// 16-bit ones) with r1=a, r2=b, r5 preloaded with b (MULS needs rd==rm) and
+// returns r5; *hiOut (optional) receives r6 for SMULL/UMULL results.
+static uint32_t m33_exec(
+    RP2350* mcu, CortexM33Core* core, uint16_t w1, uint16_t w2, uint32_t a, uint32_t b, uint32_t* hiOut) {
+  const uint32_t base = 0x20040000;
+  core->regs->r[1] = a;
+  core->regs->r[2] = b;
+  core->regs->r[5] = b;
+  core->regs->r[6] = 0;
+  RP2350_writeUint16(mcu, base, w1);
+  if (w2) RP2350_writeUint16(mcu, base + 2, w2);
+  core->regs->r[15] = base;
+  CortexM33Core_executeInstruction(core);
+  if (hiOut) *hiOut = core->regs->r[6];
+  return core->regs->r[5];
+}
+
+static uint32_t m0_exec(RP2040* mcu, CortexM0Core* core, uint16_t insn, uint32_t a, uint32_t b) {
+  const uint32_t base = 0x20040000;
+  core->registers[1] = a;
+  core->registers[2] = b;
+  core->registers[5] = b;
+  RP2040_writeUint16(mcu, base, insn);
+  core->registers[15] = base;
+  CortexM0Core_executeInstruction(core);
+  return core->registers[5];
 }
 
 // ─── checkTraceMagic* callback tests ─────────────────────────────────────
@@ -266,6 +318,108 @@ int main(void) {
     RP2040_writeUint16(mcu, base + 2, 0x0000);
     checkTraceMagicM0(core, base);
     checkI32("trace m0 no fire on bad marker", trace_calls, 0);
+  }
+
+  // ─── RISC-V add/sub/mul/div (RV32IM opcodes) ───────────────────────────
+  {
+    RP2350Options options = {.coreArch = "riscv", .loadFirmware = NULL};
+    RP2350* mcu = RP2350_new(&options);
+    CPU* cpu = RP2350_riscvCore0_get(mcu);
+
+    // ADD: wrap at the signed/unsigned top.
+    checkU32("rv add 0x7fffffff+1", rv_alu(mcu, cpu, rv_r(0, 0x00), 0x7fffffff, 1), 0x80000000u);
+    checkU32("rv add 0xffffffff+0xffffffff", rv_alu(mcu, cpu, rv_r(0, 0x00), 0xffffffff, 0xffffffff), 0xfffffffeu);
+    // SUB: borrow across zero and out of INT_MIN.
+    checkU32("rv sub 0-1", rv_alu(mcu, cpu, rv_r(0, 0x20), 0, 1), 0xffffffffu);
+    checkU32("rv sub 0x80000000-1", rv_alu(mcu, cpu, rv_r(0, 0x20), 0x80000000, 1), 0x7fffffffu);
+    // MUL: low 32 bits only.
+    checkU32("rv mul 0x10001*0x10001", rv_alu(mcu, cpu, rv_r(0, 0x01), 0x00010001, 0x00010001), 0x00020001u);
+    checkU32("rv mul -1*-1", rv_alu(mcu, cpu, rv_r(0, 0x01), 0xffffffff, 0xffffffff), 1);
+    checkU32("rv mul 0x80000000*2", rv_alu(mcu, cpu, rv_r(0, 0x01), 0x80000000, 2), 0);
+    // MULH/MULHU/MULHSU: THE signed-vs-unsigned discriminator.
+    checkU32("rv mulh INT_MIN*INT_MIN", rv_alu(mcu, cpu, rv_r(1, 0x01), 0x80000000, 0x80000000), 0x40000000u);
+    checkU32("rv mulh INT_MIN*INT_MAX", rv_alu(mcu, cpu, rv_r(1, 0x01), 0x80000000, 0x7fffffff), 0xc0000000u);
+    checkU32("rv mulhu 0xffffffff*0xffffffff", rv_alu(mcu, cpu, rv_r(3, 0x01), 0xffffffff, 0xffffffff), 0xfffffffeu);
+    checkU32("rv mulhsu -1*0xffffffff", rv_alu(mcu, cpu, rv_r(2, 0x01), 0xffffffff, 0xffffffff), 0xffffffffu);
+    // DIV: truncate toward zero, remainder takes the dividend's sign.
+    checkU32("rv div -7/2", rv_alu(mcu, cpu, rv_r(4, 0x01), (uint32_t)-7, 2), 0xfffffffcu + 1); // -3
+    checkU32("rv div INT_MIN/-1", rv_alu(mcu, cpu, rv_r(4, 0x01), 0x80000000, 0xffffffff), 0x80000000u);
+    checkU32("rv div 7/-2", rv_alu(mcu, cpu, rv_r(4, 0x01), 7, 0xfffffffe), 0xfffffffcu + 1); // -3
+    checkU32("rv divu 0xffffffff/0x10", rv_alu(mcu, cpu, rv_r(5, 0x01), 0xffffffff, 0x10), 0x0fffffffu);
+    // RISC-V div-by-zero is NOT a trap: quotient all-ones, remainder = dividend.
+    checkU32("rv div 5/0", rv_alu(mcu, cpu, rv_r(4, 0x01), 5, 0), 0xffffffffu);
+    checkU32("rv divu 5/0", rv_alu(mcu, cpu, rv_r(5, 0x01), 5, 0), 0xffffffffu);
+    checkU32("rv rem -7%2", rv_alu(mcu, cpu, rv_r(6, 0x01), (uint32_t)-7, 2), 0xffffffffu); // -1
+    checkU32("rv rem 7%-2", rv_alu(mcu, cpu, rv_r(6, 0x01), 7, 0xfffffffe), 1);
+    checkU32("rv rem INT_MIN%-1", rv_alu(mcu, cpu, rv_r(6, 0x01), 0x80000000, 0xffffffff), 0);
+    checkU32("rv remu 0xffffffff%0x10", rv_alu(mcu, cpu, rv_r(7, 0x01), 0xffffffff, 0x10), 0xfu);
+    checkU32("rv rem 5%0", rv_alu(mcu, cpu, rv_r(6, 0x01), 5, 0), 5);
+    checkU32("rv remu 5%0", rv_alu(mcu, cpu, rv_r(7, 0x01), 5, 0), 5);
+  }
+
+  // ─── Cortex-M33 add/sub/mul/div (Thumb-16 + Thumb-32) ──────────────────
+  // ADDS r5,r1,r2 / SUBS r5,r1,r2 / MULS r5,r1,r5 (rd==rm) / SDIV|UDIV r5,r1,r2 /
+  // SMULL|UMULL r5,r6,r1,r2.
+  {
+    RP2350Options options = {.coreArch = "arm", .loadFirmware = NULL};
+    RP2350* mcu = RP2350_new(&options);
+    CortexM33Core* core = RP2350_armCore0_get(mcu);
+    const uint16_t ADDS = 0x188d, SUBS = 0x1a8d, MULS = 0x434d; // rm=r2/r5, rn=r1, rd=r5
+    const uint16_t SDIV_W1 = 0xfb91, UDIV_W1 = 0xfbb1, DIV_W2 = 0xf5f2; // r5 = r1 op r2
+    const uint16_t SMULL_W1 = 0xfb81, UMULL_W1 = 0xfba1, MULL_W2 = 0x5602; // r5=lo, r6=hi
+    uint32_t hi;
+
+    checkU32("m33 adds 0x7fffffff+1", m33_exec(mcu, core, ADDS, 0, 0x7fffffff, 1, NULL), 0x80000000u);
+    checkBool("m33 adds 0x7fffffff+1 N", M33Registers_N_get(core->regs), true);
+    checkBool("m33 adds 0x7fffffff+1 V", M33Registers_V_get(core->regs), true);
+    checkBool("m33 adds 0x7fffffff+1 C", M33Registers_C_get(core->regs), false);
+    checkU32("m33 adds 0xffffffff+1", m33_exec(mcu, core, ADDS, 0, 0xffffffff, 1, NULL), 0);
+    checkBool("m33 adds 0xffffffff+1 Z", M33Registers_Z_get(core->regs), true);
+    checkBool("m33 adds 0xffffffff+1 C", M33Registers_C_get(core->regs), true); // carry, not signed ovf
+    checkBool("m33 adds 0xffffffff+1 V", M33Registers_V_get(core->regs), false);
+    checkU32("m33 subs 0-1", m33_exec(mcu, core, SUBS, 0, 0, 1, NULL), 0xffffffffu);
+    checkBool("m33 subs 0-1 N", M33Registers_N_get(core->regs), true);
+    checkBool("m33 subs 0-1 C", M33Registers_C_get(core->regs), false); // borrow
+    checkU32("m33 subs 0x80000000-1", m33_exec(mcu, core, SUBS, 0, 0x80000000, 1, NULL), 0x7fffffffu);
+    checkBool("m33 subs 0x80000000-1 V", M33Registers_V_get(core->regs), true);
+    checkBool("m33 subs 0x80000000-1 C", M33Registers_C_get(core->regs), true); // no borrow unsigned
+
+    checkU32("m33 muls 0x10001*0x10001", m33_exec(mcu, core, MULS, 0, 0x00010001, 0x00010001, NULL), 0x00020001u);
+    checkU32("m33 muls -1*-1", m33_exec(mcu, core, MULS, 0, 0xffffffff, 0xffffffff, NULL), 1);
+    checkU32("m33 smull INT_MIN*INT_MIN lo", m33_exec(mcu, core, SMULL_W1, MULL_W2, 0x80000000, 0x80000000, &hi), 0);
+    checkU32("m33 smull INT_MIN*INT_MIN hi", hi, 0x40000000u);
+    checkU32("m33 smull -1*1 lo", m33_exec(mcu, core, SMULL_W1, MULL_W2, 0xffffffff, 1, &hi), 0xffffffffu);
+    checkU32("m33 smull -1*1 hi", hi, 0xffffffffu);
+    checkU32("m33 umull 0xffffffff*0xffffffff lo", m33_exec(mcu, core, UMULL_W1, MULL_W2, 0xffffffff, 0xffffffff, &hi), 1);
+    checkU32("m33 umull 0xffffffff*0xffffffff hi", hi, 0xfffffffeu);
+
+    checkU32("m33 sdiv -7/2", m33_exec(mcu, core, SDIV_W1, DIV_W2, (uint32_t)-7, 2, NULL), (uint32_t)-3);
+    checkU32("m33 sdiv INT_MIN/-1", m33_exec(mcu, core, SDIV_W1, DIV_W2, 0x80000000, 0xffffffff, NULL), 0x80000000u);
+    checkU32("m33 sdiv 5/0", m33_exec(mcu, core, SDIV_W1, DIV_W2, 5, 0, NULL), 0); // untrapped: 0
+    checkU32("m33 udiv 0xffffffff/0x10", m33_exec(mcu, core, UDIV_W1, DIV_W2, 0xffffffff, 0x10, NULL), 0x0fffffffu);
+    checkU32("m33 udiv 5/0", m33_exec(mcu, core, UDIV_W1, DIV_W2, 5, 0, NULL), 0); // untrapped: 0
+  }
+
+  // ─── Cortex-M0+ add/sub/mul (Thumb-16; no div on this core) ────────────
+  {
+    RP2040Options options = {.loadFirmware = NULL};
+    RP2040* mcu = RP2040_new(&options);
+    CortexM0Core* core = RP2040_core0_get(mcu);
+    const uint16_t ADDS = 0x188d, SUBS = 0x1a8d, MULS = 0x434d; // rm=r2/r5, rn=r1, rd=r5
+
+    checkU32("m0 adds 0x7fffffff+1", m0_exec(mcu, core, ADDS, 0x7fffffff, 1), 0x80000000u);
+    checkBool("m0 adds 0x7fffffff+1 N", core->N, true);
+    checkBool("m0 adds 0x7fffffff+1 C", core->C, false);
+    checkU32("m0 adds 0xffffffff+1", m0_exec(mcu, core, ADDS, 0xffffffff, 1), 0);
+    checkBool("m0 adds 0xffffffff+1 Z", core->Z, true);
+    checkBool("m0 adds 0xffffffff+1 C", core->C, true);
+    checkU32("m0 subs 0-1", m0_exec(mcu, core, SUBS, 0, 1), 0xffffffffu);
+    checkBool("m0 subs 0-1 N", core->N, true);
+    checkBool("m0 subs 0-1 C", core->C, false); // borrow
+    checkU32("m0 subs 0x80000000-1", m0_exec(mcu, core, SUBS, 0x80000000, 1), 0x7fffffffu);
+    checkBool("m0 subs 0x80000000-1 C", core->C, true);
+    checkU32("m0 muls 0x10001*0x10001", m0_exec(mcu, core, MULS, 0x00010001, 0x00010001), 0x00020001u);
+    checkU32("m0 muls -1*-1", m0_exec(mcu, core, MULS, 0xffffffff, 0xffffffff), 1);
   }
 
   if (failures > 0) {
