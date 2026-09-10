@@ -331,7 +331,6 @@ export class RP2040 implements IRPChip {
     }
 
     const alignedAddress = (address & 0xfffffffc) >>> 0;
-    const offset = address & 0x3;
     const peripheral = this.findPeripheral(address);
     if (peripheral) {
       const atomicType = (alignedAddress & 0x3000) >> 12;
@@ -350,10 +349,12 @@ export class RP2040 implements IRPChip {
       );
       return;
     }
+    const shift = (address & 0x3) << 3;
     const originalValue = this.readUint32(alignedAddress);
-    const newValue = new Uint32Array([originalValue]);
-    new DataView(newValue.buffer).setUint8(offset, value);
-    this.writeUint32(alignedAddress, newValue[0]);
+    this.writeUint32(
+      alignedAddress,
+      (originalValue & ~(0xff << shift)) | ((value & 0xff) << shift)
+    );
   }
 
   writeUint16(address: Uint32, value: Uint32) {
@@ -366,7 +367,6 @@ export class RP2040 implements IRPChip {
     }
 
     const alignedAddress = (address & 0xfffffffc) >>> 0;
-    const offset = address & 0x3;
     const peripheral = this.findPeripheral(address);
     if (peripheral) {
       const atomicType = (alignedAddress & 0x3000) >> 12;
@@ -378,10 +378,12 @@ export class RP2040 implements IRPChip {
       this.writeUint32(alignedAddress, (value & 0xffff) | ((value & 0xffff) << 16));
       return;
     }
+    const shift = (address & 0x3) << 3;
     const originalValue = this.readUint32(alignedAddress);
-    const newValue = new Uint32Array([originalValue]);
-    new DataView(newValue.buffer).setUint16(offset, value, true);
-    this.writeUint32(alignedAddress, newValue[0]);
+    this.writeUint32(
+      alignedAddress,
+      (originalValue & ~(0xffff << shift)) | ((value & 0xffff) << shift)
+    );
   }
 
   dma_clearDREQ(dreq: number) {

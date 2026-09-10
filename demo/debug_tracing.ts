@@ -273,10 +273,10 @@ if (watchWriteAddresses.length > 0) {
 const cdc = new USBCDC(mcu.usbCtrl);
 let replOutput = '';
 let autoReplInputSent = false;
-cdc.onSerialData = (value: Uint8Array) => {
-  process.stdout.write(value);
+cdc.onSerialData = (value: Uint8Array, length: number) => {
+  process.stdout.write(value.subarray(0, length));
   if (autoReplInput !== null && !autoReplInputSent) {
-    replOutput += Buffer.from(value).toString('latin1');
+    replOutput += Buffer.from(value.subarray(0, length)).toString('latin1');
     if (replOutput.includes('>>>')) {
       autoReplInputSent = true;
       for (const ch of autoReplInput) cdc.sendSerialByte(ch.charCodeAt(0));

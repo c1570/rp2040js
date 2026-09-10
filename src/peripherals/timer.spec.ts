@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RP2040 } from '../rp2040';
 
+const ALARM0 = 0x40054010;
 const ALARM1 = 0x40054014;
 const ALARM2 = 0x40054018;
 const ALARM3 = 0x4005401c;
@@ -48,6 +49,18 @@ describe('RPTimer', () => {
       rp2040.writeUint32(INTR_CLEAR, 0x8);
       expect(rp2040.readUint32(INTS)).toEqual(0);
       expect(rp2040.core0.pendingInterrupts).toBe(0);
+    });
+
+    it('fires an alarm scheduled more than INT32_MAX nanoseconds in the future', () => {
+      const rp2040 = new RP2040();
+      // Target 2.5 s ahead of the fresh clock: the nanosecond delta (2.5e9)
+      // exceeds INT32_MAX, which overflows an int32 computation of the delta
+      // (the alarm would fire immediately instead).
+      rp2040.writeUint32(ALARM0, 2500000);
+      rp2040.clock.tick(2_400_000_000);
+      expect(rp2040.readUint32(INTR) & 0b1).toEqual(0);
+      rp2040.clock.tick(200_000_000);
+      expect(rp2040.readUint32(INTR) & 0b1).toEqual(0b1);
     });
 
     it('should generate an interrupt if INTF is 1 even when the INTE bit is 0', () => {

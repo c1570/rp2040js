@@ -143,10 +143,13 @@ export class RPTimer<ChipType extends IRPChip = IRPChip>
       case ALARM3: {
         const alarmIndex = (offset - ALARM0) / 4;
         const alarm = this.alarms[alarmIndex];
-        const deltaMicros = (value - this.clock.getNanos() / 1000) >>> 0;
+        // Float64 keeps the uint32 delta exact in the C build (an int32_t local
+        // would go negative past 2^31 µs) and keeps the nanosecond multiply in
+        // double precision (1000.0 — a delta of 2.5 s is 2.5e9 ns, past INT32_MAX).
+        const deltaMicros: Float64 = (value - this.clock.getNanos() / 1000) >>> 0;
         alarm.armed = true;
         alarm.targetMicros = value;
-        alarm.clockAlarm.schedule(deltaMicros * 1000);
+        alarm.clockAlarm.schedule(deltaMicros * 1000.0);
         return;
       }
       case ARMED:

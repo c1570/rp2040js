@@ -167,6 +167,201 @@ static void rp2040_write_tag(RP2040* mcu, uint32_t addr, const char* tag) {
   RP2040_writeUint8(mcu, addr + (uint32_t)n, 0); // NUL terminator
 }
 
+// ─── USB CDC enumeration + data tests ────────────────────────────────────
+// Drives RPUSBController + USBCDC the way a pico-sdk-style device responds:
+// clear the bus reset, service SETUP packets by arming EP0 buffers, feed the
+// config descriptor, then push serial data both directions. Runs on both chip
+// flavors so the monomorphized USBCDC__RP2040 interrupt routing is covered.
+// Exercised: the alarm buffer pool + lengths, the cdcSetControlLineState
+// defaults (DTR|RTS, interface 0), extractEndpointNumbers (packed),
+// sendSetupPacket's copy loop, deliverOutData → endpointReadDone → finishRead,
+// and onSerialData with lengths.
+
+#define USB_DPRAM_BASE 0x50100000u
+#define USB_CTRL_BASE 0x50110000u
+#define USB_MAIN_CTRL 0x40u
+#define USB_SIE_STATUS 0x50u
+#define USB_SIE_BUS_RESET (1u << 19)
+#define USB_SIE_SETUP_REC (1u << 17)
+#define USB_EP0_IN_BC 0x80u
+#define USB_EP0_OUT_BC 0x84u
+#define USB_BUF_CTRL_AVAILABLE (1u << 10)
+#define USB_BUF_CTRL_FULL (1u << 15)
+
+static uint8_t cdc_serial_captured[256];
+static int32_t cdc_serial_captured_len;
+static int32_t cdc_connected_count;
+
+static void cdc_on_serial(void* ctx, uint8_t* buffer, int32_t length) {
+  (void)ctx;
+  for (int32_t i = 0; i < length && cdc_serial_captured_len < (int32_t)sizeof cdc_serial_captured; i++) {
+    cdc_serial_captured[cdc_serial_captured_len++] = buffer[i];
+  }
+}
+
+static void cdc_on_connected(void* ctx) {
+  (void)ctx;
+  cdc_connected_count++;
+}
+
+// pico-sdk-style CDC config descriptor (84 bytes, from cdc.spec.ts).
+static const uint8_t CFG_DESC_9[9] = {9, 2, 84, 0, 3, 1, 0, 128, 125};
+static const uint8_t CFG_DESC[84] = {
+  9, 2, 84, 0, 3, 1, 0, 128, 125, 8, 11, 0, 2, 2, 2, 0, 0, 9, 4, 0,
+  0, 1, 2, 2, 0, 4, 5, 36, 0, 32, 1, 5, 36, 1, 0, 1, 4, 36, 2, 2,
+  5, 36, 6, 0, 1, 7, 5, 129, 3, 8, 0, 16, 9, 4, 1, 0, 2, 10, 0, 0, 0,
+  7, 5, 2, 2, 64, 0, 0, 7, 5, 130, 2, 64, 0, 0, 9, 4, 2, 0, 0, 255, 0, 1, 5,
+};
+
+typedef struct {
+  void* chip;
+  SimulationClock* clock;
+  void (*write32)(void* chip, uint32_t addr, uint32_t v);
+  void (*write8)(void* chip, uint32_t addr, uint32_t v);
+  uint32_t (*read32)(void* chip, uint32_t addr);
+  uint32_t (*read8)(void* chip, uint32_t addr);
+  void (*tick)(SimulationClock* clock, double nanos);
+} UsbOps;
+
+// Firmware-side service of one pending SETUP packet: read it from DPRAM,
+// clear SETUP_REC, hand the 8 raw bytes back.
+static void usb_service_setup(const UsbOps* io, uint8_t out[8]) {
+  for (int i = 0; i < 8; i++) out[i] = (uint8_t)io->read8(io->chip, USB_DPRAM_BASE + i);
+  io->write32(io->chip, USB_CTRL_BASE + USB_SIE_STATUS, USB_SIE_SETUP_REC);
+}
+
+static void usb_arm_ep0_in(const UsbOps* io, const uint8_t* data, int len) {
+  for (int i = 0; i < len; i++) io->write8(io->chip, USB_DPRAM_BASE + 0x100 + i, data[i]);
+  io->write32(io->chip, USB_DPRAM_BASE + USB_EP0_IN_BC, (uint32_t)len | USB_BUF_CTRL_AVAILABLE);
+  io->tick(io->clock, 20000); // > writeDelayMicroseconds (10us) default
+}
+
+static void usb_cdc_drive(const UsbOps* io, void (*send_byte)(void*, int32_t), void* cdc) {
+  void* chip = io->chip;
+  uint8_t setup[8];
+
+  // Enable the controller; CDC schedules the 10ms bus reset; firmware clears
+  // it, which triggers the first SETUP (SET_ADDRESS).
+  io->write32(chip, USB_CTRL_BASE + USB_MAIN_CTRL, 1);
+  io->tick(io->clock, 20e6);
+  io->write32(chip, USB_CTRL_BASE + USB_SIE_STATUS, USB_SIE_BUS_RESET);
+
+  usb_service_setup(io, setup);
+  checkBool("cdc set-address request", setup[1] == 5, true);
+  usb_arm_ep0_in(io, NULL, 0); // status stage → CDC requests the 9-byte config descriptor
+
+  usb_service_setup(io, setup);
+  checkBool("cdc get-desc 9 request", setup[1] == 6 && setup[3] == 2 && setup[6] == 9, true);
+  usb_arm_ep0_in(io, CFG_DESC_9, 9);
+
+  usb_service_setup(io, setup);
+  checkBool("cdc get-desc 84 request", setup[1] == 6 && setup[6] == 84, true);
+  usb_arm_ep0_in(io, CFG_DESC, 64);      // first packet
+  usb_arm_ep0_in(io, CFG_DESC + 64, 20); // rest → enumeration completes
+
+  usb_service_setup(io, setup);
+  checkBool("cdc set-configuration request", setup[1] == 9, true);
+  usb_arm_ep0_in(io, NULL, 0); // ack → CDC sends SET_CONTROL_LINE_STATE with DEFAULTS
+
+  usb_service_setup(io, setup);
+  checkBool("cdc class request 0x22", setup[1] == 0x22, true);
+  // The value/index defaults: DTR|RTS = 3, interface 0.
+  checkU32("cdc dtr|rts default", setup[2], 3);
+  checkU32("cdc interface default", setup[4], 0);
+  checkI32("cdc onDeviceConnected fired", cdc_connected_count, 1);
+
+  // Device → host serial: arm EP2 IN ("hello") → onSerialData(buffer, 5).
+  static const uint8_t hello[5] = {'h', 'e', 'l', 'l', 'o'};
+  io->write32(chip, USB_DPRAM_BASE + 0x10, 0x180); // EP2 IN control: buffer offset
+  for (int i = 0; i < 5; i++) io->write8(chip, USB_DPRAM_BASE + 0x180 + i, hello[i]);
+  io->write32(chip, USB_DPRAM_BASE + USB_EP0_IN_BC + 2 * 8, 5 | USB_BUF_CTRL_AVAILABLE);
+  io->tick(io->clock, 20000);
+  checkI32("cdc onSerialData length", cdc_serial_captured_len, 5);
+  checkBool("cdc onSerialData bytes", memcmp(cdc_serial_captured, hello, 5) == 0, true);
+
+  // Host → device serial: queue bytes, then arm EP2 OUT (64-byte request) →
+  // deliverOutData → finishRead lands exactly 3 bytes in the EP2 OUT buffer.
+  io->write32(chip, USB_DPRAM_BASE + 0x14, 0x200); // EP2 OUT control: buffer offset
+  send_byte(cdc, 'a');
+  send_byte(cdc, 'b');
+  send_byte(cdc, 'c');
+  io->write32(chip, USB_DPRAM_BASE + USB_EP0_OUT_BC + 2 * 8, 64 | USB_BUF_CTRL_AVAILABLE);
+  io->tick(io->clock, 20000);
+  checkU32("cdc out byte 0", io->read8(chip, USB_DPRAM_BASE + 0x200), 'a');
+  checkU32("cdc out byte 1", io->read8(chip, USB_DPRAM_BASE + 0x201), 'b');
+  checkU32("cdc out byte 2", io->read8(chip, USB_DPRAM_BASE + 0x202), 'c');
+  checkBool("cdc out full bit",
+            (io->read32(chip, USB_DPRAM_BASE + USB_EP0_OUT_BC + 2 * 8) & USB_BUF_CTRL_FULL) != 0,
+            true);
+  checkI32("cdc no extra serial data", cdc_serial_captured_len, 5);
+
+  // extractEndpointNumbers: invalid descriptors stay silent (packed not-found).
+  uint8_t bad[2] = {0, 0};
+  checkU32("cdc extract invalid descriptors", extractEndpointNumbers(bad, 2), 0xffffu);
+}
+
+static void check_usb_cdc_rp2350(void) {
+  RP2350Options options = {.coreArch = "arm", .loadFirmware = NULL};
+  RP2350* mcu = RP2350_new(&options);
+  USBCDC* cdc = USBCDC_new(mcu->usbCtrl);
+  cdc->onSerialData_fn = cdc_on_serial;
+  cdc->onSerialData_ctx = NULL;
+  cdc->onDeviceConnected_fn = cdc_on_connected;
+  cdc->onDeviceConnected_ctx = NULL;
+
+  cdc_serial_captured_len = 0;
+  cdc_connected_count = 0;
+  UsbOps io = {
+    .chip = mcu,
+    .clock = mcu->clock,
+    .write32 = (void (*)(void*, uint32_t, uint32_t))RP2350_writeUint32,
+    .write8 = (void (*)(void*, uint32_t, uint32_t))RP2350_writeUint8,
+    .read32 = (uint32_t(*)(void*, uint32_t))RP2350_readUint32,
+    .read8 = (uint32_t(*)(void*, uint32_t))RP2350_readUint8,
+    .tick = SimulationClock_tick,
+  };
+  usb_cdc_drive(&io, (void (*)(void*, int32_t))USBCDC_sendSerialByte, cdc);
+}
+
+static void check_usb_cdc_rp2040(void) {
+  RP2040Options options = {.loadFirmware = NULL};
+  RP2040* mcu = RP2040_new(&options);
+  USBCDC__RP2040* cdc = USBCDC__RP2040_new(mcu->usbCtrl);
+  cdc->onSerialData_fn = cdc_on_serial;
+  cdc->onSerialData_ctx = NULL;
+  cdc->onDeviceConnected_fn = cdc_on_connected;
+  cdc->onDeviceConnected_ctx = NULL;
+
+  cdc_serial_captured_len = 0;
+  cdc_connected_count = 0;
+  UsbOps io = {
+    .chip = mcu,
+    .clock = mcu->clock,
+    .write32 = (void (*)(void*, uint32_t, uint32_t))RP2040_writeUint32,
+    .write8 = (void (*)(void*, uint32_t, uint32_t))RP2040_writeUint8,
+    .read32 = (uint32_t(*)(void*, uint32_t))RP2040_readUint32,
+    .read8 = (uint32_t(*)(void*, uint32_t))RP2040_readUint8,
+    .tick = SimulationClock_tick,
+  };
+  usb_cdc_drive(&io, (void (*)(void*, int32_t))USBCDC__RP2040_sendSerialByte, cdc);
+}
+
+// ─── Timer alarm scheduling (uint-vs-int overflow) ───────────────────────
+// A 2.5 s alarm has a 2.5e9 ns delta — past INT32_MAX. The generated C used to
+// compute it as int32*int32 (`1000.0` transpiled as `1000`), overflowing so the
+// alarm fired immediately; a `double deltaMicros` local plus the preserved
+// float literal fixes it. This test fails if either regresses.
+static void check_timer_alarm_overflow(void) {
+  RP2350Options options = {.coreArch = "arm", .loadFirmware = NULL};
+  RP2350* mcu = RP2350_new(&options);
+  const uint32_t timer = 0x400b0000u; // TIMER0 base; ALARM0 at +0x10, INTR at +0x3c
+  RP2350_writeUint32(mcu, timer + 0x10, 2500000); // target 2.5e6 µs ahead of the zeroed clock
+  SimulationClock_tick(mcu->clock, 2.4e9);
+  checkU32("timer >2.1s alarm not fired early", RP2350_readUint32(mcu, timer + 0x3c) & 1u, 0);
+  SimulationClock_tick(mcu->clock, 0.2e9);
+  checkU32("timer >2.1s alarm fired", RP2350_readUint32(mcu, timer + 0x3c) & 1u, 1);
+}
+
 int main(void) {
   // floatToBits/bitsToFloat: 3.14159f's real IEEE-754 bits are 0x40490FD0 — NOT the
   // bit pattern for 3.0f (0x40400000), which is what the pre-fix
@@ -421,6 +616,13 @@ int main(void) {
     checkU32("m0 muls 0x10001*0x10001", m0_exec(mcu, core, MULS, 0x00010001, 0x00010001), 0x00020001u);
     checkU32("m0 muls -1*-1", m0_exec(mcu, core, MULS, 0xffffffff, 0xffffffff), 1);
   }
+
+  // ─── USB CDC enumeration + data (both chip flavors) ────────────────────
+  check_usb_cdc_rp2350();
+  check_usb_cdc_rp2040();
+
+  // ─── Timer alarm scheduling past INT32_MAX ns ──────────────────────────
+  check_timer_alarm_overflow();
 
   if (failures > 0) {
     fprintf(stderr, "\n%d check(s) FAILED\n", failures);

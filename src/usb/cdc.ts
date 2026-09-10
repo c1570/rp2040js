@@ -22,22 +22,23 @@ const TX_FIFO_SIZE = 512;
 const ENDPOINT_ZERO = 0;
 const CONFIGURATION_DESCRIPTOR_SIZE = 9;
 
-/** Result of scanning a USB config descriptor for a CDC data interface's endpoints. */
-interface EndpointNumbers {
-  in: number;
-  out: number;
-}
+// Config descriptors larger than this never complete enumeration.
+const MAX_DESCRIPTOR_SIZE = 256;
 
-export function extractEndpointNumbers(descriptors: ArrayLike<number>): EndpointNumbers {
+// Fixed scratch for OUT transfers (largest buffer-control length is 0x3ff).
+const MAX_PACKET_SIZE = 1024;
+
+/** Extracts a CDC data interface's bulk endpoint numbers from a config
+ * descriptor; returns them packed as `in | (out << 8)`, with 0xff for
+ * not-found (endpoint numbers are 0..15). */
+export function extractEndpointNumbers(descriptors: Uint8Array, count: number): number {
   let index = 0;
   let foundInterface = false;
-  const result: EndpointNumbers = {
-    in: -1,
-    out: -1,
-  };
-  while (index < descriptors.length) {
+  let inEndpoint = -1;
+  let outEndpoint = -1;
+  while (index < count) {
     const len = descriptors[index];
-    if (len < 2 || descriptors.length < index + len) {
+    if (len < 2 || count < index + len) {
       break;
     }
     const type = descriptors[index + 1];
@@ -51,32 +52,36 @@ export function extractEndpointNumbers(descriptors: ArrayLike<number>): Endpoint
       const attributes = descriptors[index + 3];
       if ((attributes & 0x3) === ENDPOINT_BULK) {
         if (address & 0x80) {
-          result.in = address & 0xf;
+          inEndpoint = address & 0xf;
         } else {
-          result.out = address & 0xf;
+          outEndpoint = address & 0xf;
         }
       }
     }
     index += descriptors[index];
   }
-  return result;
+  return (inEndpoint & 0xff) | ((outEndpoint & 0xff) << 8);
 }
 
 export class USBCDC {
   readonly txFIFO = new FIFO(TX_FIFO_SIZE);
 
-  onSerialData?: (buffer: Uint8Array) => void;
+  // Buffers come from the controller's alarm pool, valid only for the duration
+  // of the callback.
+  onSerialData?: (buffer: Uint8Array, length: number) => void;
   onDeviceConnected?: () => void;
 
   private initialized = false;
-  private descriptorsSize: number | null = null;
-  private descriptors: number[] = [];
+  private descriptorsSize = 0;
+  private readonly descriptors = new Uint8Array(MAX_DESCRIPTOR_SIZE);
+  private descriptorsCount = 0;
   private outEndpoint = -1;
   private inEndpoint = -1;
   /** When non-null, the firmware armed the OUT endpoint but txFIFO was empty.
    * The read is deferred until sendSerialByte pushes data, matching real
    * hardware where AVAILABLE stays set until a host packet arrives. */
   private pendingOutReadSize = 0;
+  private readonly outScratch = new Uint8Array(MAX_PACKET_SIZE);
 
   constructor(readonly usb: RPUSBController) {
     this.usb.onUSBEnabled = () => {
@@ -85,9 +90,9 @@ export class USBCDC {
     this.usb.onResetReceived = () => {
       this.usb.sendSetupPacket(setDeviceAddressPacket(1));
     };
-    this.usb.onEndpointWrite = (endpoint, buffer) => {
-      if (endpoint === ENDPOINT_ZERO && buffer.length === 0) {
-        if (this.descriptorsSize == null) {
+    this.usb.onEndpointWrite = (endpoint, buffer, length) => {
+      if (endpoint === ENDPOINT_ZERO && length === 0) {
+        if (this.descriptorsSize === 0) {
           this.usb.sendSetupPacket(
             getDescriptorPacket(DescriptorType.Configration, CONFIGURATION_DESCRIPTOR_SIZE)
           );
@@ -98,30 +103,32 @@ export class USBCDC {
           this.onDeviceConnected?.();
         }
       }
-      if (endpoint === ENDPOINT_ZERO && buffer.length > 1) {
+      if (endpoint === ENDPOINT_ZERO && length > 1) {
         if (
-          buffer.length === CONFIGURATION_DESCRIPTOR_SIZE &&
+          length === CONFIGURATION_DESCRIPTOR_SIZE &&
           buffer[1] === DescriptorType.Configration &&
-          this.descriptorsSize == null
+          this.descriptorsSize === 0
         ) {
           this.descriptorsSize = (buffer[3] << 8) | buffer[2];
           this.usb.sendSetupPacket(
             getDescriptorPacket(DescriptorType.Configration, this.descriptorsSize)
           );
-        } else if (this.descriptorsSize != null && this.descriptors.length < this.descriptorsSize) {
-          this.descriptors.push(...buffer);
+        } else if (this.descriptorsSize !== 0 && this.descriptorsCount < this.descriptorsSize) {
+          for (let i = 0; i < length && this.descriptorsCount < MAX_DESCRIPTOR_SIZE; i++) {
+            this.descriptors[this.descriptorsCount++] = buffer[i];
+          }
         }
-        if (this.descriptorsSize === this.descriptors.length) {
-          const endpoints = extractEndpointNumbers(this.descriptors);
-          this.inEndpoint = endpoints.in;
-          this.outEndpoint = endpoints.out;
+        if (this.descriptorsSize !== 0 && this.descriptorsCount === this.descriptorsSize) {
+          const endpoints = extractEndpointNumbers(this.descriptors, this.descriptorsCount);
+          this.inEndpoint = endpoints & 0xff;
+          this.outEndpoint = (endpoints >>> 8) & 0xff;
 
           // Now configure the device
           this.usb.sendSetupPacket(setDeviceConfigurationPacket(1));
         }
       }
       if (endpoint === this.inEndpoint) {
-        this.onSerialData?.(buffer);
+        this.onSerialData?.(buffer, length);
       }
     };
     this.usb.onEndpointRead = (endpoint, size) => {
@@ -151,11 +158,11 @@ export class USBCDC {
   }
 
   private deliverOutData(size: number) {
-    const buffer = new Uint8Array(Math.min(size, this.txFIFO.itemCount));
-    for (let i = 0; i < buffer.length; i++) {
-      buffer[i] = this.txFIFO.pull();
+    const length = Math.min(size, this.txFIFO.itemCount);
+    for (let i = 0; i < length; i++) {
+      this.outScratch[i] = this.txFIFO.pull();
     }
-    this.usb.endpointReadDone(this.outEndpoint, buffer);
+    this.usb.endpointReadDone(this.outEndpoint, this.outScratch, length);
   }
 
   sendSerialByte(data: number) {

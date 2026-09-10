@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { extractEndpointNumbers } from './cdc';
 
+const u8 = (bytes: number[]) => new Uint8Array(bytes);
+const IN_NOT_FOUND = 0xff;
+const OUT_NOT_FOUND = 0xff;
+
 describe('extractEndpointNumbers', () => {
   it('should not die if the descriptors are invalid', () => {
-    expect(extractEndpointNumbers([0])).toEqual({
-      in: -1,
-      out: -1,
-    });
+    expect(extractEndpointNumbers(u8([0]), 1)).toEqual(
+      (IN_NOT_FOUND | (OUT_NOT_FOUND << 8))
+    );
 
-    expect(extractEndpointNumbers([9])).toEqual({
-      in: -1,
-      out: -1,
-    });
+    expect(extractEndpointNumbers(u8([9]), 1)).toEqual(
+      (IN_NOT_FOUND | (OUT_NOT_FOUND << 8))
+    );
   });
 
   it('should extract the endpoint numbers from Pi Pico SDK descriptors', () => {
@@ -29,10 +31,9 @@ describe('extractEndpointNumbers', () => {
       ...[7, 5, 130, 2, 64, 0, 0],
       ...[9, 4, 2, 0, 0, 255, 0, 1, 5],
     ];
-    expect(extractEndpointNumbers(sdkCDCDescriptors)).toEqual({
-      in: 2,
-      out: 2,
-    });
+    expect(extractEndpointNumbers(u8(sdkCDCDescriptors), sdkCDCDescriptors.length)).toEqual(
+      (2 | (2 << 8))
+    );
   });
 
   it('should extract the endpoint numbers from MicroPython descriptors', () => {
@@ -49,10 +50,9 @@ describe('extractEndpointNumbers', () => {
       ...[7, 5, 2, 2, 64, 0, 0], // Endpoint (bulk)
       ...[7, 5, 130, 2, 64, 0, 0], // Endpoint (bulk)
     ];
-    expect(extractEndpointNumbers(micropythonDescriptors)).toEqual({
-      in: 2,
-      out: 2,
-    });
+    expect(extractEndpointNumbers(u8(micropythonDescriptors), micropythonDescriptors.length)).toEqual(
+      (2 | (2 << 8))
+    );
   });
 
   it('should extract the endpoint numbers from CircuitPython descriptors', () => {
@@ -88,10 +88,9 @@ describe('extractEndpointNumbers', () => {
       ...[7, 5, 133, 2, 64, 0, 0],
       ...[5, 37, 1, 1, 3],
     ];
-    expect(extractEndpointNumbers(circuitPythonDescriptors)).toEqual({
-      in: 2,
-      out: 2,
-    });
+    expect(extractEndpointNumbers(u8(circuitPythonDescriptors), circuitPythonDescriptors.length)).toEqual(
+      (2 | (2 << 8))
+    );
   });
 
   it('should extract the endpoint numbers from Arduino Core descriptors', () => {
@@ -108,9 +107,8 @@ describe('extractEndpointNumbers', () => {
       ...[7, 5, 129, 2, 64, 0, 0], // Endpoint
       ...[7, 5, 1, 2, 64, 0, 0], // Endpoint
     ];
-    expect(extractEndpointNumbers(arduinoCoreDescriptors)).toEqual({
-      in: 1,
-      out: 1,
-    });
+    expect(extractEndpointNumbers(u8(arduinoCoreDescriptors), arduinoCoreDescriptors.length)).toEqual(
+      (1 | (1 << 8))
+    );
   });
 });

@@ -631,12 +631,92 @@ function castStubForType(exprStr, targetType) {
 // producing `0` for a string/boolean default too.
 function literalDefaultInfo(node) {
   if (!node) return null;
-  if (node.type === 'NumericLiteral') return { type: 'int32_t', defaultStr: String(node.value) };
+  if (node.type === 'NumericLiteral') {
+    // Preserve float-written literals verbatim (see the NumericLiteral case in
+    // emitExpr for why `String(1000.0)` must not become `"1000"`).
+    const raw = node.extra?.raw;
+    const str =
+      typeof raw === 'string' && !/^0[xXbBoO]/.test(raw) && /[.eE]/.test(raw)
+        ? raw
+        : String(node.value);
+    return { type: 'int32_t', defaultStr: str };
+  }
   if (node.type === 'StringLiteral')
     return { type: 'const char*', defaultStr: `"${cStringEscape(node.value)}"` };
   if (node.type === 'BooleanLiteral')
     return { type: 'bool', defaultStr: node.value ? 'true' : 'false' };
   return null;
+}
+
+function walkIdentifierNames(node, fn) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const e of node) walkIdentifierNames(e, fn);
+    return;
+  }
+  if (node.type === 'Identifier') fn(node.name);
+  for (const k of Object.keys(node)) {
+    if (k === 'loc' || k === 'start' || k === 'end' || k === 'type') continue;
+    const v = node[k];
+    if (v && typeof v === 'object') walkIdentifierNames(v, fn);
+  }
+}
+
+function containsThis(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (node.type === 'ThisExpression') return true;
+  for (const k of Object.keys(node)) {
+    if (k === 'loc' || k === 'start' || k === 'end' || k === 'type') continue;
+    const v = node[k];
+    if (Array.isArray(v)) {
+      if (v.some((e) => containsThis(e))) return true;
+    } else if (v && typeof v === 'object') {
+      if (containsThis(v)) return true;
+    }
+  }
+  return false;
+}
+
+// Pads a call's missing trailing args with the callee params' declared defaults.
+// Literal defaults were folded to strings when the signature was collected; any
+// other default expression (e.g. `value = CDC_DTR | CDC_RTS`,
+// `delay = this.readDelayMicroseconds`) is transpiled HERE, in the caller's
+// context. `this` inside the default maps to the call's receiver expression
+// (`thisExpr`) when given — the default must evaluate against the callee's
+// this, which is the receiver object, not the enclosing method's self.
+// Anything unresolvable (defaults referencing the callee's own params, or `this`
+// without a receiver) is a transpile-time error, never a silently-wrong `0`.
+function padDefaultArgs(targetFn, args, node, funcName, params, ctx, thisExpr) {
+  while (args.length < targetFn.params.length) {
+    const param = targetFn.params[args.length];
+    const dn = param?.defaultNode;
+    if (!dn) {
+      args.push(param?.default ?? '0');
+      continue;
+    }
+    const calleeParamNames = new Set(targetFn.params.map((pp) => pp.name).filter(Boolean));
+    let badRef = null;
+    walkIdentifierNames(dn, (name) => {
+      if (calleeParamNames.has(name) && !badRef) badRef = name;
+    });
+    if (badRef) {
+      throw new Error(
+        `cts2c: default value for param '${
+          param.name
+        }' references callee param '${badRef}' — unsupported at call-site padding${loc(dn)}`
+      );
+    }
+    const hasThis = containsThis(dn);
+    if (hasThis && !thisExpr) {
+      throw new Error(
+        `cts2c: default value for param '${
+          param.name
+        }' uses 'this' but the call has no receiver${loc(dn)}`
+      );
+    }
+    const padCtx = hasThis ? { ...ctx, thisExpr } : ctx;
+    args.push(emitExpr(dn, funcName, params, padCtx));
+  }
 }
 
 const typedArrayCType = (name) => {
@@ -1172,6 +1252,8 @@ function collectFreeFunctionSignature(fn) {
         type: anno ? cTypeOf(anno, { genericAsVoidStar: true }) : litDefault?.type ?? 'int32_t',
         tsType: anno?.typeAnnotation?.typeName?.name,
         default: litDefault?.defaultStr ?? '0',
+        // Non-literal defaults keep their AST for call-site padding (padDefaultArgs).
+        defaultNode: isAssignment && !litDefault ? realParam.right : null,
       };
     });
   // Infer return type for free functions too
@@ -1558,6 +1640,8 @@ function collectTypes(filepath) {
                 type: pt,
                 tsType: anno?.typeAnnotation?.typeName?.name,
                 default: defaultVal,
+                // Non-literal defaults keep their AST for call-site padding (padDefaultArgs).
+                defaultNode: isAssignment && !litDefault ? realParam.right : null,
               };
             });
           // Infer return type: void if body has bare returns or no returns
@@ -4106,6 +4190,15 @@ function emitExpr(node, funcName, params, ctx, opts) {
       // compares two different 64-bit values and never matches. A `u` suffix makes
       // the literal `unsigned int`, restoring the correct same-rank conversion.
       const v = node.value;
+      // A literal WRITTEN as a float (`1000.0`, `2.5`, `1e3`) stays a C floating
+      // literal: emitting `String(v)` would drop the `.0` (`String(1000.0)` is
+      // `"1000"`) and silently demote `x * 1000.0`-style expressions back to
+      // int32 arithmetic. Hex/binary/octal raws are excluded (`0x1E` contains an
+      // `E` but is an integer).
+      const raw = node.extra?.raw;
+      if (typeof raw === 'string' && !/^0[xXbBoO]/.test(raw) && /[.eE]/.test(raw)) {
+        return raw;
+      }
       if (Number.isInteger(v) && v > 2147483647 && v <= 4294967295) {
         return `${v}u`;
       }
@@ -4135,7 +4228,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
       return cName(node.name);
 
     case 'ThisExpression':
-      return 'self';
+      return ctx.thisExpr || 'self';
 
     case 'MemberExpression': {
       const prop = node.property?.name;
@@ -4193,8 +4286,11 @@ function emitExpr(node, funcName, params, ctx, opts) {
         return `/* TODO: .length${loc(node)} */ ${stubAbortExpr(`.length${loc(node)}`)}`;
       }
 
-      // this.field → self->field or self->base.field (inherited)
+      // this.field → self->field or self->base.field (inherited). `this` is
+      // normally `self`, but padDefaultArgs overrides it (ctx.thisExpr) so a
+      // default like `= this.someField` evaluates against the call's receiver.
       if (obj?.type === 'ThisExpression') {
+        const thisStr = ctx?.thisExpr || 'self';
         const cprop = cName(prop);
         if (prop === 'length') {
           // Bare `this.length` (no intermediate field) — not the `this.field.length`
@@ -4211,7 +4307,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
         if (!node.computed && ctx?.className) {
           const getterClass = findGetterDefiningClass(ctx.className, prop);
           if (getterClass) {
-            return `${getterClass}_${prop}_get(${selfPathTo('self', ctx.className, getterClass)})`;
+            return `${getterClass}_${prop}_get(${selfPathTo(thisStr, ctx.className, getterClass)})`;
           }
         }
         // Check if field is inherited from an ancestor
@@ -4232,7 +4328,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
               const parentCls = classes.get(cls.parent);
               depth++;
               if (parentCls?.fields?.has(prop)) {
-                const basePath = `self->${'base.'.repeat(depth)}${cprop}`;
+                const basePath = `${thisStr}->${'base.'.repeat(depth)}${cprop}`;
                 if (!node.computed) return basePath;
                 return `${basePath}[${emitExpr(node.property, funcName, params, ctx, {
                   intCtx: true,
@@ -4242,7 +4338,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
             }
           }
         }
-        if (!node.computed) return `self->${cprop}`;
+        if (!node.computed) return `${thisStr}->${cprop}`;
         return `self->${cprop}[${emitExpr(node.property, funcName, params, ctx, {
           intCtx: true,
         })}]`;
@@ -4483,9 +4579,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
         ) {
           const targetFn = freeFunctions.get(methodName);
           let args = node.arguments.map((a) => emitExpr(a, funcName, params, ctx));
-          while (args.length < targetFn.params.length) {
-            args.push(targetFn.params[args.length]?.default ?? '0');
-          }
+          padDefaultArgs(targetFn, args, node, funcName, params, ctx);
           args = args.map((a, i) =>
             castStubForType(
               wrapArgIfInterfaceParam(
@@ -4687,12 +4781,11 @@ function emitExpr(node, funcName, params, ctx, opts) {
               )}`;
             }
             let args = node.arguments.map((a) => emitExpr(a, funcName, params, ctx));
-            // Pad with defaults for methods with default params
+            // Pad with defaults for methods with default params; the receiver is
+            // `this`, so defaults like `= this.someField` evaluate against self.
             const methodSig = classes.get(definingClass)?.methods.get(methodName);
             if (methodSig) {
-              while (args.length < methodSig.params.length) {
-                args.push(methodSig.params[args.length]?.default ?? '0');
-              }
+              padDefaultArgs(methodSig, args, node, funcName, params, ctx, 'self');
               args = args.map((a, i) =>
                 castStubForType(
                   wrapArgIfInterfaceParam(
@@ -4779,9 +4872,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
           // false)` takes an optional param compiles a call with too few arguments.
           const methodSig = classes.get(definingClass)?.methods.get(methodName);
           if (methodSig) {
-            while (args.length < methodSig.params.length) {
-              args.push(methodSig.params[args.length]?.default ?? '0');
-            }
+            padDefaultArgs(methodSig, args, node, funcName, params, ctx, objStr);
             args = args.map((a, i) =>
               castStubForType(
                 wrapArgIfInterfaceParam(
@@ -4844,9 +4935,7 @@ function emitExpr(node, funcName, params, ctx, opts) {
         const mangled = registerGenericInstantiation(name, concreteType);
         const targetFn = freeFunctions.get(mangled);
         let genArgs = node.arguments.map((a) => emitExpr(a, funcName, params, ctx));
-        while (genArgs.length < targetFn.params.length) {
-          genArgs.push(targetFn.params[genArgs.length]?.default ?? '0');
-        }
+        padDefaultArgs(targetFn, genArgs, node, funcName, params, ctx);
         genArgs = genArgs.map((a, i) =>
           wrapArgIfInterfaceParam(
             a,
@@ -6669,6 +6758,15 @@ function main() {
   out.push('  buf[n] = 0;');
   out.push('  fclose(f);');
   out.push('  return buf;');
+  out.push('}');
+  out.push('');
+  out.push("// `fs.existsSync` — guards optional side files (e.g. tryLoadDisassembly's");
+  out.push('// adjacent .dis); readFileSync aborts on missing files and catch has no C form.');
+  out.push('static bool existsSync(const char* path) {');
+  out.push('  FILE* f = fopen(path, "rb");');
+  out.push('  if (!f) return false;');
+  out.push('  fclose(f);');
+  out.push('  return true;');
   out.push('}');
   out.push('');
   out.push('// Real UF2 (github.com/microsoft/uf2) block decoder, hand-written because cts2c');

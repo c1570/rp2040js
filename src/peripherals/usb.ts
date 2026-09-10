@@ -1,6 +1,7 @@
 import { IRPChip } from '../rpchip';
 import { BasePeripheral } from './peripheral';
 import { AlarmCallback, IAlarm } from '../clock/clock.js';
+import { Float64 } from '../utils/types';
 
 const ENDPOINT_COUNT = 16;
 
@@ -96,13 +97,17 @@ const SIE_WRITECLEAR_MASK =
 // this is a generous ceiling, not a real expected depth.
 const MAX_PENDING_BUFFERS = 8;
 
+// Largest transfer the buffer-control length field can express (0x3ff), rounded
+// up. USBEndpointAlarm's pool slots are sized to this.
+const MAX_BUFFER_SIZE = 1024;
+
 class USBEndpointAlarm implements AlarmCallback {
-  // Fixed-capacity array + manual count/shift (mirroring cpu.ts's
-  // candidateIrq/candidateCount pattern) instead of a growable JS array:
-  // cts2c's growable-array support only covers a field's own `.push()`/for-of,
-  // not reassigning it to `[]` (to clear) or building a fresh local array (to
-  // dequeue) — both silently no-op in the C build.
+  // Fixed-capacity queue of lazily-allocated, reused buffers (no per-transfer
+  // allocation): schedule() copies the source bytes into the next slot and
+  // fire() hands the slot to the callback, which must consume it synchronously —
+  // the slot is reused by the next schedule() after that.
   private readonly buffers: Uint8Array[] = new Array(MAX_PENDING_BUFFERS);
+  private readonly lengths = new Int32Array(MAX_PENDING_BUFFERS);
   private bufferCount = 0;
   clockAlarm!: IAlarm;
 
@@ -112,27 +117,47 @@ class USBEndpointAlarm implements AlarmCallback {
     private readonly isWrite: boolean
   ) {}
 
-  schedule(buffer: Uint8Array, delayNanos: number) {
+  private bufferSlot(index: number): Uint8Array {
+    let buffer = this.buffers[index];
+    if (!buffer) {
+      buffer = new Uint8Array(MAX_BUFFER_SIZE);
+      this.buffers[index] = buffer;
+    }
+    return buffer;
+  }
+
+  schedule(src: Uint8Array, srcOffset: number, length: number, delayNanos: Float64) {
     if (this.bufferCount >= MAX_PENDING_BUFFERS) {
       throw new Error(`USBEndpointAlarm: pending buffer queue full (> ${MAX_PENDING_BUFFERS})`);
     }
-    this.buffers[this.bufferCount++] = buffer;
+    const slot = this.bufferSlot(this.bufferCount);
+    for (let i = 0; i < length; i++) {
+      slot[i] = src[srcOffset + i];
+    }
+    this.lengths[this.bufferCount] = length;
+    this.bufferCount++;
     this.clockAlarm.schedule(delayNanos);
   }
 
   fire() {
     if (this.isWrite) {
       for (let i = 0; i < this.bufferCount; i++) {
-        this.usb.onEndpointWrite?.(this.endpoint, this.buffers[i]);
+        this.usb.onEndpointWrite?.(this.endpoint, this.buffers[i], this.lengths[i]);
       }
       this.bufferCount = 0;
     } else if (this.bufferCount > 0) {
       const buffer = this.buffers[0];
+      const length = this.lengths[0];
       for (let i = 0; i < this.bufferCount - 1; i++) {
         this.buffers[i] = this.buffers[i + 1];
+        this.lengths[i] = this.lengths[i + 1];
       }
       this.bufferCount--;
-      this.usb.finishRead(this.endpoint, buffer);
+      // Return the delivered slot's array to the vacated tail so it can be
+      // reused by the next schedule() without aliasing queued entries.
+      this.buffers[this.bufferCount] = buffer;
+      this.lengths[this.bufferCount] = length;
+      this.usb.finishRead(this.endpoint, buffer, length);
     }
   }
 }
@@ -154,7 +179,9 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
 
   onUSBEnabled?: () => void;
   onResetReceived?: () => void;
-  onEndpointWrite?: (endpoint: number, buffer: Uint8Array) => void;
+  // Buffers handed to callbacks are USBEndpointAlarm pool slots, valid only for
+  // the duration of the callback.
+  onEndpointWrite?: (endpoint: number, buffer: Uint8Array, length: number) => void;
   onEndpointRead?: (endpoint: number, byteCount: number) => void;
 
   readDelayMicroseconds = 10;
@@ -290,9 +317,13 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
         } else {
           value &= ~(USB_BUF_CTRL_FULL << USB_BUF1_SHIFT);
           this.rpchip.usbDPRAMView.setUint32(offset, value, true);
-          const buffer = this.rpchip.usbDPRAM.slice(bufferOffset, bufferOffset + bufferLength);
           this.indicateBufferReady(endpoint, false);
-          this.endpointWriteAlarms[endpoint].schedule(buffer, this.writeDelayMicroseconds * 1000);
+          this.endpointWriteAlarms[endpoint].schedule(
+            this.rpchip.usbDPRAM,
+            bufferOffset,
+            bufferLength,
+            this.writeDelayMicroseconds * 1000.0
+          );
         }
       }
 
@@ -310,29 +341,40 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
       } else {
         value &= ~USB_BUF_CTRL_FULL;
         this.rpchip.usbDPRAMView.setUint32(offset, value, true);
-        const buffer = this.rpchip.usbDPRAM.slice(bufferOffset, bufferOffset + bufferLength);
         if (interrupt || !doubleBuffer) {
           this.indicateBufferReady(endpoint, false);
         }
-        this.endpointWriteAlarms[endpoint].schedule(buffer, this.writeDelayMicroseconds * 1000);
+        this.endpointWriteAlarms[endpoint].schedule(
+          this.rpchip.usbDPRAM,
+          bufferOffset,
+          bufferLength,
+          this.writeDelayMicroseconds * 1000.0
+        );
       }
     }
   }
 
-  endpointReadDone(endpoint: number, buffer: Uint8Array, delay = this.readDelayMicroseconds) {
-    this.endpointReadAlarms[endpoint].schedule(buffer, delay * 1000);
+  endpointReadDone(
+    endpoint: number,
+    src: Uint8Array,
+    length: number,
+    delay = this.readDelayMicroseconds
+  ) {
+    this.endpointReadAlarms[endpoint].schedule(src, 0, length, delay * 1000.0);
   }
 
-  finishRead(endpoint: number, buffer: Uint8Array) {
+  finishRead(endpoint: number, buffer: Uint8Array, length: number) {
     const bufferOffset = this.getEndpointBufferOffset(endpoint, true);
     const bufControlReg = EP0_OUT_BUFFER_CONTROL + endpoint * 8;
     let bufControl = this.rpchip.usbDPRAMView.getUint32(bufControlReg, true);
     const requestedLength = bufControl & USB_BUF_CTRL_LEN_MASK;
-    const newLength = Math.min(buffer.length, requestedLength);
+    const newLength = Math.min(length, requestedLength);
     bufControl |= USB_BUF_CTRL_FULL;
     bufControl = (bufControl & ~USB_BUF_CTRL_LEN_MASK) | (newLength & USB_BUF_CTRL_LEN_MASK);
     this.rpchip.usbDPRAMView.setUint32(bufControlReg, bufControl, true);
-    this.rpchip.usbDPRAM.set(buffer.subarray(0, newLength), bufferOffset);
+    for (let i = 0; i < newLength; i++) {
+      this.rpchip.usbDPRAMView.setUint8(bufferOffset + i, buffer[i]);
+    }
     this.indicateBufferReady(endpoint, true);
   }
 
@@ -346,7 +388,10 @@ export class RPUSBController<ChipType extends IRPChip = IRPChip>
   }
 
   sendSetupPacket(setupPacket: Uint8Array) {
-    this.rpchip.usbDPRAM.set(setupPacket);
+    // Setup packets are fixed 8 bytes per the USB spec (createSetupPacket's size).
+    for (let i = 0; i < 8; i++) {
+      this.rpchip.usbDPRAMView.setUint8(i, setupPacket[i]);
+    }
     this.sieStatus |= SIE_SETUP_REC;
     this.sieStatusUpdated();
   }

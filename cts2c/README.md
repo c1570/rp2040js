@@ -10,7 +10,13 @@ The C version achieves 2-4x the speed of the Node/TS version.
     cts2c-ensure-parity.ts       Node-vs-C CRC32 parity, with divergence bisection
     cts2c-parity.spec.ts         opt-in vitest smoke test wrapping the above
     helper-cts2c-ensure-parity.c C harness the parity check drives
-    helper-checks.c              standalone checks of the hand-written C helpers
+    helper-checks.c              standalone checks: hand-written C bodies
+                                 (bit-punning, checkTraceMagic* callbacks),
+                                 boundary-value add/sub/mul/div opcodes on all
+                                 three cores (uint-vs-int trap regression tests),
+                                 a full USB CDC enumeration + serial data drive
+                                 on both chip flavors, and timer alarms with
+                                 deltas past INT32_MAX ns
 
 `demo/emulator-run.c` is a C port of `demo/emulator-run.ts` showing how to drive the
 generated emulator: UART output, GPIO listeners, stepping.

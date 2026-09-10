@@ -19,7 +19,7 @@
  *   scratch[7] = REBOOT_TO_MAGIC_PC            (= VECTORED_BOOT_MAGIC)
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { decodeBlock } from 'uf2';
 import { IRPChip } from '../rpchip';
 import { loadHex } from './load-hex';
@@ -151,11 +151,9 @@ function tryLoadDisassembly<ChipType extends IRPChip = IRPChip>(
   ext: 'hex' | 'uf2'
 ) {
   const disPath = path.substring(0, path.length - ext.length - 1) + '.dis';
-  try {
-    chip.loadDisassembly(readFileSync(disPath, 'utf-8'));
-  } catch {
-    /* no dis file is fine */
-  }
+  // No catch in the C build, and its readFileSync aborts on missing files.
+  if (!existsSync(disPath)) return;
+  chip.loadDisassembly(readFileSync(disPath, 'utf-8'));
 }
 
 /**

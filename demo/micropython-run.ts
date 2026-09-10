@@ -65,10 +65,10 @@ cdc.onDeviceConnected = () => {
 };
 
 let currentLine = '';
-cdc.onSerialData = (value) => {
-  process.stdout.write(value);
+cdc.onSerialData = (value, length) => {
+  process.stdout.write(value.subarray(0, length));
 
-  for (const byte of value) {
+  for (const byte of value.subarray(0, length)) {
     const char = String.fromCharCode(byte);
     if (char === '\n') {
       if (expectText && currentLine.includes(expectText)) {

@@ -74,6 +74,11 @@ const FILES = [
     classes: ['USBEndpointAlarm', 'RPUSBController'],
     mode: 'shared',
   },
+  // Constructed by consumer code (`new USBCDC(chip.usbCtrl)`), not by
+  // rp2040.ts/rp2350.ts — without the clone, USBCDC's `usb` field stays on the
+  // RP2350-flavored controller set and its interrupt routing (via
+  // RPUSBController_checkInterrupts) hard-wires RP2350_setInterrupt on RP2040.
+  { file: 'src/usb/cdc.ts', classes: ['USBCDC'], mode: 'shared' },
   // Shared, but not found by the top-level `new X(` scan: RPSIOCore is constructed
   // from within sio.ts/sio_rp2350.ts, not directly by rp2040.ts/rp2350.ts.
   { file: 'src/sio-core.ts', classes: ['RPSIOCore'], mode: 'shared' },
